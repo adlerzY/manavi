@@ -1,29 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { AgeRating } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { sanitizeCustomLinks, type ProfileLink } from "@/lib/profile-links";
 import { isAllowedImageUrl } from "@/lib/image-url";
-
-export async function updateContentPreference(preference: AgeRating): Promise<{ success: boolean; error?: string }> {
-  const user = await getSessionUser();
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { contentPreference: preference },
-  });
-
-  revalidatePath("/app");
-  revalidatePath("/app/explore");
-  revalidatePath("/app/profile");
-
-  return { success: true };
-}
 
 export async function updateProfileDetails(input: {
   bio?: string;
@@ -43,6 +25,8 @@ export async function updateProfileDetails(input: {
     return { success: false, error: "آدرس تصویر معتبر نیست — از گزینه آپلود مستقیم استفاده کنید" };
   }
 
+  const customLinks = sanitizeCustomLinks(input.customLinks ?? []) as unknown as Prisma.InputJsonValue;
+
   await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -51,7 +35,7 @@ export async function updateProfileDetails(input: {
       donationLink: input.donationLink?.trim() || null,
       cryptoWalletLabel: input.cryptoWalletLabel?.trim().slice(0, 60) || null,
       cryptoWalletAddress: input.cryptoWalletAddress?.trim().slice(0, 200) || null,
-      customLinks: sanitizeCustomLinks(input.customLinks ?? []),
+      customLinks,
     },
   });
 

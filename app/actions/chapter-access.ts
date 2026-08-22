@@ -14,6 +14,10 @@ interface UnlockResult {
 
 class InsufficientCoinsError extends Error {}
 
+function isUniqueConstraintError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002");
+}
+
 export async function unlockChapterWithCoins(chapterId: string): Promise<UnlockResult> {
   const user = await getSessionUser();
   if (!user) return { success: false, error: "Not authenticated" };
@@ -32,20 +36,20 @@ export async function unlockChapterWithCoins(chapterId: string): Promise<UnlockR
 
   try {
     await prisma.$transaction(async (tx) => {
-      const existing = await tx.chapterUnlock.findUnique({ where: { userId_chapterId: { userId: user.id, chapterId } } });
-      if (existing && existing.expiresAt === null) return;
+      try {
+        await tx.chapterUnlock.create({ data: { userId: user.id, chapterId, expiresAt: null } });
+      } catch (err) {
+        if (isUniqueConstraintError(err)) {
+          return;
+        }
+        throw err;
+      }
 
       const debited = await tx.user.updateMany({
         where: { id: user.id, coinsBalance: { gte: cost } },
         data: { coinsBalance: { decrement: cost } },
       });
       if (debited.count === 0) throw new InsufficientCoinsError();
-
-      await tx.chapterUnlock.upsert({
-        where: { userId_chapterId: { userId: user.id, chapterId } },
-        update: { expiresAt: null },
-        create: { userId: user.id, chapterId, expiresAt: null },
-      });
 
       await tx.transaction.create({
         data: { type: "CHAPTER_UNLOCK", status: "PAID", amount: cost, currency: "COIN", payerId: user.id, comicId: chapter.comicId },
@@ -90,31 +94,38 @@ export async function unlockComicWithCoins(comicId: string): Promise<UnlockResul
     select: { chapterId: true },
   });
   const alreadyUnlockedIds = new Set(existingUnlocks.map((u) => u.chapterId));
-  const lockedChapterIds = chapters.map((c) => c.id).filter((id) => !alreadyUnlockedIds.has(id));
+  const candidateChapterIds = chapters.map((c) => c.id).filter((id) => !alreadyUnlockedIds.has(id));
 
-  if (lockedChapterIds.length === 0) {
+  if (candidateChapterIds.length === 0) {
     return { success: false, error: "همه چپترهای این عنوان قبلاً باز شده‌اند" };
   }
 
-  const totalCost = lockedChapterIds.length * cost;
+  let unlockedChapterIds: string[] = [];
 
   try {
     await prisma.$transaction(async (tx) => {
+      const inserted = await tx.chapterUnlock.createMany({
+        data: candidateChapterIds.map((chapterId) => ({ userId: user.id, chapterId, expiresAt: null })),
+        skipDuplicates: true,
+      });
+
+      if (inserted.count === 0) {
+        return;
+      }
+
+      const wonUnlocks = await tx.chapterUnlock.findMany({
+        where: { userId: user.id, chapterId: { in: candidateChapterIds } },
+        select: { chapterId: true },
+      });
+      unlockedChapterIds = wonUnlocks.map((u) => u.chapterId);
+
+      const totalCost = unlockedChapterIds.length * cost;
+
       const debited = await tx.user.updateMany({
         where: { id: user.id, coinsBalance: { gte: totalCost } },
         data: { coinsBalance: { decrement: totalCost } },
       });
       if (debited.count === 0) throw new InsufficientCoinsError();
-
-      await Promise.all(
-        lockedChapterIds.map((chapterId) =>
-          tx.chapterUnlock.upsert({
-            where: { userId_chapterId: { userId: user.id, chapterId } },
-            update: { expiresAt: null },
-            create: { userId: user.id, chapterId, expiresAt: null },
-          })
-        )
-      );
 
       await tx.transaction.create({
         data: {
@@ -124,24 +135,29 @@ export async function unlockComicWithCoins(comicId: string): Promise<UnlockResul
           currency: "COIN",
           payerId: user.id,
           comicId,
-          message: `باز کردن کل عنوان — ${lockedChapterIds.length} چپتر`,
+          message: `باز کردن کل عنوان یکجا — ${unlockedChapterIds.length} چپتر`,
         },
       });
     });
   } catch (err) {
     if (err instanceof InsufficientCoinsError) {
+      const totalCost = candidateChapterIds.length * cost;
       return { success: false, error: `سکه کافی نیست — ${totalCost.toLocaleString("fa-IR")} سکه لازم است` };
     }
     throw err;
   }
 
+  if (unlockedChapterIds.length === 0) {
+    return { success: false, error: "همه چپترهای این عنوان قبلاً باز شده‌اند" };
+  }
+
   await Promise.all([
     invalidateSessionUserCache(user.id),
-    ...lockedChapterIds.map((chapterId) => invalidateChapterUnlockCache(user.id, chapterId)),
+    ...unlockedChapterIds.map((chapterId) => invalidateChapterUnlockCache(user.id, chapterId)),
   ]);
 
   revalidatePath(`/app/comic/${comic.slug}`);
-  lockedChapterIds.forEach((chapterId) => revalidatePath(`/app/read/${chapterId}`));
+  unlockedChapterIds.forEach((chapterId) => revalidatePath(`/app/read/${chapterId}`));
 
   return { success: true };
 }

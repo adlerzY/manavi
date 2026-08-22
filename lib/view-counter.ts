@@ -39,8 +39,7 @@ async function flushOne(
   apply: (id: string, delta: number) => Promise<unknown>
 ): Promise<boolean> {
   const key = deltaKeyFn(id);
-  const raw = await redis.get<number | string>(key).catch(() => null);
-  await redis.del(key).catch(() => {});
+  const raw = await redis.getdel<number | string>(key).catch(() => null);
   await redis.srem(pendingKey, id).catch(() => {});
 
   const delta = Number(raw);
