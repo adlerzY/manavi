@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUploadAccess } from "@/lib/auth";
 import { assertLicenseActive, LicenseInactiveError } from "@/lib/license";
-import { notifyNewChapter } from "@/lib/telegram-bot";
+import { executeScheduledPublish } from "@/lib/scheduled-publish";
 import { deleteObject, deleteObjects, getSignedImageUrls } from "@/lib/s3";
 import { safeError } from "@/lib/errors";
 
@@ -70,61 +69,8 @@ export async function cancelSchedule(chapterId: string): Promise<ActionResult> {
 export async function runScheduledPublish(): Promise<ActionResult<{ published: number }>> {
   try {
     await requireAdmin();
-    const due = await prisma.chapter.findMany({
-      where: { status: "SCHEDULED", scheduledAt: { lte: new Date() } },
-      select: {
-        id: true,
-        chapterNumber: true,
-        comic: { select: { id: true, slug: true, title: true, license: { select: { status: true } } } },
-      },
-    });
-
-    const eligible = due.filter((chapter) => chapter.comic.license.status === "ACTIVE");
-    if (eligible.length === 0) {
-      return { success: true, data: { published: 0 } };
-    }
-
-    const publishedChapters: typeof eligible = [];
-    for (const chapter of eligible) {
-      const updated = await prisma.chapter.updateMany({
-        where: { id: chapter.id, publishedAt: null },
-        data: { status: "PUBLISHED", publishedAt: new Date(), scheduledAt: null },
-      });
-      if (updated.count > 0) publishedChapters.push(chapter);
-    }
-
-    if (publishedChapters.length > 0) {
-      const comicIds = [...new Set(publishedChapters.map((c) => c.comic.id))];
-      const bookmarks = await prisma.bookmark.findMany({
-        where: { comicId: { in: comicIds }, notifyOnNewChapter: true },
-        select: { comicId: true, user: { select: { telegramId: true } } },
-      });
-
-      const telegramIdsByComicId = new Map<string, bigint[]>();
-      for (const b of bookmarks) {
-        const list = telegramIdsByComicId.get(b.comicId) ?? [];
-        list.push(b.user.telegramId);
-        telegramIdsByComicId.set(b.comicId, list);
-      }
-
-      for (const chapter of publishedChapters) {
-        const telegramIds = telegramIdsByComicId.get(chapter.comic.id);
-        if (!telegramIds?.length) continue;
-        after(() =>
-          notifyNewChapter({
-            telegramIds,
-            comicTitle: chapter.comic.title,
-            comicSlug: chapter.comic.slug,
-            chapterNumber: chapter.chapterNumber,
-            chapterId: chapter.id,
-          }).catch(() => {})
-        );
-      }
-    }
-
-    revalidatePath("/app");
-    revalidatePath("/app/explore");
-    return { success: true, data: { published: publishedChapters.length } };
+    const result = await executeScheduledPublish();
+    return { success: true, data: result };
   } catch (err) {
     return safeError(err);
   }

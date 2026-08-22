@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { maybeTriggerScheduledPublish } from "@/lib/scheduled-publish";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
 import { getAllGenres } from "@/lib/genres";
 import { getHomepageCategories } from "@/lib/categories";
@@ -23,6 +24,8 @@ import { CategoryRowSection } from "@/components/home/category-row-section";
 export const revalidate = 300;
 
 export default async function AppHomePage() {
+  maybeTriggerScheduledPublish();
+
   const allowedRatings = await getAllowedAgeRatings();
 
   const [

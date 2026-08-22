@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const pending = await prisma.transaction.findMany({
     where: {
       status: "PENDING",
-      currency: "TON",
+      currency: "USDT",
       tonComment: { not: null },
       createdAt: {
         lte: new Date(now - RECONCILE_MIN_AGE_MS),

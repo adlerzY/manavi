@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   await req.json().catch(() => null);
 
   const pending = await prisma.transaction.findMany({
-    where: { status: "PENDING", currency: "TON", tonComment: { not: null } },
+    where: { status: "PENDING", currency: "USDT", tonComment: { not: null } },
     orderBy: { createdAt: "asc" },
     take: 50,
   });

@@ -88,8 +88,8 @@ export async function getJettonWalletAddress(
 
 export interface BuildJettonTransferInput {
   jettonAmountUnits: bigint;
-  toOwnerAddress: string; // مقصد نهایی پرداخت
-  responseAddress: string; // برای برگشت باقیمانده‌ی گس (معمولاً خودِ فرستنده)
+  toOwnerAddress: string;
+  responseAddress: string;
   comment: string;
 }
 
@@ -126,15 +126,31 @@ interface TonApiTransactionsResponse {
   transactions: TonApiTransaction[];
 }
 
+const TX_FETCH_CACHE_TTL_MS = 4000;
+const txFetchCache = new Map<string, { promise: Promise<TonApiTransaction[]>; expiresAt: number }>();
+
 export async function fetchAccountTransactions(address: string): Promise<TonApiTransaction[]> {
-  const url = `${TONAPI_BASE}/v2/blockchain/accounts/${address}/transactions?limit=50`;
-  const res = await fetch(url, {
-    headers: TONAPI_KEY ? { Authorization: `Bearer ${TONAPI_KEY}` } : undefined,
-    cache: "no-store",
-  });
-  if (!res.ok) throw new TonVerificationError(`TonAPI request failed (${res.status})`);
-  const body = (await res.json()) as TonApiTransactionsResponse;
-  return body.transactions ?? [];
+  const now = Date.now();
+  const cached = txFetchCache.get(address);
+  if (cached && cached.expiresAt > now) {
+    return cached.promise;
+  }
+
+  const promise = (async () => {
+    const url = `${TONAPI_BASE}/v2/blockchain/accounts/${address}/transactions?limit=50`;
+    const res = await fetch(url, {
+      headers: TONAPI_KEY ? { Authorization: `Bearer ${TONAPI_KEY}` } : undefined,
+      cache: "no-store",
+    });
+    if (!res.ok) throw new TonVerificationError(`TonAPI request failed (${res.status})`);
+    const body = (await res.json()) as TonApiTransactionsResponse;
+    return body.transactions ?? [];
+  })();
+
+  txFetchCache.set(address, { promise, expiresAt: now + TX_FETCH_CACHE_TTL_MS });
+  promise.catch(() => txFetchCache.delete(address));
+
+  return promise;
 }
 
 function extractJettonNotification(tx: TonApiTransaction): { jettonAmountUnits: bigint; comment: string } | null {
