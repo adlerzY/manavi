@@ -1,1 +1,0 @@
-ALTER TABLE "Chapter" ALTER COLUMN "accessType" SET DEFAULT 'FREE';

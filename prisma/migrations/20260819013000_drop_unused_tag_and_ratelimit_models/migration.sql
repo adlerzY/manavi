@@ -1,6 +1,0 @@
-ALTER TABLE "ComicTag" DROP CONSTRAINT IF EXISTS "ComicTag_comicId_fkey";
-ALTER TABLE "ComicTag" DROP CONSTRAINT IF EXISTS "ComicTag_tagId_fkey";
-DROP TABLE IF EXISTS "ComicTag";
-DROP TABLE IF EXISTS "Tag";
-
-DROP TABLE IF EXISTS "RateLimitBucket";
