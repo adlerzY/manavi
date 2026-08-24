@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUploadAccess } from "@/lib/auth";
 import { deleteObject, deleteObjects } from "@/lib/s3";
 import { extractDominantColor } from "@/lib/color";
+import { invalidateChapterAccessList } from "@/lib/chapters";
 import { safeError } from "@/lib/errors";
 import { isAllowedImageUrl } from "@/lib/image-url";
 import { LicenseStatus, ChapterAccessType } from "@prisma/client";
@@ -304,6 +305,7 @@ export async function updateChapter(
     revalidatePath(`/admin/comics/${chapter.comic.id}`);
     revalidatePath(`/publisher/comics/${chapter.comic.id}`);
     revalidatePath(`/app/comic/${chapter.comic.slug}`);
+    invalidateChapterAccessList(chapter.comic.id);
     return { success: true };
   } catch (err) {
     return safeError(err);
@@ -444,6 +446,7 @@ export async function bulkUpdateChapterAccessType(
     for (const comicId of comicIds) {
       revalidatePath(`/admin/comics/${comicId}`);
       revalidatePath(`/publisher/comics/${comicId}`);
+      invalidateChapterAccessList(comicId);
     }
     return { success: true, data: { updated: result.count } };
   } catch (err) {

@@ -8,6 +8,7 @@ import { verifySessionToken } from "@/lib/session";
 import { getUploaderVerification } from "@/lib/auth";
 import { assertLicenseActive, LicenseInactiveError } from "@/lib/license";
 import { notifyNewChapter } from "@/lib/telegram-bot";
+import { invalidateChapterAccessList } from "@/lib/chapters";
 import { safeError } from "@/lib/errors";
 
 interface PublishChapterResult {
@@ -103,6 +104,7 @@ export async function publishChapter(chapterId: string): Promise<PublishChapterR
       revalidatePath("/admin/comics");
       revalidatePath("/publisher/comics");
       revalidatePath("/admin/chapter-approvals");
+      revalidateTag("home-feed", "default");
       return { success: true, data: { status: "PENDING_APPROVAL" } };
     }
 
@@ -115,11 +117,12 @@ export async function publishChapter(chapterId: string): Promise<PublishChapterR
       return { success: false, error: "این چپتر قبلاً منتشر شده است" };
     }
 
-    revalidateTag("home-feed");
+    revalidateTag("home-feed", "default");
     revalidatePath(`/app/comic/${chapter.comic.slug}`);
     revalidatePath(`/app/read/${chapterId}`);
     revalidatePath("/app");
     revalidatePath("/app/explore");
+    invalidateChapterAccessList(chapter.comic.id);
 
     const bookmarks = await prisma.bookmark.findMany({
       where: { comicId: chapter.comic.id, notifyOnNewChapter: true },

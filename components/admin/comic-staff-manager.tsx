@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { addComicStaff, removeComicStaff, type ComicStaffRow } from "@/app/admin/actions/comic-staff";
 import type { StaffRole } from "@prisma/client";
 import { STAFF_ROLE_LABELS } from "@/lib/staff-roles";
@@ -8,7 +9,13 @@ import { STAFF_ROLE_LABELS } from "@/lib/staff-roles";
 const ROLES: StaffRole[] = ["LOCALIZATION_SPECIALIST", "EDITOR", "CLEANER", "TYPIST"];
 
 export function ComicStaffManager({ comicId, initialStaff }: { comicId: string; initialStaff: ComicStaffRow[] }) {
+  const router = useRouter();
   const [staff, setStaff] = useState(initialStaff);
+
+  useEffect(() => {
+    setStaff(initialStaff);
+  }, [initialStaff]);
+
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<StaffRole>("LOCALIZATION_SPECIALIST");
   const [pending, setPending] = useState(false);
@@ -21,7 +28,7 @@ export function ComicStaffManager({ comicId, initialStaff }: { comicId: string; 
     const result = await addComicStaff(comicId, username, role);
     if (result.success) {
       setUsername("");
-      window.location.reload();
+      router.refresh();
     } else {
       setError(result.error ?? "خطا");
     }
@@ -31,7 +38,10 @@ export function ComicStaffManager({ comicId, initialStaff }: { comicId: string; 
   async function handleRemove(staffId: string) {
     setPending(true);
     const result = await removeComicStaff(comicId, staffId);
-    if (result.success) setStaff((prev) => prev.filter((s) => s.id !== staffId));
+    if (result.success) {
+      setStaff((prev) => prev.filter((s) => s.id !== staffId));
+      router.refresh();
+    }
     setPending(false);
   }
 

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { unstable_cache } from "next/cache";
+import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "./prisma";
 import { ChapterAccessType } from "@prisma/client";
 import type { ChapterAccessInfo } from "./chapter-access";
@@ -59,12 +59,20 @@ async function fetchChapterAccessList(comicId: string): Promise<ChapterAccessInf
   });
 }
 
+export function chapterAccessListTag(comicId: string): string {
+  return `chapters-access:${comicId}`;
+}
+
 export const getChapterAccessList = (comicId: string) =>
   unstable_cache(
     () => fetchChapterAccessList(comicId),
     [`chapters-access-list:${comicId}`],
-    { revalidate: CHAPTER_ACCESS_LIST_REVALIDATE_SECONDS }
+    { revalidate: CHAPTER_ACCESS_LIST_REVALIDATE_SECONDS, tags: [chapterAccessListTag(comicId)] }
   )();
+
+export function invalidateChapterAccessList(comicId: string): void {
+  revalidateTag(chapterAccessListTag(comicId), "max");
+}
 
 export async function userHasChapterAccess(
   userId: string | null,

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import {
   createCoinPackage,
   updateCoinPackage,
@@ -40,7 +41,13 @@ function pricePreview(coins: string, coinPriceUsdt: number, tomanPerUsdt: number
 }
 
 export function CoinPackageManager({ initialPackages, tomanPerUsdt, coinPriceUsdt }: CoinPackageManagerProps) {
+  const router = useRouter();
   const [packages, setPackages] = useState(initialPackages);
+
+  useEffect(() => {
+    setPackages(initialPackages);
+  }, [initialPackages]);
+
   const [form, setForm] = useState<PackageFormState>(EMPTY_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<PackageFormState>(EMPTY_FORM);
@@ -64,7 +71,7 @@ export function CoinPackageManager({ initialPackages, tomanPerUsdt, coinPriceUsd
     if (result.success) {
       setStatus("done");
       setForm(EMPTY_FORM);
-      window.location.reload();
+      router.refresh();
     } else {
       setStatus("error");
       setError(result.error ?? "خطا در ایجاد پکیج");
@@ -115,6 +122,7 @@ export function CoinPackageManager({ initialPackages, tomanPerUsdt, coinPriceUsd
         )
       );
       setEditingId(null);
+      router.refresh();
     } else {
       setError(result.error ?? "خطا در ذخیره‌سازی");
     }
@@ -126,6 +134,7 @@ export function CoinPackageManager({ initialPackages, tomanPerUsdt, coinPriceUsd
     const result = await toggleCoinPackageActive(pkg.id, !pkg.isActive);
     if (result.success) {
       setPackages((prev) => prev.map((p) => (p.id === pkg.id ? { ...p, isActive: !p.isActive } : p)));
+      router.refresh();
     } else {
       setError(result.error ?? "خطا");
     }
@@ -137,7 +146,7 @@ export function CoinPackageManager({ initialPackages, tomanPerUsdt, coinPriceUsd
     setPendingId(pkg.id);
     const result = await deleteCoinPackage(pkg.id);
     if (result.success) {
-      window.location.reload();
+      router.refresh();
     } else {
       setError(result.error ?? "خطا در حذف");
     }

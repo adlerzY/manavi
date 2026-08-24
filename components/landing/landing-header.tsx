@@ -10,7 +10,7 @@ const NAV_LINKS = [
   { href: "/#features", label: "ویژگی‌ها" },
   { href: "/#reader", label: "تجربه خواندن" },
   { href: "/#stats", label: "آمار ماناوی" },
-  { href: "/buy-with-ton", label: "خرید با تون" },
+  { href: "/buy-with-ton", label: "خرید با تتر" },
   { href: "/#join", label: "همکاری با ما" },
 ];
 
@@ -65,7 +65,6 @@ export function LandingHeader() {
         </button>
       </nav>
 
-      {/* منوی موبایل نرم و بدون پرش */}
       <AnimatePresence>
         {open && (
           <motion.div

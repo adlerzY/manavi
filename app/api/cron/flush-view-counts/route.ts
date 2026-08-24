@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { flushBufferedViewCounts } from "@/lib/view-counter";
+import { executeScheduledPublish } from "@/lib/scheduled-publish";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -14,6 +15,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const result = await flushBufferedViewCounts();
-  return NextResponse.json({ ok: true, ...result });
+  const [viewCounts, scheduledPublish] = await Promise.all([
+    flushBufferedViewCounts(),
+    executeScheduledPublish(),
+  ]);
+
+  return NextResponse.json({ ok: true, ...viewCounts, scheduledPublish });
 }

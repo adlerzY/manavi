@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUploadAccess } from "@/lib/auth";
 import { assertLicenseActive, LicenseInactiveError } from "@/lib/license";
 import { executeScheduledPublish } from "@/lib/scheduled-publish";
+import { invalidateChapterAccessList } from "@/lib/chapters";
 import { deleteObject, deleteObjects, getSignedImageUrls } from "@/lib/s3";
 import { safeError } from "@/lib/errors";
 
@@ -115,6 +116,8 @@ export async function deleteChapter(chapterId: string): Promise<ActionResult> {
       (key): key is string => Boolean(key) && !key.startsWith("http://") && !key.startsWith("https://")
     );
     await deleteObjects(keysToDelete).catch(() => {});
+
+    invalidateChapterAccessList(chapter.comicId);
 
     revalidatePath("/admin/comics");
     revalidatePath(`/admin/comics/${chapter.comicId}`);

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit-log";
 import { notifyNewChapter } from "@/lib/telegram-bot";
+import { invalidateChapterAccessList } from "@/lib/chapters";
 import { safeError } from "@/lib/errors";
 
 interface ActionResult<T = undefined> {
@@ -85,13 +86,14 @@ export async function approveChapter(chapterId: string): Promise<ActionResult> {
       })
     );
 
-    revalidateTag("home-feed");
+    revalidateTag("home-feed", "default" );
     revalidatePath(`/app/comic/${chapter.comic.slug}`);
     revalidatePath(`/app/read/${chapterId}`);
     revalidatePath("/app");
     revalidatePath("/app/explore");
     revalidatePath("/admin/comics");
     revalidatePath("/admin/chapter-approvals");
+    invalidateChapterAccessList(chapter.comic.id);
 
     const bookmarks = await prisma.bookmark.findMany({
       where: { comicId: chapter.comic.id, notifyOnNewChapter: true },

@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "./prisma";
 import { notifyNewChapter } from "./telegram-bot";
+import { invalidateChapterAccessList } from "./chapters";
 import { redis, isRedisConfigured } from "./redis";
 
 const THROTTLE_KEY = "scheduled-publish:lock";
@@ -71,6 +72,8 @@ export async function executeScheduledPublish(): Promise<ScheduledPublishResult>
       revalidatePath(`/app/comic/${chapter.comic.slug}`);
       revalidatePath(`/app/read/${chapter.id}`);
     }
+
+    comicIds.forEach((comicId) => invalidateChapterAccessList(comicId));
 
     revalidateTag("home-feed", "max");
     revalidatePath("/app");

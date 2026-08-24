@@ -5,6 +5,7 @@ import { prisma } from "./prisma";
 
 const HOME_FEED_REVALIDATE_SECONDS = 120;
 const HOME_FEED_TAG = "home-feed";
+const GENRE_RECOMMENDATIONS_REVALIDATE_SECONDS = 300;
 
 export interface HeroComic {
   id: string;
@@ -52,7 +53,7 @@ export interface RecommendedComic {
   completed: boolean;
 }
 
-export async function getGenreBasedRecommendations(userId: string, allowedRatings: AgeRating[]): Promise<RecommendedComic[]> {
+async function fetchGenreBasedRecommendations(userId: string, allowedRatings: AgeRating[]): Promise<RecommendedComic[]> {
   const viewedGenres = await prisma.readHistory.findMany({
     where: { userId },
     orderBy: { updatedAt: "desc" },
@@ -102,6 +103,12 @@ export async function getGenreBasedRecommendations(userId: string, allowedRating
     completed: c.status === "COMPLETED",
   }));
 }
+
+export const getGenreBasedRecommendations = unstable_cache(
+  fetchGenreBasedRecommendations,
+  ["home-feed:genre-recommendations"],
+  { revalidate: GENRE_RECOMMENDATIONS_REVALIDATE_SECONDS, tags: [HOME_FEED_TAG] }
+);
 
 export interface LatestCommentItem {
   id: string;

@@ -14,8 +14,8 @@ const STEPS = [
   },
   {
     icon: <CreditCard size={18} />,
-    title: "انتخاب پلن یا پکیج",
-    description: "اشتراک ویژه یا پکیج سکه موردنظرت رو انتخاب و تایید کن.",
+    title: "انتخاب پکیج سکه",
+    description: "پکیج سکه‌ای که می‌خوای — یا مقدار دلخواه — رو انتخاب و تایید کن.",
   },
   {
     icon: <CheckCircle2 size={18} />,
@@ -29,7 +29,7 @@ export function TonGuideSection() {
     <section className="relative mx-auto max-w-6xl px-4 py-20">
       <div className="mb-10 text-center">
         <span className="text-xs font-medium tracking-widest text-primary">پرداخت ارزی</span>
-        <h2 className="mt-3 text-2xl font-bold text-text-main sm:text-3xl">خرید اشتراک و سکه با تتر</h2>
+        <h2 className="mt-3 text-2xl font-bold text-text-main sm:text-3xl">خرید سکه با تتر</h2>
         <p className="mx-auto mt-3 max-w-md text-sm leading-8 text-text-muted">
           پرداخت مستقیم و بدون واسطه با تتر از طریق کیف پول، بدون نیاز به کارت بانکی یا درگاه واسط.
         </p>
