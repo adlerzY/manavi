@@ -5,6 +5,7 @@ import { getSessionUser, invalidateSessionUserCache } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadUserAvatar } from "@/lib/s3";
 import { describeUploadError } from "@/lib/upload-error";
+import { assertRealImage, InvalidImageError } from "@/lib/image-validate";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -28,6 +29,8 @@ export async function uploadOwnAvatarAction(formData: FormData): Promise<ActionR
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    await assertRealImage(buffer);
+
     const url = await uploadUserAvatar(user.id, buffer, file.type);
 
     await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: url } });
@@ -36,6 +39,7 @@ export async function uploadOwnAvatarAction(formData: FormData): Promise<ActionR
 
     return { success: true, data: { url } };
   } catch (err) {
+    if (err instanceof InvalidImageError) return { success: false, error: err.message };
     return { success: false, error: describeUploadError(err) };
   }
 }

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { validateTelegramInitData, InvalidInitDataError, sanitizeTelegramPhotoUrl } from "@/lib/telegram";
 import { createSessionToken, sessionCookieOptions } from "@/lib/session";
 import { generateReferralCode } from "@/lib/referral";
+import { checkRateLimit } from "@/lib/moderation";
 import type { Role } from "@prisma/client";
 
 function getBootstrapAdminTelegramIds(): Set<string> {
@@ -49,6 +50,12 @@ async function createUserWithReferral(input: {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const allowed = await checkRateLimit(`auth-telegram:${ip}`, 20);
+  if (!allowed) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  }
+
   let initData: unknown;
   try {
     const body = await req.json();

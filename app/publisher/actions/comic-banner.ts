@@ -3,6 +3,7 @@
 import { getSessionUser, getPublisherContext, requireComicManageAccessByComicId } from "@/lib/auth";
 import { uploadComicBanner, uploadComicCover } from "@/lib/s3";
 import { describeUploadError } from "@/lib/upload-error";
+import { assertRealImage, InvalidImageError } from "@/lib/image-validate";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -44,10 +45,13 @@ export async function uploadComicBannerAsPublisherAction(formData: FormData): Pr
     await assertAccess(comicId);
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    await assertRealImage(buffer);
+
     const url = await uploadComicBanner(comicId, buffer, file.type);
 
     return { success: true, data: { url } };
   } catch (err) {
+    if (err instanceof InvalidImageError) return { success: false, error: err.message };
     return { success: false, error: describeUploadError(err) };
   }
 }
@@ -66,10 +70,13 @@ export async function uploadComicCoverAsPublisherAction(formData: FormData): Pro
     await assertAccess(comicId);
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    await assertRealImage(buffer);
+
     const url = await uploadComicCover(comicId, buffer, file.type);
 
     return { success: true, data: { url } };
   } catch (err) {
+    if (err instanceof InvalidImageError) return { success: false, error: err.message };
     return { success: false, error: describeUploadError(err) };
   }
 }

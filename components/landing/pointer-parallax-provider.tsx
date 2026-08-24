@@ -32,7 +32,11 @@ export function PointerParallaxProvider({ children }: { children: ReactNode }) {
   const frame = useRef<number | null>(null);
 
   useEffect(() => {
+    const isFinePointer = window.matchMedia("(pointer: fine)").matches;
+    if (!isFinePointer) return;
+
     function handlePointerMove(event: PointerEvent) {
+      if (event.pointerType !== "mouse") return;
       if (frame.current) return;
       frame.current = requestAnimationFrame(() => {
         frame.current = null;

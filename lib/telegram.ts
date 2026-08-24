@@ -56,6 +56,31 @@ function getBotToken(): string {
   return token;
 }
 
+interface MemoryReplayEntry {
+  expiresAt: number;
+}
+
+function getMemoryReplayCache(): Map<string, MemoryReplayEntry> {
+  const g = globalThis as unknown as { __telegramReplayCache?: Map<string, MemoryReplayEntry> };
+  if (!g.__telegramReplayCache) {
+    g.__telegramReplayCache = new Map();
+  }
+  return g.__telegramReplayCache;
+}
+
+function claimReplayGuardInMemory(hash: string, ttlSeconds: number): boolean {
+  const cache = getMemoryReplayCache();
+  const now = Date.now();
+
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt < now) cache.delete(key);
+  }
+
+  if (cache.has(hash)) return false;
+  cache.set(hash, { expiresAt: now + ttlSeconds * 1000 });
+  return true;
+}
+
 export async function validateTelegramInitData(initData: string): Promise<ValidatedInitData> {
   const params = new URLSearchParams(initData);
 
@@ -104,10 +129,10 @@ export async function validateTelegramInitData(initData: string): Promise<Valida
     throw new InvalidInitDataError("auth_date is in the future");
   }
 
+  const remainingTtl = Math.max(1, Math.ceil(MAX_AUTH_AGE_SECONDS - ageSeconds));
 
   if (isRedisConfigured) {
     try {
-      const remainingTtl = Math.max(1, Math.ceil(MAX_AUTH_AGE_SECONDS - ageSeconds));
       const claimed = await redis.set(`${REPLAY_GUARD_PREFIX}:${hash}`, "1", {
         ex: remainingTtl,
         nx: true,
@@ -117,6 +142,13 @@ export async function validateTelegramInitData(initData: string): Promise<Valida
       }
     } catch (err) {
       if (err instanceof ReplayedInitDataError) throw err;
+      if (!claimReplayGuardInMemory(hash, remainingTtl)) {
+        throw new ReplayedInitDataError();
+      }
+    }
+  } else {
+    if (!claimReplayGuardInMemory(hash, remainingTtl)) {
+      throw new ReplayedInitDataError();
     }
   }
 

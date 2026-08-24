@@ -3,10 +3,12 @@
 import { useEffect, useRef } from "react";
 import { reportDevToolsOpen } from "@/app/actions/anti-piracy";
 
-const SIZE_CHECK_INTERVAL_MS = 5000;
-const TIMING_CHECK_INTERVAL_MS = 10000;
+const SIZE_CHECK_INTERVAL_MS = 8000;
+const TIMING_CHECK_INTERVAL_MS = 15000;
 const SIZE_THRESHOLD_PX = 160;
 const TIMING_THRESHOLD_MS = 100;
+
+const debuggerProbe = new Function("debugger");
 
 export function DevToolsGuard() {
   const triggeredRef = useRef(false);
@@ -27,6 +29,7 @@ export function DevToolsGuard() {
     }
 
     function checkBySize() {
+      if (document.hidden) return;
       const widthDelta = window.outerWidth - window.innerWidth;
       const heightDelta = window.outerHeight - window.innerHeight;
       if (widthDelta > SIZE_THRESHOLD_PX || heightDelta > SIZE_THRESHOLD_PX) {
@@ -35,8 +38,9 @@ export function DevToolsGuard() {
     }
 
     function checkByTiming() {
+      if (document.hidden) return;
       const start = performance.now();
-      Function("debugger")();
+      debuggerProbe();
       if (performance.now() - start > TIMING_THRESHOLD_MS) {
         trigger();
       }

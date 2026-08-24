@@ -5,6 +5,7 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadPublisherAvatar } from "@/lib/s3";
 import { describeUploadError } from "@/lib/upload-error";
+import { assertRealImage, InvalidImageError } from "@/lib/image-validate";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -28,6 +29,8 @@ export async function uploadPublisherAvatarAction(formData: FormData): Promise<A
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    await assertRealImage(buffer);
+
     const url = await uploadPublisherAvatar(user.publisherProfile.id, buffer, file.type);
 
     await prisma.publisher.update({ where: { id: user.publisherProfile.id }, data: { avatarUrl: url } });
@@ -36,6 +39,7 @@ export async function uploadPublisherAvatarAction(formData: FormData): Promise<A
 
     return { success: true, data: { url } };
   } catch (err) {
+    if (err instanceof InvalidImageError) return { success: false, error: err.message };
     return { success: false, error: describeUploadError(err) };
   }
 }

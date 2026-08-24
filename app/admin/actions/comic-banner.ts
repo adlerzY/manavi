@@ -3,6 +3,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { uploadComicBanner, uploadComicCover } from "@/lib/s3";
 import { describeUploadError } from "@/lib/upload-error";
+import { assertRealImage, InvalidImageError } from "@/lib/image-validate";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -32,10 +33,13 @@ export async function uploadComicBannerAction(formData: FormData): Promise<Actio
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    await assertRealImage(buffer);
+
     const url = await uploadComicBanner(comicId, buffer, file.type);
 
     return { success: true, data: { url } };
   } catch (err) {
+    if (err instanceof InvalidImageError) return { success: false, error: err.message };
     return { success: false, error: describeUploadError(err) };
   }
 }
@@ -54,10 +58,13 @@ export async function uploadComicCoverAction(formData: FormData): Promise<Action
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    await assertRealImage(buffer);
+
     const url = await uploadComicCover(comicId, buffer, file.type);
 
     return { success: true, data: { url } };
   } catch (err) {
+    if (err instanceof InvalidImageError) return { success: false, error: err.message };
     return { success: false, error: describeUploadError(err) };
   }
 }
