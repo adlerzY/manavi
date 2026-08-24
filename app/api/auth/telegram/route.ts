@@ -17,6 +17,17 @@ function getBootstrapAdminTelegramIds(): Set<string> {
   );
 }
 
+function prismaErrorCode(err: unknown): string | undefined {
+  return err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+}
+
+function prismaErrorTarget(err: unknown): string[] | undefined {
+  if (!err || typeof err !== "object" || !("meta" in err)) return undefined;
+  const meta = (err as { meta?: { target?: string[] | string } }).meta;
+  if (!meta?.target) return undefined;
+  return Array.isArray(meta.target) ? meta.target : [meta.target];
+}
+
 async function createUserWithReferral(input: {
   telegramId: bigint;
   firstName: string;
@@ -42,8 +53,19 @@ async function createUserWithReferral(input: {
         },
       });
     } catch (err) {
-      const isUniqueViolation = err instanceof Error && err.message.includes("Unique constraint");
-      if (!isUniqueViolation || attempt === 4) throw err;
+      const code = prismaErrorCode(err);
+      const target = prismaErrorTarget(err);
+
+      if (code === "P2002" && target?.includes("telegramId")) {
+        const existing = await prisma.user.findUnique({ where: { telegramId: input.telegramId } });
+        if (existing) return existing;
+      }
+
+      if (code === "P2002" && target?.includes("referralCode") && attempt < 4) {
+        continue;
+      }
+
+      throw err;
     }
   }
   throw new Error("Failed to allocate a unique referral code");

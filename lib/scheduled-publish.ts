@@ -27,14 +27,21 @@ export async function executeScheduledPublish(): Promise<ScheduledPublishResult>
     return { published: 0 };
   }
 
-  const publishedChapters: typeof eligible = [];
-  for (const chapter of eligible) {
-    const updated = await prisma.chapter.updateMany({
-      where: { id: chapter.id, publishedAt: null },
-      data: { status: "PUBLISHED", publishedAt: new Date(), scheduledAt: null },
-    });
-    if (updated.count > 0) publishedChapters.push(chapter);
-  }
+  const publishTime = new Date();
+  const eligibleIds = eligible.map((c) => c.id);
+
+  await prisma.chapter.updateMany({
+    where: { id: { in: eligibleIds }, publishedAt: null },
+    data: { status: "PUBLISHED", publishedAt: publishTime, scheduledAt: null },
+  });
+
+  const justPublished = await prisma.chapter.findMany({
+    where: { id: { in: eligibleIds }, publishedAt: publishTime },
+    select: { id: true },
+  });
+  const justPublishedIds = new Set(justPublished.map((c) => c.id));
+
+  const publishedChapters = eligible.filter((chapter) => justPublishedIds.has(chapter.id));
 
   if (publishedChapters.length > 0) {
     const comicIds = [...new Set(publishedChapters.map((c) => c.comic.id))];
@@ -72,6 +79,7 @@ export async function executeScheduledPublish(): Promise<ScheduledPublishResult>
 
   return { published: publishedChapters.length };
 }
+
 export function maybeTriggerScheduledPublish(): void {
   if (!isRedisConfigured) return;
 

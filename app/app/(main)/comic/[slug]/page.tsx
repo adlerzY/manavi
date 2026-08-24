@@ -83,6 +83,8 @@ export default async function ComicDetailPage({ params }: PageProps) {
   const licenseActive = comic.license.status === "ACTIVE";
   const firstChapter = sortedChapters[0];
 
+  const canPreviewAdultContent = comic.ageRating === "NORMAL" || Boolean(user?.isAgeVerified);
+
   const [bookmarked, similarComics, firstChapterPages, readHistoryEntry, readChapterIds, hasRead, unlockPreview] = await Promise.all([
     user
       ? prisma.bookmark.findUnique({ where: { userId_comicId: { userId: user.id, comicId: comic.id } } }).then(Boolean)
@@ -107,7 +109,7 @@ export default async function ComicDetailPage({ params }: PageProps) {
           },
         })
       : Promise.resolve([]),
-    firstChapter && licenseActive
+    firstChapter && licenseActive && canPreviewAdultContent
       ? prisma.chapter
           .findUnique({ where: { id: firstChapter.id }, select: { pages: true } })
           .then((c) => (c ? getSignedImageUrls(c.pages.slice(0, 3), undefined, { width: 640 }) : []))

@@ -47,14 +47,13 @@ async function fetchChapterAccessList(comicId: string): Promise<ChapterAccessInf
 
   return chapters.map((chapter) => {
     const isFree = chapter.accessType === ChapterAccessType.FREE;
-    const locked = !isFree && chapter.isLocked;
     return {
       id: chapter.id,
       chapterNumber: chapter.chapterNumber,
       title: chapter.title,
       publishedAt: chapter.publishedAt,
       manuallyLocked: chapter.isLocked,
-      locked,
+      locked: !isFree,
       accessType: chapter.accessType,
     };
   });

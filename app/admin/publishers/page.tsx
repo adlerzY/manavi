@@ -18,7 +18,14 @@ export default async function AdminPublishersPage({ searchParams }: PageProps) {
   const [publishers, total] = await Promise.all([
     prisma.publisher.findMany({
       orderBy: { createdAt: "desc" },
-      include: { licenses: { select: { id: true } }, contractUser: { select: { username: true } } },
+      select: {
+        id: true,
+        name: true,
+        contactEmail: true,
+        isVerified: true,
+        licenses: { select: { id: true } },
+        contractUser: { select: { username: true } },
+      },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),

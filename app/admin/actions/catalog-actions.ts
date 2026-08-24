@@ -434,9 +434,7 @@ export async function bulkUpdateChapterAccessType(
     if (chapters.length === 0) return { success: false, error: "چپتری یافت نشد" };
 
     const comicIds = [...new Set(chapters.map((c) => c.comicId))];
-    for (const comicId of comicIds) {
-      await requireUploadAccess(comicId);
-    }
+    await Promise.all(comicIds.map((comicId) => requireUploadAccess(comicId)));
 
     const result = await prisma.chapter.updateMany({
       where: { id: { in: chapterIds } },

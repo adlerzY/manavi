@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
@@ -35,6 +36,8 @@ export async function updatePublisherProfile(input: {
       return { success: false, error: "آدرس تصویر معتبر نیست — از گزینه آپلود مستقیم استفاده کنید" };
     }
 
+    const customLinks = sanitizeCustomLinks(input.customLinks ?? []) as unknown as Prisma.InputJsonValue;
+
     await prisma.publisher.update({
       where: { id: user.publisherProfile.id },
       data: {
@@ -46,7 +49,7 @@ export async function updatePublisherProfile(input: {
         donationLink: input.donationLink?.trim() || null,
         cryptoWalletLabel: input.cryptoWalletLabel?.trim().slice(0, 60) || null,
         cryptoWalletAddress: input.cryptoWalletAddress?.trim().slice(0, 200) || null,
-        customLinks: sanitizeCustomLinks(input.customLinks ?? []),
+        customLinks,
       },
     });
 
