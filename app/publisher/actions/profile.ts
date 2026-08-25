@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
-import { sanitizeCustomLinks, type ProfileLink } from "@/lib/profile-links";
+import { sanitizeCustomLinks, isSafeUrl, type ProfileLink } from "@/lib/profile-links";
 import { isAllowedImageUrl } from "@/lib/image-url";
 
 interface ActionResult<T = undefined> {
@@ -36,6 +36,23 @@ export async function updatePublisherProfile(input: {
       return { success: false, error: "آدرس تصویر معتبر نیست — از گزینه آپلود مستقیم استفاده کنید" };
     }
 
+    const telegramUrl = input.telegramUrl?.trim();
+    const instagramUrl = input.instagramUrl?.trim();
+    const websiteUrl = input.websiteUrl?.trim();
+    const donationLink = input.donationLink?.trim();
+
+    const linksToValidate: [string, string | undefined][] = [
+      ["تلگرام", telegramUrl],
+      ["اینستاگرام", instagramUrl],
+      ["وب‌سایت", websiteUrl],
+      ["دونیت", donationLink],
+    ];
+    for (const [label, value] of linksToValidate) {
+      if (value && !isSafeUrl(value)) {
+        return { success: false, error: `لینک ${label} معتبر نیست` };
+      }
+    }
+
     const customLinks = sanitizeCustomLinks(input.customLinks ?? []) as unknown as Prisma.InputJsonValue;
 
     await prisma.publisher.update({
@@ -43,10 +60,10 @@ export async function updatePublisherProfile(input: {
       data: {
         bio: input.bio?.trim() || null,
         avatarUrl: avatarUrl || null,
-        telegramUrl: input.telegramUrl?.trim() || null,
-        instagramUrl: input.instagramUrl?.trim() || null,
-        websiteUrl: input.websiteUrl?.trim() || null,
-        donationLink: input.donationLink?.trim() || null,
+        telegramUrl: telegramUrl || null,
+        instagramUrl: instagramUrl || null,
+        websiteUrl: websiteUrl || null,
+        donationLink: donationLink || null,
         cryptoWalletLabel: input.cryptoWalletLabel?.trim().slice(0, 60) || null,
         cryptoWalletAddress: input.cryptoWalletAddress?.trim().slice(0, 200) || null,
         customLinks,

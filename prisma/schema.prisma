@@ -299,7 +299,7 @@ model Chapter {
   readMarks  ChapterReadMark[]
 
   @@index([comicId, publishedAt])
-  @@index([comicId, chapterNumber])
+  @@unique([comicId, chapterNumber])
   @@index([status, scheduledAt])
   @@index([viewCount])
   @@index([uploadedById])

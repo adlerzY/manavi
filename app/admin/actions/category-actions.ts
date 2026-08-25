@@ -49,7 +49,7 @@ export async function createCategory(input: {
       },
     });
 
-    revalidateTag("categories");
+    revalidateTag("categories", "max");
     revalidatePath("/admin/categories");
     revalidatePath("/app");
     revalidatePath("/app/explore");
@@ -95,7 +95,7 @@ export async function updateCategory(
       },
     });
 
-    revalidateTag("categories");
+    revalidateTag("categories", "max");
     revalidatePath("/admin/categories");
     revalidatePath("/app");
     revalidatePath("/app/explore");
@@ -112,7 +112,7 @@ export async function toggleCategoryHomepage(categoryId: string, showOnHomepage:
   try {
     await requireAdmin();
     await prisma.category.update({ where: { id: categoryId }, data: { showOnHomepage } });
-    revalidateTag("categories");
+    revalidateTag("categories", "max");
     revalidatePath("/admin/categories");
     revalidatePath("/app");
     return { success: true };
@@ -125,9 +125,8 @@ export async function toggleCategoryActive(categoryId: string, isActive: boolean
   try {
     await requireAdmin();
     await prisma.category.update({ where: { id: categoryId }, data: { isActive } });
-    revalidateTag("categories");
+    revalidateTag("categories", "max");
     revalidatePath("/admin/categories");
-    revalidatePath("/app");
     revalidatePath("/app/explore");
     return { success: true };
   } catch (err) {
@@ -146,7 +145,7 @@ export async function deleteCategory(categoryId: string): Promise<ActionResult> 
       };
     }
     await prisma.category.delete({ where: { id: categoryId } });
-    revalidateTag("categories");
+    revalidateTag("categories", "max");
     revalidatePath("/admin/categories");
     return { success: true };
   } catch (err) {

@@ -23,6 +23,9 @@ function slugify(value: string): string {
 export async function createGenre(input: { name: string; imageUrl?: string }): Promise<ActionResult<{ id: string }>> {
   try {
     const user = await getSessionUser();
+    if (user?.isBanned) {
+      return { success: false, error: "دسترسی غیرمجاز" };
+    }
     if (user?.role !== "ADMIN") {
       const context = await getPublisherContext(user);
       if (!context?.canManageComics) return { success: false, error: "دسترسی غیرمجاز" };
@@ -40,12 +43,15 @@ export async function createGenre(input: { name: string; imageUrl?: string }): P
       data: { name, slug: slugify(name), imageUrl: input.imageUrl || null },
     });
 
-    revalidateTag("genres");
+    revalidateTag("genres", "max");
     revalidatePath("/admin/genres");
     revalidatePath("/admin/comics");
     revalidatePath("/app/explore");
     return { success: true, data: { id: genre.id } };
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+      return { success: false, error: "این نام قبلاً استفاده شده — یک نام دیگر انتخاب کنید" };
+    }
     return safeError(err);
   }
 }
@@ -60,7 +66,7 @@ export async function updateGenreImage(genreId: string, imageUrl: string): Promi
 
     await prisma.genre.update({ where: { id: genreId }, data: { imageUrl } });
 
-    revalidateTag("genres");
+    revalidateTag("genres", "max");
     revalidatePath("/admin/genres");
     revalidatePath("/app/explore");
     return { success: true };
@@ -80,7 +86,7 @@ export async function deleteGenre(genreId: string): Promise<ActionResult> {
 
     await prisma.genre.delete({ where: { id: genreId } });
 
-    revalidateTag("genres");
+    revalidateTag("genres", "max");
     revalidatePath("/admin/genres");
     return { success: true };
   } catch (err) {

@@ -8,7 +8,7 @@ export type AuditAction =
   | "genre.create"
   | "publisher.verify" | "staff.verify"
   | "user.ban" | "user.unban" | "user.roleChange"
-  | "user.coinGrant" | "user.coinRevoke"
+  | "user.coinGrant" | "user.coinRevoke" | "user.delete"
   | "platformSettings.update"
   | "publisherStaff.permissionChange";
 

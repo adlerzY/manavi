@@ -17,6 +17,9 @@ export async function replyToComment(commentId: string, content: string): Promis
     if (!user) {
       return { success: false, error: "برای پاسخ باید وارد شوید" };
     }
+    if (user.isBanned) {
+      return { success: false, error: "حساب شما مسدود شده است" };
+    }
 
     const parent = await prisma.comment.findUnique({
       where: { id: commentId },

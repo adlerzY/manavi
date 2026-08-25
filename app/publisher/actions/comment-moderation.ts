@@ -15,6 +15,7 @@ interface ActionResult<T = undefined> {
 
 async function requirePublisherId(): Promise<string> {
   const user = await getSessionUser();
+  if (user?.isBanned) throw new Error("حساب شما مسدود شده است");
   const context = await getPublisherContext(user);
   if (!context) throw new Error("دسترسی غیرمجاز");
   return context.publisherId;

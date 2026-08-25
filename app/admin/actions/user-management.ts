@@ -251,6 +251,15 @@ export async function deleteUserAccount(userId: string, confirmationName: string
     });
 
     await invalidateSessionUserCache(userId);
+    after(() =>
+      logAuditEvent({
+        actorId: admin.id,
+        actorRole: admin.role,
+        action: "user.delete",
+        targetType: "User",
+        targetId: userId,
+      })
+    );
     revalidatePath("/admin/users");
     return { success: true };
   } catch (err) {

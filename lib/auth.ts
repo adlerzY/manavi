@@ -78,6 +78,9 @@ export async function requireAdmin(): Promise<SessionUser> {
   if (!user || user.role !== "ADMIN") {
     throw new Error("Admin access required");
   }
+  if (user.isBanned) {
+    throw new Error("Account is banned");
+  }
   return user;
 }
 
@@ -85,6 +88,9 @@ export async function requireUploadAccess(comicId: string): Promise<SessionUser>
   const user = await getSessionUser();
   if (!user) {
     throw new Error("Not authenticated");
+  }
+  if (user.isBanned) {
+    throw new Error("Account is banned");
   }
   if (user.role === "ADMIN") {
     return user;
@@ -115,6 +121,7 @@ export async function requireUploadAccess(comicId: string): Promise<SessionUser>
 export async function requireComicManageAccess(publisherId: string): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
+  if (user.isBanned) throw new Error("Account is banned");
   if (user.role === "ADMIN") return user;
   if (user.publisherProfile?.id === publisherId) return user;
 

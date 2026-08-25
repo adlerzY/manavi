@@ -46,7 +46,7 @@ export async function approveComic(comicId: string): Promise<ActionResult> {
 
     after(() => logAuditEvent({ actorId: admin.id, actorRole: admin.role, action: "comic.approve", targetType: "Comic", targetId: comicId }));
 
-    revalidateTag("home-feed");
+    revalidateTag("home-feed", "max");
     revalidatePath("/app");
     revalidatePath("/app/explore");
     revalidatePath(`/app/comic/${comic.slug}`);
@@ -63,10 +63,18 @@ export async function rejectComic(comicId: string, note: string): Promise<Action
     const trimmed = note.trim();
     if (!trimmed) return { success: false, error: "برای رد کردن، دلیل را بنویسید" };
 
-    await prisma.comic.update({ where: { id: comicId }, data: { approvalStatus: "NEEDS_CHANGES", rejectionNote: trimmed } });
+    const comic = await prisma.comic.update({
+      where: { id: comicId },
+      data: { approvalStatus: "NEEDS_CHANGES", rejectionNote: trimmed },
+      select: { slug: true },
+    });
 
     after(() => logAuditEvent({ actorId: admin.id, actorRole: admin.role, action: "comic.reject", targetType: "Comic", targetId: comicId, metadata: { note: trimmed } }));
 
+    revalidateTag("home-feed", "max");
+    revalidatePath("/app");
+    revalidatePath("/app/explore");
+    revalidatePath(`/app/comic/${comic.slug}`);
     revalidatePath("/admin/chapter-approvals");
     revalidatePath("/publisher/comics");
     return { success: true };

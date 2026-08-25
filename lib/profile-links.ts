@@ -7,7 +7,7 @@ const MAX_CUSTOM_LINKS = 5;
 const MAX_LABEL_LENGTH = 40;
 const MAX_URL_LENGTH = 300;
 
-function isSafeUrl(url: string): boolean {
+export function isSafeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     return parsed.protocol === "https:" || parsed.protocol === "http:";

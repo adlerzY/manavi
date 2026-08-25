@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { validateTelegramInitData, InvalidInitDataError, sanitizeTelegramPhotoUrl } from "@/lib/telegram";
-import { createSessionToken, sessionCookieOptions } from "@/lib/session";
+import { createSessionToken, sessionCookieOptions, verifySessionToken } from "@/lib/session";
 import { generateReferralCode } from "@/lib/referral";
 import { checkRateLimit } from "@/lib/moderation";
 import type { Role } from "@prisma/client";
@@ -71,7 +71,30 @@ async function createUserWithReferral(input: {
   throw new Error("Failed to allocate a unique referral code");
 }
 
+function publicUserPayload(user: { id: string; firstName: string; lastName: string | null; username: string | null; role: Role }) {
+  return {
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    username: user.username,
+    role: user.role,
+  };
+}
+
 export async function POST(req: NextRequest) {
+  const cookieStore = await cookies();
+  const existingToken = cookieStore.get("session")?.value;
+
+  if (existingToken) {
+    const existingSession = verifySessionToken(existingToken);
+    if (existingSession) {
+      const existingUser = await prisma.user.findUnique({ where: { id: existingSession.userId } });
+      if (existingUser && !existingUser.deletedAt) {
+        return NextResponse.json({ user: publicUserPayload(existingUser) });
+      }
+    }
+  }
+
   const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const allowed = await checkRateLimit(`auth-telegram:${ip}`, 20);
   if (!allowed) {
@@ -139,16 +162,7 @@ export async function POST(req: NextRequest) {
   }
 
   const sessionToken = createSessionToken(dbUser.id);
-  const cookieStore = await cookies();
   cookieStore.set("session", sessionToken, sessionCookieOptions());
 
-  return NextResponse.json({
-    user: {
-      id: dbUser.id,
-      firstName: dbUser.firstName,
-      lastName: dbUser.lastName,
-      username: dbUser.username,
-      role: dbUser.role,
-    },
-  });
+  return NextResponse.json({ user: publicUserPayload(dbUser) });
 }

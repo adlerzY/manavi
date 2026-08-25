@@ -25,6 +25,9 @@ async function assertAccess(comicId: string | null): Promise<void> {
     return;
   }
   const user = await getSessionUser();
+  if (user?.isBanned) {
+    throw new Error("Account is banned");
+  }
   const context = await getPublisherContext(user);
   if (!context?.canManageComics) {
     throw new Error("دسترسی غیرمجاز");

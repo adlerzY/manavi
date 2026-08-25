@@ -99,12 +99,13 @@ export interface ComicUnlockPreview {
 }
 
 export async function getComicUnlockPreview(userId: string | null, comicId: string): Promise<ComicUnlockPreview> {
-  const cost = await getChapterUnlockCoinCost();
-
-  const chapters = await prisma.chapter.findMany({
-    where: { comicId, status: "PUBLISHED", accessType: ChapterAccessType.COIN },
-    select: { id: true },
-  });
+  const [cost, chapters] = await Promise.all([
+    getChapterUnlockCoinCost(),
+    prisma.chapter.findMany({
+      where: { comicId, status: "PUBLISHED", accessType: ChapterAccessType.COIN },
+      select: { id: true },
+    }),
+  ]);
 
   if (chapters.length === 0) {
     return { lockedCount: 0, totalCost: 0, coinCost: cost };

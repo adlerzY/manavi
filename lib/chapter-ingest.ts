@@ -19,6 +19,10 @@ export interface IngestChapterResult {
   chapterId?: string;
 }
 
+function isUniqueConstraintError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002");
+}
+
 export async function ingestChapter(input: IngestChapterInput): Promise<IngestChapterResult> {
   if (!input.comicId) return { success: false, error: "comicId الزامی است" };
   if (!Number.isFinite(input.chapterNumber) || input.chapterNumber <= 0) {
@@ -51,17 +55,25 @@ export async function ingestChapter(input: IngestChapterInput): Promise<IngestCh
       ? (input.accessType as ChapterAccessType)
       : ChapterAccessType.FREE;
 
-  const chapter = await prisma.chapter.create({
-    data: {
-      comicId: input.comicId,
-      chapterNumber: input.chapterNumber,
-      title: input.title?.trim() || null,
-      pages: input.pageKeys,
-      status: "DRAFT",
-      accessType,
-      uploadedById: input.uploadedById ?? null,
-    },
-  });
+  let chapter;
+  try {
+    chapter = await prisma.chapter.create({
+      data: {
+        comicId: input.comicId,
+        chapterNumber: input.chapterNumber,
+        title: input.title?.trim() || null,
+        pages: input.pageKeys,
+        status: "DRAFT",
+        accessType,
+        uploadedById: input.uploadedById ?? null,
+      },
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      return { success: false, error: `چپتر ${input.chapterNumber} قبلاً برای این عنوان ثبت شده است` };
+    }
+    throw err;
+  }
 
   const comicStaff = await prisma.comicStaff.findMany({
     where: { comicId: input.comicId },

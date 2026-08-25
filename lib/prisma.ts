@@ -17,7 +17,7 @@ if (process.env.NODE_ENV === "production" && !looksLikeLocalDb && !DATABASE_URL.
   );
 }
 
-const DATABASE_POOL_MAX = Number(process.env.DATABASE_POOL_MAX ?? 3);
+const DATABASE_POOL_MAX = Number(process.env.DATABASE_POOL_MAX ?? 10);
 const DATABASE_POOL_IDLE_TIMEOUT_MS = Number(process.env.DATABASE_POOL_IDLE_TIMEOUT_MS ?? 10_000);
 const DATABASE_POOL_CONNECT_TIMEOUT_MS = Number(process.env.DATABASE_POOL_CONNECT_TIMEOUT_MS ?? 5_000);
 const DATABASE_STATEMENT_TIMEOUT_MS = Number(process.env.DATABASE_STATEMENT_TIMEOUT_MS ?? 15_000);

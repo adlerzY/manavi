@@ -25,6 +25,9 @@ export async function addPublisherStaff(input: {
     if (!publisherUser?.publisherProfile) {
       return { success: false, error: "دسترسی غیرمجاز" };
     }
+    if (publisherUser.isBanned) {
+      return { success: false, error: "حساب شما مسدود شده است" };
+    }
 
     const targetUser = await prisma.user.findFirst({
       where: { username: input.telegramUsername.replace("@", "") },
@@ -81,6 +84,9 @@ export async function removePublisherStaff(staffId: string): Promise<ActionResul
     const publisherUser = await getSessionUser();
     if (!publisherUser?.publisherProfile) {
       return { success: false, error: "دسترسی غیرمجاز" };
+    }
+    if (publisherUser.isBanned) {
+      return { success: false, error: "حساب شما مسدود شده است" };
     }
 
     await prisma.publisherStaff.deleteMany({

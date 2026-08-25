@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
-import { sanitizeCustomLinks, type ProfileLink } from "@/lib/profile-links";
+import { sanitizeCustomLinks, isSafeUrl, type ProfileLink } from "@/lib/profile-links";
 import { isAllowedImageUrl } from "@/lib/image-url";
 
 export async function updateProfileDetails(input: {
@@ -25,6 +25,11 @@ export async function updateProfileDetails(input: {
     return { success: false, error: "آدرس تصویر معتبر نیست — از گزینه آپلود مستقیم استفاده کنید" };
   }
 
+  const donationLink = input.donationLink?.trim();
+  if (donationLink && !isSafeUrl(donationLink)) {
+    return { success: false, error: "لینک دونیت معتبر نیست" };
+  }
+
   const customLinks = sanitizeCustomLinks(input.customLinks ?? []) as unknown as Prisma.InputJsonValue;
 
   await prisma.user.update({
@@ -32,7 +37,7 @@ export async function updateProfileDetails(input: {
     data: {
       bio: input.bio?.trim().slice(0, 500) || null,
       avatarUrl: avatarUrl || null,
-      donationLink: input.donationLink?.trim() || null,
+      donationLink: donationLink || null,
       cryptoWalletLabel: input.cryptoWalletLabel?.trim().slice(0, 60) || null,
       cryptoWalletAddress: input.cryptoWalletAddress?.trim().slice(0, 200) || null,
       customLinks,

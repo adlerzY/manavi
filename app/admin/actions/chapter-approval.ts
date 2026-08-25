@@ -86,7 +86,7 @@ export async function approveChapter(chapterId: string): Promise<ActionResult> {
       })
     );
 
-    revalidateTag("home-feed", "default" );
+    revalidateTag("home-feed", "max");
     revalidatePath(`/app/comic/${chapter.comic.slug}`);
     revalidatePath(`/app/read/${chapterId}`);
     revalidatePath("/app");

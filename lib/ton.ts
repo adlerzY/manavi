@@ -204,7 +204,7 @@ export function matchIncomingJettonPayment(
 
     const notification = extractJettonNotification(tx);
     if (!notification) return false;
-    if (!notification.comment.includes(input.comment)) return false;
+    if (notification.comment.trim() !== input.comment) return false;
 
     return notification.jettonAmountUnits >= input.minAmountUnits;
   });
