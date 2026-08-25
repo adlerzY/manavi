@@ -1,0 +1,1 @@
+ALTER TABLE "ChapterUnlock" ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP(3);

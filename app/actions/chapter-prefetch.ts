@@ -18,6 +18,7 @@ export async function getChapterPrefetchUrls(chapterId: string): Promise<string[
       pages: true,
       publishedAt: true,
       accessType: true,
+      isLocked: true,
       comic: {
         select: {
           ageRating: true,
@@ -32,6 +33,7 @@ export async function getChapterPrefetchUrls(chapterId: string): Promise<string[
   });
 
   if (!chapter || !chapter.publishedAt || chapter.pages.length === 0) return [];
+  if (chapter.isLocked && user?.role !== "ADMIN") return [];
   if (!isLicenseCurrentlyActive(chapter.comic.license)) return [];
 
   if (chapter.comic.approvalStatus !== "APPROVED") {

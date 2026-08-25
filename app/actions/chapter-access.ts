@@ -25,9 +25,12 @@ export async function unlockChapterWithCoins(chapterId: string): Promise<UnlockR
 
   const chapter = await prisma.chapter.findUnique({
     where: { id: chapterId },
-    select: { id: true, comicId: true, accessType: true },
+    select: { id: true, comicId: true, accessType: true, isLocked: true },
   });
   if (!chapter) return { success: false, error: "Chapter not found" };
+  if (chapter.isLocked) {
+    return { success: false, error: "این چپتر موقتاً در دسترس نیست" };
+  }
   if (chapter.accessType !== ChapterAccessType.COIN) {
     return { success: false, error: "این چپتر با سکه قابل باز شدن نیست" };
   }
@@ -82,7 +85,7 @@ export async function unlockComicWithCoins(comicId: string): Promise<UnlockResul
   const cost = await getChapterUnlockCoinCost();
 
   const chapters = await prisma.chapter.findMany({
-    where: { comicId, status: "PUBLISHED", accessType: ChapterAccessType.COIN },
+    where: { comicId, status: "PUBLISHED", accessType: ChapterAccessType.COIN, isLocked: false },
     select: { id: true },
   });
   if (chapters.length === 0) {
@@ -104,20 +107,17 @@ export async function unlockComicWithCoins(comicId: string): Promise<UnlockResul
 
   try {
     await prisma.$transaction(async (tx) => {
-      const inserted = await tx.chapterUnlock.createMany({
+      const created = await tx.chapterUnlock.createManyAndReturn({
         data: candidateChapterIds.map((chapterId) => ({ userId: user.id, chapterId, expiresAt: null })),
         skipDuplicates: true,
+        select: { chapterId: true },
       });
 
-      if (inserted.count === 0) {
+      if (created.length === 0) {
         return;
       }
 
-      const wonUnlocks = await tx.chapterUnlock.findMany({
-        where: { userId: user.id, chapterId: { in: candidateChapterIds } },
-        select: { chapterId: true },
-      });
-      unlockedChapterIds = wonUnlocks.map((u) => u.chapterId);
+      unlockedChapterIds = created.map((u) => u.chapterId);
 
       const totalCost = unlockedChapterIds.length * cost;
 
@@ -141,7 +141,7 @@ export async function unlockComicWithCoins(comicId: string): Promise<UnlockResul
     });
   } catch (err) {
     if (err instanceof InsufficientCoinsError) {
-      const totalCost = candidateChapterIds.length * cost;
+      const totalCost = unlockedChapterIds.length * cost;
       return { success: false, error: `سکه کافی نیست — ${totalCost.toLocaleString("fa-IR")} سکه لازم است` };
     }
     throw err;

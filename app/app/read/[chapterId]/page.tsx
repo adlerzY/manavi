@@ -32,6 +32,7 @@ export default async function ReadChapterPage({ params }: PageProps) {
       pages: true,
       publishedAt: true,
       accessType: true,
+      isLocked: true,
       comic: {
         select: {
           id: true,
@@ -73,16 +74,23 @@ export default async function ReadChapterPage({ params }: PageProps) {
     getChapterAccessList(chapter.comic.id),
   ]);
 
-  if (chapter.comic.approvalStatus !== "APPROVED") {
-    const isPrivileged = user?.role === "ADMIN" || user?.id === chapter.comic.createdById;
-    let isTeamMember = false;
+  const needsPrivilegeCheck = chapter.isLocked || chapter.comic.approvalStatus !== "APPROVED";
+  let isPrivileged = false;
+  let isTeamMember = false;
+  if (needsPrivilegeCheck) {
+    isPrivileged = user?.role === "ADMIN" || user?.id === chapter.comic.createdById;
     if (!isPrivileged && user) {
       const ownContext = await getPublisherContext(user);
       isTeamMember = ownContext?.publisherId === chapter.comic.license.publisherId;
     }
-    if (!isPrivileged && !isTeamMember) {
-      notFound();
-    }
+  }
+
+  if (chapter.isLocked && !isPrivileged && !isTeamMember) {
+    notFound();
+  }
+
+  if (chapter.comic.approvalStatus !== "APPROVED" && !isPrivileged && !isTeamMember) {
+    notFound();
   }
 
   if (user?.isBanned) {

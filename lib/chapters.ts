@@ -33,7 +33,7 @@ export async function invalidateChapterUnlockCache(userId: string, chapterId: st
 
 async function fetchChapterAccessList(comicId: string): Promise<ChapterAccessInfo[]> {
   const chapters = await prisma.chapter.findMany({
-    where: { comicId, publishedAt: { not: null } },
+    where: { comicId, publishedAt: { not: null }, isLocked: false },
     orderBy: { chapterNumber: "desc" },
     select: {
       id: true,
@@ -102,7 +102,7 @@ export async function getComicUnlockPreview(userId: string | null, comicId: stri
   const [cost, chapters] = await Promise.all([
     getChapterUnlockCoinCost(),
     prisma.chapter.findMany({
-      where: { comicId, status: "PUBLISHED", accessType: ChapterAccessType.COIN },
+      where: { comicId, status: "PUBLISHED", accessType: ChapterAccessType.COIN, isLocked: false },
       select: { id: true },
     }),
   ]);
