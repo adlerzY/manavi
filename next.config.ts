@@ -13,7 +13,7 @@ function buildRemotePatterns() {
         patterns.push({ protocol: "https", hostname });
       }
     } catch {
-    
+
     }
   }
 
@@ -38,6 +38,11 @@ function buildRemotePatterns() {
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: buildRemotePatterns(),
+  },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "3mb",
+    },
   },
   turbopack: {
     resolveAlias: {

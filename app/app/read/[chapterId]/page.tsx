@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { after } from "next/server";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
 import { isLicenseCurrentlyActive } from "@/lib/license";
@@ -7,6 +8,7 @@ import { getChapterAccessList, userHasChapterAccess } from "@/lib/chapters";
 import { getSignedImageUrls } from "@/lib/s3";
 import { recordChapterVisit } from "@/lib/analytics";
 import { getChapterUnlockCoinCost } from "@/lib/platform-settings";
+import { checkRateLimit } from "@/lib/moderation";
 import { ChapterReader } from "@/components/reader/chapter-reader";
 import { LockedChapterGate } from "@/components/reader/locked-chapter-gate";
 import { AgeVerificationGate } from "@/components/reader/age-verification-gate";
@@ -19,6 +21,8 @@ import type { StaffCreditItem } from "@/components/reader/chapter-staff-credits"
 interface PageProps {
   params: Promise<{ chapterId: string }>;
 }
+
+const CHAPTER_READ_RATE_LIMIT = 20;
 
 export default async function ReadChapterPage({ params }: PageProps) {
   const { chapterId } = await params;
@@ -73,6 +77,21 @@ export default async function ReadChapterPage({ params }: PageProps) {
     getSessionUser(),
     getChapterAccessList(chapter.comic.id),
   ]);
+
+  const rateLimitKey = user
+    ? `chapter-read:${user.id}`
+    : `chapter-read:ip:${(await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"}`;
+  const withinRateLimit = user?.role === "ADMIN" ? true : await checkRateLimit(rateLimitKey, CHAPTER_READ_RATE_LIMIT);
+  if (!withinRateLimit) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        <p className="text-lg font-medium text-text-main">درخواست‌های شما زیاده — کمی صبر کنید</p>
+        <p className="max-w-sm text-sm text-text-muted">
+          برای جلوگیری از سوءاستفاده، تعداد چپترهایی که در یک بازه‌ی کوتاه باز می‌شود محدود شده. چند لحظه دیگر دوباره تلاش کنید.
+        </p>
+      </div>
+    );
+  }
 
   const needsPrivilegeCheck = chapter.isLocked || chapter.comic.approvalStatus !== "APPROVED";
   let isPrivileged = false;

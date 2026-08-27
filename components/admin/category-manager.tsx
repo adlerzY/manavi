@@ -9,6 +9,7 @@ import {
   deleteCategory,
 } from "@/app/admin/actions/category-actions";
 import { READING_MODE_LABELS } from "@/lib/reading";
+import { CategoryImageUploader } from "@/components/admin/banner-uploader";
 
 export interface CategoryRow {
   id: string;
@@ -112,12 +113,16 @@ export function CategoryManager({ initialCategories }: { initialCategories: Cate
           <div key={category.id} className="space-y-3 px-4 py-3">
             {editingId === category.id && editForm ? (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="نام" className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-text-main" />
                   <input value={editForm.slug} onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })} placeholder="اسلاگ" className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-text-main" />
-                  <input value={editForm.imageUrl ?? ""} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })} placeholder="آدرس تصویر" className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-text-main" />
                   <input type="number" value={editForm.sortOrder} onChange={(e) => setEditForm({ ...editForm, sortOrder: Number(e.target.value) || 0 })} placeholder="ترتیب" className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-text-main" />
                 </div>
+                <CategoryImageUploader
+                  entityId={category.id}
+                  currentUrl={editForm.imageUrl ?? ""}
+                  onUploaded={(url) => setEditForm({ ...editForm, imageUrl: url })}
+                />
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <select value={editForm.readingDirection} onChange={(e) => setEditForm({ ...editForm, readingDirection: e.target.value as ReadingDirection })} className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-text-main">
                     <option value="LTR">LTR</option>

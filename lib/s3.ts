@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID, createHmac } from "crypto";
+import type { AssetKind } from "./asset-kinds";
 
 const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID;
 const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY;
@@ -96,7 +97,7 @@ function withImageTransform(url: string, transform?: ImageTransformOptions): str
 export class BannerPublicUrlNotConfiguredError extends Error {
   constructor() {
     super(
-      "S3_PUBLIC_BASE_URL تنظیم نشده است. بنر باید همیشه از یک URL دائمی سرو شود (باکت عمومی یا یک Pull Zone عمومی روی CDN)، وگرنه بعد از انقضای لینک امضاشده تصویر می‌شکند. قبل از آپلود بنر این متغیر محیطی را تنظیم کنید."
+      "S3_PUBLIC_BASE_URL تنظیم نشده است. تصویر باید همیشه از یک URL دائمی سرو شود (باکت عمومی یا یک Pull Zone عمومی روی CDN)، وگرنه بعد از انقضای لینک امضاشده تصویر می‌شکند. قبل از آپلود این متغیر محیطی را تنظیم کنید."
     );
     this.name = "BannerPublicUrlNotConfiguredError";
   }
@@ -284,4 +285,34 @@ export async function createPagePresignedPutUrl(
     ContentType: contentType,
   });
   return getSignedUrl(s3, command, { expiresIn: expiresInSec });
+}
+
+export function isAllowedAssetContentType(contentType: string): boolean {
+  return contentType in ALLOWED_PAGE_CONTENT_TYPES;
+}
+
+export function buildAssetKey(kind: AssetKind, ownerId: string | null, contentType: string): string {
+  const extension = ALLOWED_PAGE_CONTENT_TYPES[contentType] ?? "bin";
+  return ownerId
+    ? `${kind}/${ownerId}/image-${randomUUID()}.${extension}`
+    : `staging/${kind}/pending/${randomUUID()}/image.${extension}`;
+}
+
+export async function createAssetPresignedPutUrl(
+  key: string,
+  contentType: string,
+  expiresInSec: number = PRESIGN_PUT_TTL_SECONDS
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: getS3Bucket(),
+    Key: key,
+    ContentType: contentType,
+    CacheControl: "public, max-age=31536000, immutable",
+  });
+  return getSignedUrl(s3, command, { expiresIn: expiresInSec });
+}
+
+export function assetPublicUrl(key: string): string {
+  if (!PUBLIC_BASE_URL) throw new BannerPublicUrlNotConfiguredError();
+  return `${PUBLIC_BASE_URL.replace(/\/$/, "")}/${key}`;
 }

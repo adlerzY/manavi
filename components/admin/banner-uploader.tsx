@@ -2,37 +2,33 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import { uploadComicBannerAction, uploadComicCoverAction } from "@/app/admin/actions/comic-banner";
-
-type UploadFn = (formData: FormData) => Promise<{ success: boolean; error?: string; data?: { url: string } }>;
+import { uploadAssetFile } from "@/lib/client/asset-upload";
+import type { AssetKind } from "@/lib/asset-kinds";
 
 interface ImageUploaderProps {
-  comicId: string | null;
+  entityId: string | null;
   currentUrl: string;
   onUploaded: (url: string) => void;
-  uploadAction: UploadFn;
-  fieldName: string;
+  kind: AssetKind;
   label: string;
   aspectClassName?: string;
 }
 
-export function ImageUploader({ comicId, currentUrl, onUploaded, uploadAction, fieldName, label, aspectClassName = "h-32" }: ImageUploaderProps) {
+export function ImageUploader({ entityId, currentUrl, onUploaded, kind, label, aspectClassName = "h-32" }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSelect(file: File) {
     setStatus("uploading");
+    setProgress(0);
     setError(null);
 
-    const formData = new FormData();
-    if (comicId) formData.set("comicId", comicId);
-    formData.set(fieldName, file);
+    const result = await uploadAssetFile(kind, entityId, file, file.type, setProgress);
 
-    const result = await uploadAction(formData);
-
-    if (result.success && result.data) {
-      onUploaded(result.data.url);
+    if (result.success && result.url) {
+      onUploaded(result.url);
       setStatus("idle");
     } else {
       setStatus("error");
@@ -65,7 +61,7 @@ export function ImageUploader({ comicId, currentUrl, onUploaded, uploadAction, f
         disabled={status === "uploading"}
         className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-text-main disabled:opacity-50"
       >
-        {status === "uploading" ? "در حال آپلود…" : currentUrl ? "تغییر تصویر" : "آپلود تصویر"}
+        {status === "uploading" ? `در حال آپلود… ${progress}%` : currentUrl ? "تغییر تصویر" : "آپلود تصویر"}
       </button>
       {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
@@ -73,23 +69,20 @@ export function ImageUploader({ comicId, currentUrl, onUploaded, uploadAction, f
 }
 
 export function BannerUploader({
-  comicId,
+  entityId,
   currentUrl,
   onUploaded,
-  uploadAction = uploadComicBannerAction,
 }: {
-  comicId: string | null;
+  entityId: string | null;
   currentUrl: string;
   onUploaded: (url: string) => void;
-  uploadAction?: UploadFn;
 }) {
   return (
     <ImageUploader
-      comicId={comicId}
+      entityId={entityId}
       currentUrl={currentUrl}
       onUploaded={onUploaded}
-      uploadAction={uploadAction}
-      fieldName="banner"
+      kind="comic-banner"
       label="تصویر بنر هیرو (کیفیت بالا، برای نمایش در صفحه اصلی)"
       aspectClassName="h-32"
     />
@@ -97,25 +90,43 @@ export function BannerUploader({
 }
 
 export function CoverUploader({
-  comicId,
+  entityId,
   currentUrl,
   onUploaded,
-  uploadAction = uploadComicCoverAction,
 }: {
-  comicId: string | null;
+  entityId: string | null;
   currentUrl: string;
   onUploaded: (url: string) => void;
-  uploadAction?: UploadFn;
 }) {
   return (
     <ImageUploader
-      comicId={comicId}
+      entityId={entityId}
       currentUrl={currentUrl}
       onUploaded={onUploaded}
-      uploadAction={uploadAction}
-      fieldName="cover"
+      kind="comic-cover"
       label="تصویر کاور (نسبت ابعاد ۲:۳ پیشنهاد می‌شود)"
       aspectClassName="aspect-[2/3] h-56"
+    />
+  );
+}
+
+export function CategoryImageUploader({
+  entityId,
+  currentUrl,
+  onUploaded,
+}: {
+  entityId: string | null;
+  currentUrl: string;
+  onUploaded: (url: string) => void;
+}) {
+  return (
+    <ImageUploader
+      entityId={entityId}
+      currentUrl={currentUrl}
+      onUploaded={onUploaded}
+      kind="category-image"
+      label="تصویر کارت دسته‌بندی"
+      aspectClassName="h-24"
     />
   );
 }

@@ -2,8 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import type { ReadingMode, ReadingDirection } from "@prisma/client";
 import { createCategory } from "@/app/admin/actions/category-actions";
+import { CategoryImageUploader } from "@/components/admin/banner-uploader";
+import type { ReadingMode, ReadingDirection } from "@prisma/client";
 import { READING_MODE_LABELS } from "@/lib/reading";
 import { useCollapsibleClose } from "@/components/ui/collapsible-section";
 
@@ -65,10 +66,7 @@ export function CreateCategoryForm() {
         </div>
       </div>
 
-      <div className="space-y-1">
-        <label className="text-sm text-text-muted" htmlFor="category-image">آدرس تصویر کارت <span className="text-text-muted">(اختیاری)</span></label>
-        <input id="category-image" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-main outline-none focus:border-primary" />
-      </div>
+      <CategoryImageUploader entityId={null} currentUrl={imageUrl} onUploaded={setImageUrl} />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="space-y-1">

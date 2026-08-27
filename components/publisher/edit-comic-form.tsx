@@ -4,10 +4,6 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { ReadingMode } from "@prisma/client";
 import { updateComicAsPublisher } from "@/app/publisher/actions/comic-update";
-import {
-  uploadComicBannerAsPublisherAction,
-  uploadComicCoverAsPublisherAction,
-} from "@/app/publisher/actions/comic-banner";
 import { READING_MODE_LABELS } from "@/lib/reading";
 import { useCollapsibleClose } from "@/components/ui/collapsible-section";
 import { CoverUploader, BannerUploader } from "@/components/admin/banner-uploader";
@@ -106,10 +102,9 @@ export function PublisherEditComicForm({ comic, genres, initialGenreIds }: Publi
       </div>
 
       <CoverUploader
-        comicId={comic.id}
+        entityId={comic.id}
         currentUrl={coverImage}
         onUploaded={setCoverImage}
-        uploadAction={uploadComicCoverAsPublisherAction}
       />
 
       <div className="grid grid-cols-2 gap-4">
@@ -149,10 +144,9 @@ export function PublisherEditComicForm({ comic, genres, initialGenreIds }: Publi
       <div className="space-y-2 rounded-md border border-border bg-background p-3">
         <p className="text-xs text-text-muted">تصویر بنر (اختیاری — فقط وقتی ادمین این عنوان را در صفحه اصلی معرفی کند استفاده می‌شود)</p>
         <BannerUploader
-          comicId={comic.id}
+          entityId={comic.id}
           currentUrl={bannerImage}
           onUploaded={setBannerImage}
-          uploadAction={uploadComicBannerAsPublisherAction}
         />
       </div>
 

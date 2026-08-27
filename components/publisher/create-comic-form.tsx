@@ -7,7 +7,6 @@ import { createComicAsPublisher } from "@/app/publisher/actions/comic-create";
 import { READING_MODE_LABELS } from "@/lib/reading";
 import { useCollapsibleClose } from "@/components/ui/collapsible-section";
 import { CoverUploader, BannerUploader } from "@/components/admin/banner-uploader";
-import { uploadComicCoverAsPublisherAction, uploadComicBannerAsPublisherAction } from "@/app/publisher/actions/comic-banner";
 
 interface GenreOption { id: string; name: string }
 interface CategoryOption { id: string; name: string; defaultReadingMode: ReadingMode }
@@ -107,16 +106,14 @@ export function PublisherCreateComicForm({ genres, categories }: { genres: Genre
 
       <div className="grid grid-cols-2 gap-4">
         <CoverUploader
-          comicId={null}
+          entityId={null}
           currentUrl={coverImage}
           onUploaded={setCoverImage}
-          uploadAction={uploadComicCoverAsPublisherAction}
         />
         <BannerUploader
-          comicId={null}
+          entityId={null}
           currentUrl={bannerImage}
           onUploaded={setBannerImage}
-          uploadAction={uploadComicBannerAsPublisherAction}
         />
       </div>
 

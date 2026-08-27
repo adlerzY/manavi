@@ -167,8 +167,8 @@ export function CreateComicForm({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <CoverUploader comicId={null} currentUrl={coverImage} onUploaded={setCoverImage} />
-        <BannerUploader comicId={null} currentUrl={bannerImage} onUploaded={setBannerImage} />
+        <CoverUploader entityId={null} currentUrl={coverImage} onUploaded={setCoverImage} />
+        <BannerUploader entityId={null} currentUrl={bannerImage} onUploaded={setBannerImage} />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
