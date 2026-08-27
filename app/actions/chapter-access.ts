@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser, invalidateSessionUserCache } from "@/lib/auth";
 import { invalidateChapterUnlockCache } from "@/lib/chapters";
 import { getChapterUnlockCoinCost } from "@/lib/platform-settings";
+import { checkRateLimit } from "@/lib/moderation";
 import { ChapterAccessType } from "@prisma/client";
 
 interface UnlockResult {
@@ -22,6 +23,9 @@ export async function unlockChapterWithCoins(chapterId: string): Promise<UnlockR
   const user = await getSessionUser();
   if (!user) return { success: false, error: "Not authenticated" };
   if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
+
+  const allowed = await checkRateLimit(`unlock-chapter:${user.id}`, 30);
+  if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است، کمی صبر کنید" };
 
   const chapter = await prisma.chapter.findUnique({
     where: { id: chapterId },
@@ -78,6 +82,9 @@ export async function unlockComicWithCoins(comicId: string): Promise<UnlockResul
   const user = await getSessionUser();
   if (!user) return { success: false, error: "Not authenticated" };
   if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
+
+  const allowed = await checkRateLimit(`unlock-comic:${user.id}`, 5);
+  if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است، کمی صبر کنید" };
 
   const comic = await prisma.comic.findUnique({ where: { id: comicId }, select: { slug: true } });
   if (!comic) return { success: false, error: "عنوان یافت نشد" };

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
+import { cleanupOldFailedTransactions as cleanupOldFailedTransactionsLib } from "@/lib/transaction-cleanup";
 import type { TransactionType, TransactionStatus } from "@prisma/client";
 
 export interface TransactionRow {
@@ -74,13 +75,10 @@ export async function cleanupOldFailedTransactions(
       return { success: false, error: "تعداد روز باید عددی مثبت باشد" };
     }
 
-    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const result = await prisma.transaction.deleteMany({
-      where: { status: "FAILED", createdAt: { lt: cutoff } },
-    });
+    const deleted = await cleanupOldFailedTransactionsLib(days);
 
     revalidatePath("/admin/transactions");
-    return { success: true, data: { deleted: result.count } };
+    return { success: true, data: { deleted } };
   } catch (err) {
     return safeError(err);
   }
