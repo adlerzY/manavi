@@ -6,24 +6,21 @@ import { ChapterPagesManager } from "./chapter-pages-manager";
 
 interface ChapterPagesLazyProps {
   chapterId: string;
-  pageKeys: string[];
 }
 
-export function ChapterPagesLazy({ chapterId, pageKeys }: ChapterPagesLazyProps) {
+export function ChapterPagesLazy({ chapterId }: ChapterPagesLazyProps) {
   const [open, setOpen] = useState(false);
+  const [pageKeys, setPageKeys] = useState<string[] | null>(null);
   const [previewUrls, setPreviewUrls] = useState<string[] | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
 
   async function handleOpen() {
     setOpen(true);
-    if (previewUrls !== null) return;
-    if (pageKeys.length === 0) {
-      setPreviewUrls([]);
-      return;
-    }
+    if (pageKeys !== null) return;
     setStatus("loading");
     const result = await getChapterPagePreviews(chapterId);
     if (result.success && result.data) {
+      setPageKeys(result.data.pageKeys);
       setPreviewUrls(result.data.previewUrls);
       setStatus("idle");
     } else {
@@ -34,7 +31,7 @@ export function ChapterPagesLazy({ chapterId, pageKeys }: ChapterPagesLazyProps)
   if (!open) {
     return (
       <button type="button" onClick={handleOpen} className="text-xs text-text-muted underline decoration-dotted">
-        نمایش {pageKeys.length.toLocaleString("fa-IR")} صفحه
+        نمایش صفحات
       </button>
     );
   }
@@ -46,7 +43,12 @@ export function ChapterPagesLazy({ chapterId, pageKeys }: ChapterPagesLazyProps)
       </button>
       {status === "loading" && <p className="text-xs text-text-muted">در حال بارگذاری پیش‌نمایش صفحات…</p>}
       {status === "error" && <p className="text-xs text-red-400">خطا در بارگذاری پیش‌نمایش صفحات</p>}
-      {previewUrls && <ChapterPagesManager chapterId={chapterId} pageKeys={pageKeys} previewUrls={previewUrls} />}
+      {pageKeys && previewUrls && pageKeys.length === 0 && (
+        <p className="text-xs text-text-muted">صفحه‌ای موجود نیست.</p>
+      )}
+      {pageKeys && previewUrls && pageKeys.length > 0 && (
+        <ChapterPagesManager chapterId={chapterId} pageKeys={pageKeys} previewUrls={previewUrls} />
+      )}
     </div>
   );
 }

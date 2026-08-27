@@ -44,7 +44,6 @@ export default async function AdminComicDetailPage({ params }: PageProps) {
             status: true,
             scheduledAt: true,
             isLocked: true,
-            pages: true,
             accessType: true,
           },
         },
@@ -114,7 +113,6 @@ export default async function AdminComicDetailPage({ params }: PageProps) {
             status: ch.status,
             scheduledAt: ch.scheduledAt ? ch.scheduledAt.toISOString() : null,
             isLocked: ch.isLocked,
-            pages: ch.pages,
             accessType: ch.accessType,
           }))}
         />

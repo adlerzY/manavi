@@ -16,7 +16,6 @@ export interface ChapterListRow {
   status: ChapterStatus;
   scheduledAt: string | null;
   isLocked: boolean;
-  pages: string[];
   accessType: ChapterAccessType;
 }
 
@@ -115,7 +114,7 @@ export function ChapterListManager({ chapters, restrictAccessTypes, pageSize = D
                 initialIsLocked={chapter.isLocked}
                 initialAccessType={chapter.accessType}
               />
-              <ChapterPagesLazy chapterId={chapter.id} pageKeys={chapter.pages} />
+              <ChapterPagesLazy chapterId={chapter.id} />
             </div>
           );
         })}

@@ -131,14 +131,16 @@ export async function deleteChapter(chapterId: string): Promise<ActionResult> {
     return safeError(err);
   }
 }
-export async function getChapterPagePreviews(chapterId: string): Promise<ActionResult<{ previewUrls: string[] }>> {
+
+export async function getChapterPagePreviews(chapterId: string): Promise<ActionResult<{ pageKeys: string[]; previewUrls: string[] }>> {
   try {
     const chapter = await prisma.chapter.findUnique({ where: { id: chapterId }, select: { pages: true, comicId: true } });
     if (!chapter) return { success: false, error: "چپتر یافت نشد" };
 
     await requireUploadAccess(chapter.comicId);
 
-    const previewUrls = chapter.pages.length ? await getSignedImageUrls(chapter.pages, 900, { width: 300 }) : [];    return { success: true, data: { previewUrls } };
+    const previewUrls = chapter.pages.length ? await getSignedImageUrls(chapter.pages, 900, { width: 300 }) : [];
+    return { success: true, data: { pageKeys: chapter.pages, previewUrls } };
   } catch (err) {
     return safeError(err);
   }
