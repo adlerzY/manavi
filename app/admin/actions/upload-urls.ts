@@ -66,7 +66,7 @@ export async function requestPageUploadUrls(input: {
     return { success: true, data: { items } };
   } catch (err) {
     if (err instanceof LicenseInactiveError) {
-      return { success: false, error: `آپلود ممکن نیست: ${err.reason}` };
+      return { success: false, error: `آپلود ممکن نیست: ${err.reasonFa}` };
     }
     return safeError(err);
   }

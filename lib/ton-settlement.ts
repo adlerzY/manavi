@@ -175,3 +175,28 @@ export async function settlePendingTonTransactions(
 
   return { settled, checked };
 }
+
+const STALE_PENDING_HOURS = 48;
+
+export async function failStalePendingTonTransactions(): Promise<{ failed: number }> {
+  const cutoff = new Date(Date.now() - STALE_PENDING_HOURS * 60 * 60 * 1000);
+
+  const stale = await prisma.transaction.findMany({
+    where: { status: "PENDING", currency: "USDT", tonComment: { not: null }, createdAt: { lt: cutoff } },
+    select: { id: true },
+  });
+
+  if (stale.length === 0) return { failed: 0 };
+
+  const staleIds = stale.map((t) => t.id);
+
+  await prisma.$transaction([
+    prisma.transaction.updateMany({ where: { id: { in: staleIds } }, data: { status: "FAILED" } }),
+    prisma.payoutRequest.updateMany({
+      where: { tonTransactionId: { in: staleIds }, status: "PENDING" },
+      data: { tonTransactionId: null },
+    }),
+  ]);
+
+  return { failed: staleIds.length };
+}

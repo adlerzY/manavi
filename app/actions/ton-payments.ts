@@ -62,14 +62,14 @@ async function createPendingTransaction(input: {
   return { transaction, comment };
 }
 
-async function buildPaymentRequest(input: {
+function buildPaymentPayload(input: {
+  jettonWalletAddress: string;
   payerWalletAddress: string;
   destinationOwnerAddress: string;
   amountUsdt: number;
   comment: string;
   transactionId: string;
-}): Promise<TonPaymentRequest> {
-  const jettonWalletAddress = await getJettonWalletAddress(input.payerWalletAddress);
+}): TonPaymentRequest {
   const payloadBase64 = buildJettonTransferPayload({
     jettonAmountUnits: usdtToJettonUnits(input.amountUsdt),
     toOwnerAddress: input.destinationOwnerAddress,
@@ -78,7 +78,7 @@ async function buildPaymentRequest(input: {
   });
   return {
     transactionId: input.transactionId,
-    jettonWalletAddress,
+    jettonWalletAddress: input.jettonWalletAddress,
     amountNanotons: JETTON_TRANSFER_GAS_NANOTON.toString(),
     payloadBase64,
   };
@@ -102,13 +102,15 @@ export async function createTonCoinPayment(packageId: string, payerWalletAddress
   if (!pack) return { success: false, error: "این پکیج در دسترس نیست" };
 
   try {
+    const jettonWalletAddress = await getJettonWalletAddress(payerWalletAddress);
     const { transaction, comment } = await createPendingTransaction({
       type: "COIN_PURCHASE",
       amountUsdt: Number(pack.priceUsdt),
       payerId: user.id,
       coinPackageId: pack.id,
     });
-    const data = await buildPaymentRequest({
+    const data = buildPaymentPayload({
+      jettonWalletAddress,
       payerWalletAddress,
       destinationOwnerAddress: getPlatformTonAddress(),
       amountUsdt: Number(pack.priceUsdt),
@@ -139,13 +141,15 @@ export async function createTonCustomCoinPayment(coins: number, payerWalletAddre
   const amountUsdt = Math.round(coins * coinPriceUsdt * 1e6) / 1e6;
 
   try {
+    const jettonWalletAddress = await getJettonWalletAddress(payerWalletAddress);
     const { transaction, comment } = await createPendingTransaction({
       type: "COIN_PURCHASE",
       amountUsdt,
       payerId: user.id,
       customCoins: coins,
     });
-    const data = await buildPaymentRequest({
+    const data = buildPaymentPayload({
+      jettonWalletAddress,
       payerWalletAddress,
       destinationOwnerAddress: getPlatformTonAddress(),
       amountUsdt,
@@ -187,6 +191,7 @@ export async function createTonDonationPayment(input: {
   if (!receiver.cryptoWalletAddress) return { success: false, error: "این کاربر آدرس کیف پول تون ثبت نکرده است" };
 
   try {
+    const jettonWalletAddress = await getJettonWalletAddress(input.payerWalletAddress);
     const { transaction, comment } = await createPendingTransaction({
       type: "DONATION",
       amountUsdt: input.amountUsdt,
@@ -194,7 +199,8 @@ export async function createTonDonationPayment(input: {
       receiverId: input.receiverId,
       message: input.message?.trim().slice(0, 300),
     });
-    const data = await buildPaymentRequest({
+    const data = buildPaymentPayload({
+      jettonWalletAddress,
       payerWalletAddress: input.payerWalletAddress,
       destinationOwnerAddress: receiver.cryptoWalletAddress,
       amountUsdt: input.amountUsdt,
@@ -227,6 +233,8 @@ export async function createTonPublisherPayoutPayment(input: {
     if (!publisher) return { success: false, error: "ناشر یافت نشد" };
     if (!publisher.cryptoWalletAddress) return { success: false, error: "این ناشر آدرس کیف پول تون ثبت نکرده است" };
 
+    const jettonWalletAddress = await getJettonWalletAddress(input.payerWalletAddress);
+
     const { transaction, comment } = await createPendingTransaction({
       type: "PUBLISHER_PAYOUT",
       amountUsdt: input.amountUsdt,
@@ -247,7 +255,8 @@ export async function createTonPublisherPayoutPayment(input: {
       },
     });
 
-    const data = await buildPaymentRequest({
+    const data = buildPaymentPayload({
+      jettonWalletAddress,
       payerWalletAddress: input.payerWalletAddress,
       destinationOwnerAddress: publisher.cryptoWalletAddress,
       amountUsdt: input.amountUsdt,

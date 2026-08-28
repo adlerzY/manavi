@@ -2,10 +2,29 @@ import "server-only";
 import { prisma } from "./prisma";
 import { LicenseStatus, type License } from "@prisma/client";
 
+export const LICENSE_STATUS_LABELS_FA: Record<LicenseStatus, string> = {
+  PENDING: "در انتظار",
+  ACTIVE: "فعال",
+  EXPIRED: "منقضی‌شده",
+  TERMINATED: "لغوشده",
+};
+
+export type LicenseInactiveReason = "TERMINATED" | "STATUS_NOT_ACTIVE" | "NOT_STARTED" | "EXPIRED";
+
+const LICENSE_INACTIVE_REASON_LABELS_FA: Record<LicenseInactiveReason, string> = {
+  TERMINATED: "لایسنس لغو شده است",
+  STATUS_NOT_ACTIVE: "لایسنس در وضعیت فعال نیست",
+  NOT_STARTED: "تاریخ شروع لایسنس هنوز نرسیده است",
+  EXPIRED: "تاریخ پایان لایسنس گذشته است",
+};
+
 export class LicenseInactiveError extends Error {
-  constructor(public reason: string, public licenseId: string) {
+  public reasonFa: string;
+
+  constructor(public reason: LicenseInactiveReason, public licenseId: string) {
     super(`License ${licenseId} is not active: ${reason}`);
     this.name = "LicenseInactiveError";
+    this.reasonFa = LICENSE_INACTIVE_REASON_LABELS_FA[reason];
   }
 }
 
@@ -30,16 +49,16 @@ export async function assertLicenseActive(comicId: string): Promise<License> {
   const now = new Date();
 
   if (license.terminatedAt) {
-    throw new LicenseInactiveError("license was terminated", license.id);
+    throw new LicenseInactiveError("TERMINATED", license.id);
   }
   if (license.status !== LicenseStatus.ACTIVE) {
-    throw new LicenseInactiveError(`status is ${license.status}`, license.id);
+    throw new LicenseInactiveError("STATUS_NOT_ACTIVE", license.id);
   }
   if (license.startDate > now) {
-    throw new LicenseInactiveError("startDate is in the future", license.id);
+    throw new LicenseInactiveError("NOT_STARTED", license.id);
   }
   if (license.endDate && license.endDate < now) {
-    throw new LicenseInactiveError("endDate has passed", license.id);
+    throw new LicenseInactiveError("EXPIRED", license.id);
   }
 
   return license;

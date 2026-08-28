@@ -10,6 +10,7 @@ import { invalidateChapterAccessList } from "@/lib/chapters";
 import { safeError } from "@/lib/errors";
 import { isAllowedImageUrl } from "@/lib/image-url";
 import { logAuditEvent } from "@/lib/audit-log";
+import { LICENSE_STATUS_LABELS_FA } from "@/lib/license";
 import { LicenseStatus, ChapterAccessType } from "@prisma/client";
 import type { ReadingMode } from "@prisma/client";
 
@@ -180,7 +181,7 @@ export async function createComic(input: {
     const admin = await requireAdmin();
 
     if (!input.title.trim() || !input.slug.trim() || !input.licenseId || !input.categoryId) {
-      return { success: false, error: "Title, slug, license, and category are required" };
+      return { success: false, error: "عنوان، اسلاگ، لایسنس و دسته‌بندی الزامی است" };
     }
 
     if (!input.coverImage || !isAllowedImageUrl(input.coverImage)) {
@@ -195,10 +196,10 @@ export async function createComic(input: {
       prisma.category.findUnique({ where: { id: input.categoryId } }),
     ]);
     if (!license) {
-      return { success: false, error: "License not found" };
+      return { success: false, error: "لایسنس یافت نشد" };
     }
     if (license.status === LicenseStatus.EXPIRED || license.status === LicenseStatus.TERMINATED) {
-      return { success: false, error: `Cannot attach content to a ${license.status.toLowerCase()} license` };
+      return { success: false, error: `امکان اتصال محتوا به لایسنس ${LICENSE_STATUS_LABELS_FA[license.status]} وجود ندارد` };
     }
     if (!category || !category.isActive) {
       return { success: false, error: "دسته‌بندی انتخاب‌شده معتبر نیست" };

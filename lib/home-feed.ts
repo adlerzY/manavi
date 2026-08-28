@@ -5,6 +5,7 @@ import { prisma } from "./prisma";
 
 const HOME_FEED_REVALIDATE_SECONDS = 120;
 const HOME_FEED_TAG = "home-feed";
+const GENRE_RECOMMENDATIONS_TAG = "home-feed-recommendations";
 const GENRE_RECOMMENDATIONS_REVALIDATE_SECONDS = 300;
 
 export interface HeroComic {
@@ -107,7 +108,7 @@ async function fetchGenreBasedRecommendations(userId: string, allowedRatings: Ag
 export const getGenreBasedRecommendations = unstable_cache(
   fetchGenreBasedRecommendations,
   ["home-feed:genre-recommendations"],
-  { revalidate: GENRE_RECOMMENDATIONS_REVALIDATE_SECONDS, tags: [HOME_FEED_TAG] }
+  { revalidate: GENRE_RECOMMENDATIONS_REVALIDATE_SECONDS, tags: [GENRE_RECOMMENDATIONS_TAG] }
 );
 
 export interface LatestCommentItem {

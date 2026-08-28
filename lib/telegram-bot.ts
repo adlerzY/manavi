@@ -22,6 +22,9 @@ interface SendOptions {
   buttonUrl?: string;
 }
 
+const NOTIFY_BATCH_SIZE = 20;
+const NOTIFY_BATCH_DELAY_MS = 1100;
+
 async function sendTelegramMessage(botToken: string, chatId: bigint, text: string, options?: SendOptions) {
   const reply_markup = options?.buttonText && options?.buttonUrl
     ? { inline_keyboard: [[{ text: options.buttonText, web_app: { url: options.buttonUrl } }]] }
@@ -46,9 +49,16 @@ export async function notifyNewChapter(input: NotifyChapterInput) {
   const readUrl = `${miniAppUrl}/app/read/${input.chapterId}`;
   const text = `فصل جدید ${input.comicTitle} منتشر شد: چپتر ${input.chapterNumber}`;
 
-  await processInBatches(input.telegramIds, 20, async (telegramId) => {
-    try {
-      await sendTelegramMessage(botToken, telegramId, text, { buttonText: "خواندن چپتر جدید", buttonUrl: readUrl });
-    } catch {}
-  });
+  await processInBatches(
+    input.telegramIds,
+    NOTIFY_BATCH_SIZE,
+    async (telegramId) => {
+      try {
+        await sendTelegramMessage(botToken, telegramId, text, { buttonText: "خواندن چپتر جدید", buttonUrl: readUrl });
+      } catch (err) {
+        console.error("[telegram-bot] failed to notify", telegramId.toString(), err);
+      }
+    },
+    NOTIFY_BATCH_DELAY_MS
+  );
 }

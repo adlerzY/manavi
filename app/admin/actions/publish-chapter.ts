@@ -96,7 +96,7 @@ export async function publishChapter(chapterId: string): Promise<PublishChapterR
     return { success: true, data: { status: "PUBLISHED" } };
   } catch (err) {
     if (err instanceof LicenseInactiveError) {
-      return { success: false, error: `انتشار ممکن نیست: ${err.reason}` };
+      return { success: false, error: `انتشار ممکن نیست: ${err.reasonFa}` };
     }
     return safeError(err);
   }

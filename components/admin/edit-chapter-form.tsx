@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import type { ChapterAccessType } from "@prisma/client";
 import { updateChapter } from "@/app/admin/actions/catalog-actions";
+import { CHAPTER_ACCESS_TYPE_OPTIONS } from "@/lib/chapter-access";
 
 interface EditChapterFormProps {
   chapterId: string;
@@ -12,11 +13,6 @@ interface EditChapterFormProps {
   initialAccessType: ChapterAccessType;
   accessOptions?: { value: ChapterAccessType; label: string }[];
 }
-
-const DEFAULT_ACCESS_TYPE_OPTIONS: { value: ChapterAccessType; label: string }[] = [
-  { value: "FREE", label: "رایگان" },
-  { value: "COIN", label: "سکه‌ای (پیش‌فرض)" },
-];
 
 export function EditChapterForm({
   chapterId,
@@ -34,7 +30,7 @@ export function EditChapterForm({
   const [status, setStatus] = useState<"idle" | "saving" | "error" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const options = accessOptions ?? DEFAULT_ACCESS_TYPE_OPTIONS;
+  const options = accessOptions ?? CHAPTER_ACCESS_TYPE_OPTIONS;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();

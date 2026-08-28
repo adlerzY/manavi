@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "./prisma";
 import { ChapterAccessType } from "@prisma/client";
+import { LICENSE_STATUS_LABELS_FA } from "./license";
 
 export const MAX_CHAPTER_PAGES = 500;
 
@@ -39,7 +40,7 @@ export async function ingestChapter(input: IngestChapterInput): Promise<IngestCh
   });
   if (!comic) return { success: false, error: "عنوان یافت نشد" };
   if (comic.license.status === "EXPIRED" || comic.license.status === "TERMINATED") {
-    return { success: false, error: `آپلود ممکن نیست — لایسنس ${comic.license.status} است` };
+    return { success: false, error: `آپلود ممکن نیست — لایسنس ${LICENSE_STATUS_LABELS_FA[comic.license.status]} است` };
   }
 
   const duplicate = await prisma.chapter.findFirst({

@@ -8,6 +8,7 @@ import { ChapterBulkActions } from "./chapter-bulk-actions";
 import { ChapterStatusPanel } from "./chapter-status-panel";
 import { EditChapterForm } from "./edit-chapter-form";
 import { ChapterPagesLazy } from "./chapter-pages-lazy";
+import { CHAPTER_ACCESS_TYPE_OPTIONS, PUBLISHER_CHAPTER_ACCESS_TYPE_OPTIONS } from "@/lib/chapter-access";
 
 export interface ChapterListRow {
   id: string;
@@ -32,6 +33,8 @@ export function ChapterListManager({ chapters, restrictAccessTypes, pageSize = D
   const [filter, setFilter] = useState<ChapterAccessFilterValue>("ALL");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [visibleCount, setVisibleCount] = useState(pageSize);
+
+  const accessOptions = restrictAccessTypes ? PUBLISHER_CHAPTER_ACCESS_TYPE_OPTIONS : CHAPTER_ACCESS_TYPE_OPTIONS;
 
   const counts = useMemo(() => {
     const base: Record<ChapterAccessFilterValue, number> = {
@@ -113,6 +116,7 @@ export function ChapterListManager({ chapters, restrictAccessTypes, pageSize = D
                 initialChapterNumber={chapter.chapterNumber}
                 initialIsLocked={chapter.isLocked}
                 initialAccessType={chapter.accessType}
+                accessOptions={accessOptions}
               />
               <ChapterPagesLazy chapterId={chapter.id} />
             </div>

@@ -42,7 +42,7 @@ export async function scheduleChapter(chapterId: string, scheduledAt: string): P
     return { success: true };
   } catch (err) {
     if (err instanceof LicenseInactiveError) {
-      return { success: false, error: `Cannot schedule: ${err.reason}` };
+      return { success: false, error: `زمان‌بندی ممکن نیست: ${err.reasonFa}` };
     }
     return safeError(err);
   }

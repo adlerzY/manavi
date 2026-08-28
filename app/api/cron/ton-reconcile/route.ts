@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { settlePendingTonTransactions } from "@/lib/ton-settlement";
+import { settlePendingTonTransactions, failStalePendingTonTransactions } from "@/lib/ton-settlement";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 const RECONCILE_MIN_AGE_MS = 15_000;
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
   });
 
   const result = await settlePendingTonTransactions(pending);
+  const staleResult = await failStalePendingTonTransactions();
 
-  return NextResponse.json({ ok: true, ...result });
+  return NextResponse.json({ ok: true, ...result, ...staleResult });
 }

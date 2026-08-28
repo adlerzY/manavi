@@ -146,7 +146,7 @@ export function EditComicForm({ comic, licenses, genres, categories, initialGenr
           <select id="edit-comic-age" value={ageRating} onChange={(e) => setAgeRating(e.target.value as typeof ageRating)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-text-main outline-none focus:border-primary">
             <option value="NORMAL">عادی</option>
             <option value="EIGHTEEN_PLUS">۱۸+</option>
-            <option value="NSFW">بدون محدودیت</option>
+            <option value="NSFW">صریح (نیازمند تایید سنی، مانند ۱۸+)</option>
           </select>
         </div>
         <div className="space-y-1">
