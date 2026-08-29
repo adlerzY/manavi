@@ -1,4 +1,4 @@
-import { ChapterAccessType } from "@prisma/client";
+import type { ChapterAccessType } from "@prisma/client";
 
 export interface ChapterAccessInfo {
   id: string;
@@ -11,8 +11,8 @@ export interface ChapterAccessInfo {
 }
 
 export const CHAPTER_ACCESS_TYPE_OPTIONS: { value: ChapterAccessType; label: string }[] = [
-  { value: ChapterAccessType.FREE, label: "رایگان (پیش‌فرض)" },
-  { value: ChapterAccessType.COIN, label: "سکه‌ای" },
+  { value: "FREE" as ChapterAccessType, label: "رایگان (پیش‌فرض)" },
+  { value: "COIN" as ChapterAccessType, label: "سکه‌ای" },
 ];
 
 export const PUBLISHER_CHAPTER_ACCESS_TYPE_OPTIONS = CHAPTER_ACCESS_TYPE_OPTIONS;
