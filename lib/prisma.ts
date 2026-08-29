@@ -22,6 +22,19 @@ if (process.env.NODE_ENV === "production" && !looksLikeLocalDb && !DATABASE_URL.
   );
 }
 
+function stripSslModeParam(connectionString: string): string {
+  try {
+    const url = new URL(connectionString);
+    url.searchParams.delete("sslmode");
+    url.searchParams.delete("ssl");
+    return url.toString();
+  } catch {
+    return connectionString;
+  }
+}
+
+const POOL_CONNECTION_STRING = looksLikeLocalDb ? DATABASE_URL : stripSslModeParam(DATABASE_URL);
+
 const DATABASE_POOL_MAX = Number(process.env.DATABASE_POOL_MAX ?? 3);
 const DATABASE_POOL_IDLE_TIMEOUT_MS = Number(process.env.DATABASE_POOL_IDLE_TIMEOUT_MS ?? 10_000);
 const DATABASE_POOL_CONNECT_TIMEOUT_MS = Number(process.env.DATABASE_POOL_CONNECT_TIMEOUT_MS ?? 5_000);
@@ -32,7 +45,7 @@ let lastPoolErrorAlertAt = 0;
 
 function createPool(): Pool {
   const pool = new Pool({
-    connectionString: DATABASE_URL,
+    connectionString: POOL_CONNECTION_STRING,
     max: DATABASE_POOL_MAX,
     idleTimeoutMillis: DATABASE_POOL_IDLE_TIMEOUT_MS,
     connectionTimeoutMillis: DATABASE_POOL_CONNECT_TIMEOUT_MS,
