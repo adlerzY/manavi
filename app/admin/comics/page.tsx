@@ -4,6 +4,7 @@ import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { CreateComicForm } from "@/components/admin/create-comic-form";
 import { getAllGenres } from "@/lib/genres";
 import { getAllCategories } from "@/lib/categories";
+import { ComicStatus, Prisma } from "@prisma/client";
 
 const PAGE_SIZE = 30;
 
@@ -15,9 +16,13 @@ export default async function AdminComicsPage({ searchParams }: PageProps) {
   const { q, categoryId, status: statusParam, page: pageParam } = await searchParams;
   const query = q?.trim();
   const page = Math.max(1, Number(pageParam) || 1);
-  const status = statusParam === "ONGOING" || statusParam === "COMPLETED" || statusParam === "HIATUS" ? statusParam : undefined;
+  const status = (
+    statusParam === "ONGOING" || statusParam === "COMPLETED" || statusParam === "HIATUS"
+      ? statusParam
+      : undefined
+  ) as ComicStatus | undefined;
 
-  const where = {
+  const where: Prisma.ComicWhereInput = {
     ...(query
       ? {
           OR: [
