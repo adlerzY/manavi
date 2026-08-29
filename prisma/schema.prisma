@@ -242,6 +242,7 @@ model ComicGenre {
   genre   Genre @relation(fields: [genreId], references: [id])
 
   @@id([comicId, genreId])
+  @@index([genreId])
 }
 
 model ComicStaff {

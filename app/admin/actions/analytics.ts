@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { getTomanPerUsdt } from "@/lib/platform-settings";
 
 export interface TopComicStat {
   id: string;
@@ -51,24 +52,32 @@ export async function getTopChapters(limit = 10): Promise<TopChapterStat[]> {
 }
 
 export interface CoinStats {
-  totalRevenueToman: number;
+  totalRevenueUsdt: number;
+  totalRevenueToman: number | null;
   totalCoinsSpent: number;
   purchaseCount: number;
-  donationTotalToman: number;
+  donationTotalUsdt: number;
+  donationTotalToman: number | null;
 }
 
 export async function getCoinStats(): Promise<CoinStats> {
   await requireAdmin();
-  const [purchases, spends, donations] = await Promise.all([
+  const [purchases, spends, donations, tomanPerUsdt] = await Promise.all([
     prisma.transaction.aggregate({ where: { type: "COIN_PURCHASE", status: "PAID" }, _sum: { amount: true }, _count: { _all: true } }),
     prisma.transaction.aggregate({ where: { type: "CHAPTER_UNLOCK", status: "PAID" }, _sum: { amount: true } }),
     prisma.transaction.aggregate({ where: { type: "DONATION", status: "PAID" }, _sum: { amount: true } }),
+    getTomanPerUsdt(),
   ]);
 
+  const totalRevenueUsdt = Number(purchases._sum.amount ?? 0);
+  const donationTotalUsdt = Number(donations._sum.amount ?? 0);
+
   return {
-    totalRevenueToman: Number(purchases._sum.amount ?? 0),
+    totalRevenueUsdt,
+    totalRevenueToman: tomanPerUsdt > 0 ? Math.round(totalRevenueUsdt * tomanPerUsdt) : null,
     totalCoinsSpent: Number(spends._sum.amount ?? 0),
     purchaseCount: purchases._count._all,
-    donationTotalToman: Number(donations._sum.amount ?? 0),
+    donationTotalUsdt,
+    donationTotalToman: tomanPerUsdt > 0 ? Math.round(donationTotalUsdt * tomanPerUsdt) : null,
   };
 }

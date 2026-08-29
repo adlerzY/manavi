@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "ComicGenre_genreId_idx" ON "ComicGenre"("genreId");

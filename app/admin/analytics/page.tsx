@@ -7,8 +7,10 @@ export default async function AdminAnalyticsPage() {
     <div className="space-y-8">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-md border border-border bg-surface p-4 text-center">
-          <p className="text-2xl font-semibold text-primary">{coinStats.totalRevenueToman.toLocaleString("fa-IR")}</p>
-          <p className="mt-1 text-xs text-text-muted">درآمد سکه (تومان)</p>
+          <p className="text-2xl font-semibold text-primary">{coinStats.totalRevenueUsdt.toLocaleString("fa-IR")} USDT</p>
+          <p className="mt-1 text-xs text-text-muted">
+            درآمد خرید سکه{coinStats.totalRevenueToman !== null && ` (≈ ${coinStats.totalRevenueToman.toLocaleString("fa-IR")} تومان)`}
+          </p>
         </div>
         <div className="rounded-md border border-border bg-surface p-4 text-center">
           <p className="text-2xl font-semibold text-primary">{coinStats.purchaseCount.toLocaleString("fa-IR")}</p>
@@ -19,8 +21,10 @@ export default async function AdminAnalyticsPage() {
           <p className="mt-1 text-xs text-text-muted">سکه خرج‌شده روی چپترها</p>
         </div>
         <div className="rounded-md border border-border bg-surface p-4 text-center">
-          <p className="text-2xl font-semibold text-primary">{coinStats.donationTotalToman.toLocaleString("fa-IR")}</p>
-          <p className="mt-1 text-xs text-text-muted">مجموع دونیت (تومان)</p>
+          <p className="text-2xl font-semibold text-primary">{coinStats.donationTotalUsdt.toLocaleString("fa-IR")} USDT</p>
+          <p className="mt-1 text-xs text-text-muted">
+            مجموع دونیت{coinStats.donationTotalToman !== null && ` (≈ ${coinStats.donationTotalToman.toLocaleString("fa-IR")} تومان)`}
+          </p>
         </div>
       </div>
 
