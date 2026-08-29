@@ -129,7 +129,7 @@ export function EditComicForm({ comic, licenses, genres, categories, initialGenr
         <textarea id="edit-comic-description" value={description} onChange={(e) => setDescription(e.target.value)} required rows={3} className="w-full rounded-md border border-border bg-background px-3 py-2 text-text-main outline-none focus:border-primary" />
       </div>
 
-      <CoverUploader comicId={comic.id} currentUrl={coverImage} onUploaded={setCoverImage} />
+      <CoverUploader entityId={comic.id} currentUrl={coverImage} onUploaded={setCoverImage} />
 
       <div className="space-y-1">
         <label className="text-sm text-text-muted" htmlFor="edit-comic-license">لایسنس</label>
@@ -194,7 +194,7 @@ export function EditComicForm({ comic, licenses, genres, categories, initialGenr
               <label className="text-xs text-text-muted" htmlFor="edit-comic-badge">متن بج (مثلاً «چپتر جدید»)</label>
               <input id="edit-comic-badge" value={featuredBadge} onChange={(e) => setFeaturedBadge(e.target.value)} className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text-main outline-none focus:border-primary" />
             </div>
-            <BannerUploader comicId={comic.id} currentUrl={bannerImage} onUploaded={setBannerImage} />
+            <BannerUploader entityId={comic.id} currentUrl={bannerImage} onUploaded={setBannerImage} />
           </>
         )}
       </div>
