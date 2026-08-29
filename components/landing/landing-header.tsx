@@ -38,7 +38,7 @@ export function LandingHeader() {
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 dir-rtl">
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <Image src="/favicon.svg" alt="ماناوی" width={28} height={28} sizes="28px" className="rounded-md" />
+            <Image src="/favicon.svg" alt="ماناوی" width={28} height={28} sizes="28px" className="rounded-md" priority />
             <span className="text-base font-bold text-text-main">ماناوی</span>
           </Link>
 

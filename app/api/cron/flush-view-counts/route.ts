@@ -3,6 +3,7 @@ import { flushBufferedViewCounts } from "@/lib/view-counter";
 import { executeScheduledPublish } from "@/lib/scheduled-publish";
 import { cleanupOldAuditLogs } from "@/lib/audit-log";
 import { cleanupOldFailedTransactions } from "@/lib/transaction-cleanup";
+import { notifyAdmin } from "@/lib/admin-alert";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 const AUDIT_LOG_RETENTION_DAYS = Number(process.env.AUDIT_LOG_RETENTION_DAYS ?? 180);
@@ -18,12 +19,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const [viewCounts, scheduledPublish, auditLogsDeleted, failedTransactionsDeleted] = await Promise.all([
-    flushBufferedViewCounts(),
-    executeScheduledPublish(),
-    cleanupOldAuditLogs(AUDIT_LOG_RETENTION_DAYS).catch(() => 0),
-    cleanupOldFailedTransactions().catch(() => 0),
-  ]);
+  try {
+    const [viewCounts, scheduledPublish, auditLogsDeleted, failedTransactionsDeleted] = await Promise.all([
+      flushBufferedViewCounts(),
+      executeScheduledPublish(),
+      cleanupOldAuditLogs(AUDIT_LOG_RETENTION_DAYS).catch(() => 0),
+      cleanupOldFailedTransactions().catch(() => 0),
+    ]);
 
-  return NextResponse.json({ ok: true, ...viewCounts, scheduledPublish, auditLogsDeleted, failedTransactionsDeleted });
+    return NextResponse.json({ ok: true, ...viewCounts, scheduledPublish, auditLogsDeleted, failedTransactionsDeleted });
+  } catch (err) {
+    await notifyAdmin("کران flush-view-counts شکست خورد", err instanceof Error ? err.message : String(err), "error");
+    return NextResponse.json({ ok: false, error: "cron failed" }, { status: 500 });
+  }
 }

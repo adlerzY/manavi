@@ -2,6 +2,7 @@ import "server-only";
 import { Pool } from "pg";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { notifyAdmin } from "./admin-alert";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient; pgPool?: Pool };
 
@@ -22,6 +23,9 @@ const DATABASE_POOL_IDLE_TIMEOUT_MS = Number(process.env.DATABASE_POOL_IDLE_TIME
 const DATABASE_POOL_CONNECT_TIMEOUT_MS = Number(process.env.DATABASE_POOL_CONNECT_TIMEOUT_MS ?? 5_000);
 const DATABASE_STATEMENT_TIMEOUT_MS = Number(process.env.DATABASE_STATEMENT_TIMEOUT_MS ?? 15_000);
 
+const POOL_ERROR_ALERT_THROTTLE_MS = 5 * 60 * 1000;
+let lastPoolErrorAlertAt = 0;
+
 function createPool(): Pool {
   const pool = new Pool({
     connectionString: DATABASE_URL,
@@ -35,6 +39,12 @@ function createPool(): Pool {
 
   pool.on("error", (err) => {
     console.error("[prisma] خطای غیرمنتظره روی یک اتصال idle در pg pool — نادیده گرفته شد تا سرور crash نکند.", err);
+
+    const now = Date.now();
+    if (now - lastPoolErrorAlertAt > POOL_ERROR_ALERT_THROTTLE_MS) {
+      lastPoolErrorAlertAt = now;
+      notifyAdmin("خطای غیرمنتظره در pg pool", err.message, "error").catch(() => {});
+    }
   });
 
   return pool;
