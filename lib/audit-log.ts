@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 
 export type AuditAction =
@@ -21,7 +22,7 @@ interface LogAuditEventInput {
   action: AuditAction;
   targetType?: string;
   targetId?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonValue;
 }
 
 export async function logAuditEvent(input: LogAuditEventInput): Promise<void> {
@@ -33,7 +34,7 @@ export async function logAuditEvent(input: LogAuditEventInput): Promise<void> {
         action: input.action,
         targetType: input.targetType,
         targetId: input.targetId,
-        metadata: input.metadata,
+        metadata: input.metadata ?? Prisma.JsonNull,
       },
     });
   } catch (err) {
