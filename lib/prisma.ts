@@ -39,6 +39,7 @@ function createPool(): Pool {
     statement_timeout: DATABASE_STATEMENT_TIMEOUT_MS,
     query_timeout: DATABASE_STATEMENT_TIMEOUT_MS,
     allowExitOnIdle: true,
+    ssl: looksLikeLocalDb ? undefined : { rejectUnauthorized: false },
   });
 
   pool.on("error", (err) => {
