@@ -13,15 +13,14 @@ import type { TelegramLinks } from "@/lib/site-config";
 interface LandingPageProps {
   stats: SiteStats;
   links: TelegramLinks | null;
-  qrCodeSvg: string | null;
 }
 
-export function LandingPage({ stats, links, qrCodeSvg }: LandingPageProps) {
+export function LandingPage({ stats, links }: LandingPageProps) {
   return (
     <PointerParallaxProvider>
       <main className="relative min-h-screen overflow-x-clip bg-background text-text-main">
         <LandingHeader />
-        <HeroSection links={links} qrCodeSvg={qrCodeSvg} />
+        <HeroSection links={links} />
         <StatBand stats={stats} />
         <FeatureGrid />
         <ReaderPreview links={links} />

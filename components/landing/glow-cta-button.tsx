@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 interface GlowCtaButtonProps {
   href?: string;
   nativeHref?: string;
+  variant?: "primary" | "secondary";
   children: ReactNode;
 }
 
 const MOBILE_UA_PATTERN = /android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i;
 const NATIVE_APP_FALLBACK_MS = 1500;
 
-export function GlowCtaButton({ href = "/app", nativeHref, children }: GlowCtaButtonProps) {
+export function GlowCtaButton({ href = "/app", nativeHref, variant = "primary", children }: GlowCtaButtonProps) {
   const [isMobile, setIsMobile] = useState(false);
   const router = useRouter();
 
@@ -52,6 +53,19 @@ export function GlowCtaButton({ href = "/app", nativeHref, children }: GlowCtaBu
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.location.href = nativeHref;
+  }
+
+  if (variant === "secondary") {
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={!href}
+        className="w-full rounded-md border border-border bg-surface/60 px-6 py-3 text-center text-sm font-medium text-text-main backdrop-blur-sm transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+      >
+        {children}
+      </button>
+    );
   }
 
   return (

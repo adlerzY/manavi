@@ -8,10 +8,9 @@ const NATIVE_APP_FALLBACK_MS = 1500;
 interface TelegramCtaProps {
   webLink: string;
   nativeLink: string;
-  qrCodeSvg: string;
 }
 
-export function TelegramCta({ webLink, nativeLink, qrCodeSvg }: TelegramCtaProps) {
+export function TelegramCta({ webLink, nativeLink }: TelegramCtaProps) {
   const [isMobile, setIsMobile] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -19,6 +18,11 @@ export function TelegramCta({ webLink, nativeLink, qrCodeSvg }: TelegramCtaProps
   }, []);
 
   function handleOpenClick() {
+    if (!isMobile) {
+      window.open(webLink, "_blank", "noopener,noreferrer");
+      return;
+    }
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
         clearTimeout(fallbackTimer);
@@ -40,24 +44,12 @@ export function TelegramCta({ webLink, nativeLink, qrCodeSvg }: TelegramCtaProps
     return <div className="h-14 w-full max-w-xs rounded-md bg-surface" />;
   }
 
-  if (isMobile) {
-    return (
-      <button
-        onClick={handleOpenClick}
-        className="flex w-full max-w-xs items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground"
-      >
-        باز کردن مینی‌اپ در تلگرام
-      </button>
-    );
-  }
-
   return (
-    <div className="flex flex-col items-center gap-3 rounded-md border border-border bg-surface p-6">
-      <div
-        className="h-40 w-40 [&>svg]:h-full [&>svg]:w-full"
-        dangerouslySetInnerHTML={{ __html: qrCodeSvg }}
-      />
-      <p className="text-xs text-text-muted">با دوربین گوشی اسکن کنید</p>
-    </div>
+    <button
+      onClick={handleOpenClick}
+      className="flex w-full max-w-xs items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground"
+    >
+      باز کردن مینی‌اپ در تلگرام
+    </button>
   );
 }

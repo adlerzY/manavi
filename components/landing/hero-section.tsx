@@ -1,19 +1,18 @@
 import Image from "next/image";
-import Link from "next/link";
 import { GlowOrbs } from "./glow-orbs";
 import { HalftoneOverlay } from "./halftone-overlay";
 import { AnimatedHeadline } from "./animated-headline";
 import { FloatingPanelCard } from "./floating-panel-card";
 import { HeroIconGlow } from "./hero-icon-glow";
 import { TelegramCta } from "@/components/landing/telegram-cta";
+import { GlowCtaButton } from "./glow-cta-button";
 import type { TelegramLinks } from "@/lib/site-config";
 
 interface HeroSectionProps {
   links: TelegramLinks | null;
-  qrCodeSvg: string | null;
 }
 
-export function HeroSection({ links, qrCodeSvg }: HeroSectionProps) {
+export function HeroSection({ links }: HeroSectionProps) {
   return (
     <section className="relative overflow-hidden pb-20 pt-6 sm:pt-10">
       <div className="absolute inset-0 -z-10 bg-background" />
@@ -45,23 +44,20 @@ export function HeroSection({ links, qrCodeSvg }: HeroSectionProps) {
           </p>
 
           <div className="mt-9 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row">
-            {links && qrCodeSvg ? (
+            {links ? (
               <div className="relative">
                 <div className="absolute -inset-1 animate-pulse rounded-xl bg-gradient-to-l from-primary/40 via-accent/30 to-primary/40 blur-md" />
                 <div className="relative">
-                  <TelegramCta webLink={links.webLink} nativeLink={links.nativeLink} qrCodeSvg={qrCodeSvg} />
+                  <TelegramCta webLink={links.webLink} nativeLink={links.nativeLink} />
                 </div>
               </div>
             ) : (
               <p className="text-sm text-accent">لینک مینی‌اپ هنوز در تنظیمات محیطی ست نشده است.</p>
             )}
 
-            <Link
-              href="#features"
-              className="w-full rounded-md border border-border bg-surface/60 px-6 py-3 text-center text-sm font-medium text-text-main backdrop-blur-sm transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto"
-            >
+            <GlowCtaButton href={links?.webLink ?? "/app"} nativeHref={links?.nativeLink} variant="secondary">
               کاوش در دنیای ماناوی
-            </Link>
+            </GlowCtaButton>
           </div>
         </div>
 
