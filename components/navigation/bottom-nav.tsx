@@ -22,7 +22,7 @@ export function BottomNav() {
 
   return (
     <nav
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))" }}
       className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/80 backdrop-blur-lg"
     >
       <div className="mx-auto flex max-w-4xl items-center justify-around px-2 py-2">

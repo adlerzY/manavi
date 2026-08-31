@@ -14,7 +14,7 @@ export function CoinBalanceHeader({ coinsBalance, authenticated }: CoinBalanceHe
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-md">
+      <header className="sticky top-[var(--tg-content-safe-area-top,0px)] z-30 flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <Image src="/favicon.svg" alt="ماناوی" width={28} height={28} priority className="rounded-md" />
           <span className="text-sm font-semibold text-text-main">ماناوی</span>

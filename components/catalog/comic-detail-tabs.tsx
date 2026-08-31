@@ -31,7 +31,7 @@ export function ComicDetailTabs({ preview, episodes, similar, episodeCount, read
 
   return (
     <div className={showCta ? "pb-24" : undefined}>
-      <div className="sticky top-0 z-10 -mx-4 flex border-b border-border bg-background/95 px-4 backdrop-blur-sm">
+      <div className="sticky top-[var(--tg-content-safe-area-top,0px)] z-10 -mx-4 flex border-b border-border bg-background/95 px-4 backdrop-blur-sm">
         {TABS.map((tab) => (
           <button
             key={tab.id}

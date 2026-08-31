@@ -32,7 +32,81 @@ export function useTelegramAuth() {
   return useContext(TelegramAuthContext);
 }
 
-const AUTH_TIMEOUT_MS = 5000;
+const SDK_WAIT_TIMEOUT_MS = 6000;
+const SDK_POLL_INTERVAL_MS = 50;
+const AUTH_TIMEOUT_MS = 12000;
+
+const SAFE_AREA_EVENTS = ["safeAreaChanged", "contentSafeAreaChanged", "fullscreenChanged"];
+
+function waitForTelegramWebApp(): Promise<TelegramWebApp | null> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") {
+      resolve(null);
+      return;
+    }
+    if (window.Telegram?.WebApp) {
+      resolve(window.Telegram.WebApp);
+      return;
+    }
+
+    const startedAt = Date.now();
+    const interval = setInterval(() => {
+      if (window.Telegram?.WebApp) {
+        clearInterval(interval);
+        resolve(window.Telegram.WebApp);
+        return;
+      }
+      if (Date.now() - startedAt > SDK_WAIT_TIMEOUT_MS) {
+        clearInterval(interval);
+        resolve(null);
+      }
+    }, SDK_POLL_INTERVAL_MS);
+  });
+}
+
+function applySafeAreaCssVars(webApp: TelegramWebApp) {
+  const root = document.documentElement;
+  const safeArea = webApp.safeAreaInset;
+  const contentSafeArea = webApp.contentSafeAreaInset;
+
+  root.style.setProperty("--tg-safe-area-top", `${safeArea?.top ?? 0}px`);
+  root.style.setProperty("--tg-safe-area-bottom", `${safeArea?.bottom ?? 0}px`);
+  root.style.setProperty("--tg-safe-area-left", `${safeArea?.left ?? 0}px`);
+  root.style.setProperty("--tg-safe-area-right", `${safeArea?.right ?? 0}px`);
+
+  root.style.setProperty("--tg-content-safe-area-top", `${contentSafeArea?.top ?? safeArea?.top ?? 0}px`);
+  root.style.setProperty("--tg-content-safe-area-bottom", `${contentSafeArea?.bottom ?? safeArea?.bottom ?? 0}px`);
+  root.style.setProperty("--tg-content-safe-area-left", `${contentSafeArea?.left ?? safeArea?.left ?? 0}px`);
+  root.style.setProperty("--tg-content-safe-area-right", `${contentSafeArea?.right ?? safeArea?.right ?? 0}px`);
+}
+
+function setupTelegramViewport(webApp: TelegramWebApp): () => void {
+  try {
+    webApp.ready();
+    webApp.expand();
+  } catch {}
+
+  applySafeAreaCssVars(webApp);
+
+  try {
+    webApp.requestFullscreen?.();
+  } catch {}
+
+  const handleChange = () => applySafeAreaCssVars(webApp);
+  SAFE_AREA_EVENTS.forEach((eventName) => {
+    try {
+      webApp.onEvent(eventName, handleChange);
+    } catch {}
+  });
+
+  return () => {
+    SAFE_AREA_EVENTS.forEach((eventName) => {
+      try {
+        webApp.offEvent(eventName, handleChange);
+      } catch {}
+    });
+  };
+}
 
 export function TelegramAuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<TelegramAuthState>({
@@ -43,25 +117,23 @@ export function TelegramAuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let cleanupViewport: (() => void) | null = null;
 
     async function authenticate() {
-      const webApp = window.Telegram?.WebApp;
+      const webApp = await waitForTelegramWebApp();
+
+      if (cancelled) return;
 
       if (!webApp) {
-        // Distinguish "not opened from inside Telegram" (expected during
-        // plain-browser dev) from an actual auth failure.
-        if (!cancelled) {
-          setState({
-            status: "error",
-            user: null,
-            error: "Telegram WebApp SDK not found — open this app from Telegram.",
-          });
-        }
+        setState({
+          status: "error",
+          user: null,
+          error: "Telegram WebApp SDK not found — open this app from Telegram.",
+        });
         return;
       }
 
-      webApp.ready();
-      webApp.expand();
+      cleanupViewport = setupTelegramViewport(webApp);
 
       const initData = webApp.initData;
       if (!initData) {
@@ -117,6 +189,7 @@ export function TelegramAuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       clearTimeout(timeout);
+      cleanupViewport?.();
     };
   }, []);
 

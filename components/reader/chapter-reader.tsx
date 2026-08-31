@@ -65,7 +65,6 @@ function useImmersiveReading() {
     const webApp = window.Telegram?.WebApp;
     try {
       webApp?.expand?.();
-      webApp?.requestFullscreen?.();
       webApp?.disableVerticalSwipes?.();
     } catch {}
 
@@ -78,7 +77,6 @@ function useImmersiveReading() {
     return () => {
       try {
         webApp?.enableVerticalSwipes?.();
-        webApp?.exitFullscreen?.();
       } catch {}
       if (canRequestFullscreen && document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
@@ -185,7 +183,10 @@ export function ChapterReader({
       <WatermarkOverlay label={watermarkLabel} />
       <DevToolsGuard />
 
-      <div className={`fixed inset-x-0 top-0 z-40 flex items-center justify-between bg-black/80 px-2 py-3 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "-translate-y-full"}`}>
+      <div
+        style={{ top: "var(--tg-content-safe-area-top, 0px)" }}
+        className={`fixed inset-x-0 z-40 flex items-center justify-between bg-black/80 px-2 py-3 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "-translate-y-full"}`}
+      >
         <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="reader" />
         <div className="text-center">
           <p className="text-sm font-medium text-white">{comicTitle}</p>
@@ -248,7 +249,10 @@ export function ChapterReader({
         />
       )}
 
-      <div className={`fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-black/80 px-4 py-3 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "translate-y-full"}`}>
+      <div
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))" }}
+        className={`fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-black/80 px-4 py-3 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "translate-y-full"}`}
+      >
         {prevChapterId ? (
           <Link href={`/app/read/${prevChapterId}`} className="rounded-md bg-white/10 p-2 text-white"><ChevronRight size={20} /></Link>
         ) : <div className="w-9" />}

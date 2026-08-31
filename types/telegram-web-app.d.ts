@@ -11,6 +11,13 @@ declare global {
     photo_url?: string;
   }
 
+  interface TelegramWebAppSafeAreaInset {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+  }
+
   interface TelegramWebApp {
     initData: string;
     initDataUnsafe: {
@@ -18,8 +25,16 @@ declare global {
       start_param?: string;
       [key: string]: unknown;
     };
+    version?: string;
+    platform?: string;
     colorScheme: "light" | "dark";
     themeParams: Record<string, string>;
+    isExpanded?: boolean;
+    viewportHeight?: number;
+    viewportStableHeight?: number;
+    isFullscreen?: boolean;
+    safeAreaInset?: TelegramWebAppSafeAreaInset;
+    contentSafeAreaInset?: TelegramWebAppSafeAreaInset;
     ready: () => void;
     expand: () => void;
     close: () => void;
@@ -27,6 +42,7 @@ declare global {
     exitFullscreen?: () => void;
     disableVerticalSwipes?: () => void;
     enableVerticalSwipes?: () => void;
+    isVersionAtLeast?: (version: string) => boolean;
     onEvent: (eventType: string, callback: () => void) => void;
     offEvent: (eventType: string, callback: () => void) => void;
   }
