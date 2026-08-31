@@ -1,5 +1,6 @@
 import "server-only";
 import { processInBatches } from "./batch-upload";
+import { prisma } from "./prisma";
 
 function getBotToken(): string | null {
   return process.env.TELEGRAM_BOT_TOKEN || null;
@@ -25,28 +26,47 @@ interface NotifyChapterInput {
   chapterId: string;
 }
 
-interface SendOptions {
-  buttonText?: string;
-  buttonUrl?: string;
+interface TelegramInlineButton {
+  text: string;
+  url?: string;
+  web_app?: { url: string };
+}
+
+interface TelegramReplyMarkup {
+  inline_keyboard: TelegramInlineButton[][];
 }
 
 const NOTIFY_BATCH_SIZE = 20;
 const NOTIFY_BATCH_DELAY_MS = 1100;
 
-async function sendTelegramMessage(botToken: string, chatId: bigint | number, text: string, options?: SendOptions) {
-  const reply_markup = options?.buttonText && options?.buttonUrl
-    ? { inline_keyboard: [[{ text: options.buttonText, web_app: { url: options.buttonUrl } }]] }
-    : undefined;
+async function sendTelegramMessage(
+  botToken: string,
+  chatId: bigint | number,
+  text: string,
+  replyMarkup?: TelegramReplyMarkup
+): Promise<boolean> {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId.toString(),
+        text,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      }),
+    });
 
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId.toString(),
-      text,
-      ...(reply_markup ? { reply_markup } : {}),
-    }),
-  });
+    if (res.ok) return true;
+
+    if (res.status !== 403) {
+      const body = await res.text().catch(() => "");
+      console.error("[telegram-bot] sendMessage failed", chatId.toString(), res.status, body.slice(0, 200));
+    }
+    return false;
+  } catch (err) {
+    console.error("[telegram-bot] sendMessage network error", chatId.toString(), err);
+    return false;
+  }
 }
 
 export async function notifyNewChapter(input: NotifyChapterInput) {
@@ -56,22 +76,19 @@ export async function notifyNewChapter(input: NotifyChapterInput) {
 
   const readUrl = `${miniAppUrl}/app/read/${input.chapterId}`;
   const text = `فصل جدید ${input.comicTitle} منتشر شد: چپتر ${input.chapterNumber}`;
+  const replyMarkup: TelegramReplyMarkup = {
+    inline_keyboard: [[{ text: "خواندن چپتر جدید", web_app: { url: readUrl } }]],
+  };
 
   await processInBatches(
     input.telegramIds,
     NOTIFY_BATCH_SIZE,
-    async (telegramId) => {
-      try {
-        await sendTelegramMessage(botToken, telegramId, text, { buttonText: "خواندن چپتر جدید", buttonUrl: readUrl });
-      } catch (err) {
-        console.error("[telegram-bot] failed to notify", telegramId.toString(), err);
-      }
-    },
+    (telegramId) => sendTelegramMessage(botToken, telegramId, text, replyMarkup),
     NOTIFY_BATCH_DELAY_MS
   );
 }
 
-export function buildOpenMiniAppKeyboard(startParam?: string) {
+export function buildOpenMiniAppKeyboard(startParam?: string): TelegramReplyMarkup {
   const botUsername = getBotUsername();
   const miniAppShortName = getMiniAppShortName();
   const miniAppUrl = getMiniAppUrl();
@@ -97,15 +114,12 @@ export async function sendWelcomeMessage(chatId: number, startParam?: string): P
   const botToken = getBotToken();
   if (!botToken) return;
 
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: "به مناوی خوش آمدید! برای شروع مطالعه روی دکمه زیر بزنید.",
-      reply_markup: buildOpenMiniAppKeyboard(startParam),
-    }),
-  }).catch(() => {});
+  await sendTelegramMessage(
+    botToken,
+    chatId,
+    "به مناوی خوش آمدید! برای شروع مطالعه روی دکمه زیر بزنید.",
+    buildOpenMiniAppKeyboard(startParam)
+  );
 }
 
 export async function sendHelpMessage(chatId: number): Promise<void> {
@@ -116,27 +130,44 @@ export async function sendHelpMessage(chatId: number): Promise<void> {
     "راهنمای ماناوی:",
     "— برای باز کردن اپ روی دکمه پایین یا دکمه منوی کنار پیام‌رسان بزنید.",
     "— داخل اپ می‌تونید مانهوا/مانگا بخونید، سکه بخرید و از مترجم‌ها حمایت مالی کنید.",
+    "— برای دیدن موجودی سکه‌تون دستور /balance رو بفرستید.",
     "— برای پشتیبانی با ادمین در ارتباط باشید.",
   ].join("\n");
 
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, reply_markup: buildOpenMiniAppKeyboard() }),
-  }).catch(() => {});
+  await sendTelegramMessage(botToken, chatId, text, buildOpenMiniAppKeyboard());
+}
+
+export async function sendBalanceMessage(chatId: number, userTelegramId?: number): Promise<void> {
+  const botToken = getBotToken();
+  if (!botToken) return;
+
+  const telegramId = userTelegramId ?? chatId;
+
+  const user = await prisma.user
+    .findUnique({
+      where: { telegramId: BigInt(telegramId) },
+      select: { coinsBalance: true, isBanned: true, deletedAt: true },
+    })
+    .catch(() => null);
+
+  const text =
+    !user || user.deletedAt
+      ? "برای مشاهده موجودی سکه، ابتدا یک‌بار مینی‌اپ ماناوی را باز کنید."
+      : user.isBanned
+      ? "حساب شما مسدود شده است."
+      : `موجودی فعلی شما: 🪙 ${user.coinsBalance.toLocaleString("fa-IR")} سکه`;
+
+  await sendTelegramMessage(botToken, chatId, text, buildOpenMiniAppKeyboard());
 }
 
 export async function sendFallbackMessage(chatId: number): Promise<void> {
   const botToken = getBotToken();
   if (!botToken) return;
 
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: "متوجه این پیام نشدم — برای شروع از دکمه زیر یا دستور /help استفاده کنید.",
-      reply_markup: buildOpenMiniAppKeyboard(),
-    }),
-  }).catch(() => {});
+  await sendTelegramMessage(
+    botToken,
+    chatId,
+    "متوجه این پیام نشدم — برای شروع از دکمه زیر یا دستور /help استفاده کنید.",
+    buildOpenMiniAppKeyboard()
+  );
 }

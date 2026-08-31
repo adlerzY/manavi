@@ -130,7 +130,13 @@ export async function settlePendingTonTransactions(
 
   for (const transaction of transactions) {
     if (transaction.status !== "PENDING" || !transaction.tonComment) continue;
-    const toOwnerAddress = await resolveDestinationOwnerAddress(transaction);
+    let toOwnerAddress: string | null;
+    try {
+      toOwnerAddress = await resolveDestinationOwnerAddress(transaction);
+    } catch (err) {
+      console.error("[ton-settlement] failed to resolve destination address", transaction.id, err);
+      continue;
+    }
     if (!toOwnerAddress) continue;
     const bucket = byOwner.get(toOwnerAddress) ?? [];
     bucket.push(transaction);

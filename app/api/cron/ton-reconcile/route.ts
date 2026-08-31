@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isTonConfigured } from "@/lib/ton";
 import { settlePendingTonTransactions, failStalePendingTonTransactions } from "@/lib/ton-settlement";
 import { notifyAdmin } from "@/lib/admin-alert";
 
@@ -16,6 +17,10 @@ export async function GET(req: NextRequest) {
     if (provided !== `Bearer ${CRON_SECRET}`) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
+  }
+
+  if (!isTonConfigured()) {
+    return NextResponse.json({ ok: true, skipped: true, reason: "ton-not-configured" });
   }
 
   try {
