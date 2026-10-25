@@ -1,7 +1,6 @@
 "use server";
 
 import { requireAdmin, requireComicManageAccessByComicId, getSessionUser, getPublisherContext } from "@/lib/auth";
-import { buildAssetKey, createAssetPresignedPutUrl, isAllowedAssetContentType, assetPublicUrl } from "@/lib/s3";
 import { safeError } from "@/lib/errors";
 import { MAX_ASSET_SIZE_BYTES, type AssetKind } from "@/lib/asset-kinds";
 
@@ -41,6 +40,11 @@ export async function requestAssetUploadUrl(input: {
   sizeBytes: number;
 }): Promise<ActionResult<AssetUploadTarget>> {
   try {
+    // Storage configuration must be loaded inside this try block: lib/s3 may throw
+    // at module initialization if required environment variables are absent.
+    const { buildAssetKey, createAssetPresignedPutUrl, isAllowedAssetContentType, assetPublicUrl } =
+      await import("@/lib/s3");
+
     if (!(input.kind in MAX_ASSET_SIZE_BYTES)) {
       return { success: false, error: "نوع دارایی نامعتبر است" };
     }
@@ -60,6 +64,6 @@ export async function requestAssetUploadUrl(input: {
 
     return { success: true, data: { uploadUrl, publicUrl } };
   } catch (err) {
-    return safeError(err);
+    return safeError(err, "آماده‌سازی لینک آپلود ناموفق بود؛ تنظیمات فضای ذخیره‌سازی و لاگ سرور را بررسی کنید.");
   }
 }

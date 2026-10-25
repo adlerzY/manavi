@@ -11,12 +11,18 @@ export function AgeVerificationToggle({ current }: { current: boolean }) {
   function handleToggle() {
     const next = !verified;
     setError(null);
-    setVerified(next); 
+    setVerified(next);
+    const previous = verified;
     startTransition(async () => {
-      const result = await setAgeVerified(next);
-      if (!result.success) {
-        setVerified(!next);
-        setError(result.error ?? "خطا در ثبت تنظیمات");
+      try {
+        const result = await setAgeVerified(next);
+        if (!result.success) {
+          setVerified(previous);
+          setError(result.error ?? "خطا در ثبت تنظیمات");
+        }
+      } catch {
+        setVerified(previous);
+        setError("ذخیره تنظیم نمایش محتوای +۱۸ ناموفق بود؛ اتصال سرور را بررسی و دوباره تلاش کنید.");
       }
     });
   }

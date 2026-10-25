@@ -4,8 +4,6 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUploadAccess, invalidateSessionUserCache } from "@/lib/auth";
-import { deleteObject, deleteObjects } from "@/lib/s3";
-import { extractDominantColor } from "@/lib/color";
 import { invalidateChapterAccessList } from "@/lib/chapters";
 import { safeError } from "@/lib/errors";
 import { isAllowedImageUrl } from "@/lib/image-url";
@@ -24,6 +22,13 @@ interface ActionResult<T = undefined> {
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 const TERRITORY_PATTERN = /^[A-Z0-9_-]{2,20}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Image processing is only needed when a comic cover changes. Keep unrelated
+// admin actions (especially license creation) independent of Sharp's native runtime.
+async function getDominantColor(imageUrl: string): Promise<string | null> {
+  const { extractDominantColor } = await import("@/lib/color");
+  return extractDominantColor(imageUrl);
+}
 
 function isUniqueViolation(err: unknown): boolean {
   return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002");
@@ -278,7 +283,7 @@ export async function createComic(input: {
       return { success: false, error: "دسته‌بندی انتخاب‌شده معتبر نیست" };
     }
 
-    const dominantColor = await extractDominantColor(input.coverImage);
+    const dominantColor = await getDominantColor(input.coverImage);
 
     const comic = await prisma.comic.create({
       data: {
@@ -379,7 +384,7 @@ export async function updateComic(
     }
 
     const coverChanged = existing.coverImage !== input.coverImage;
-    const dominantColor = coverChanged ? await extractDominantColor(input.coverImage) : undefined;
+    const dominantColor = coverChanged ? await getDominantColor(input.coverImage) : undefined;
 
     const comic = await prisma.$transaction(async (tx) => {
       if (input.genreIds) {
@@ -511,6 +516,7 @@ export async function removeChapterPage(chapterId: string, pageIndex: number): P
     const nextPages = chapter.pages.filter((_, i) => i !== pageIndex);
 
     await prisma.chapter.update({ where: { id: chapterId }, data: { pages: nextPages } });
+    const { deleteObject } = await import("@/lib/s3");
     await deleteObject(removedKey).catch(() => {});
 
     after(() =>
@@ -578,6 +584,7 @@ export async function deleteComic(comicId: string): Promise<ActionResult> {
     const keysToDelete = comic.chapters
       .flatMap((c) => c.pages)
       .filter((key): key is string => Boolean(key) && !key.startsWith("http://") && !key.startsWith("https://"));
+    const { deleteObjects } = await import("@/lib/s3");
     await deleteObjects(keysToDelete).catch(() => {});
 
     after(() =>

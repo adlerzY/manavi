@@ -25,24 +25,29 @@ export function CreateLicenseForm({ publishers, onCreated }: { publishers: Publi
     setStatus("saving");
     setError(null);
 
-    const result = await createLicense({
-      publisherId,
-      territory: territory.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean),
-      royaltyPercentage: Number(royaltyPercentage),
-      startDate,
-      endDate: endDate || undefined,
-      contractReference: contractReference || undefined,
-    });
+    try {
+      const result = await createLicense({
+        publisherId,
+        territory: territory.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean),
+        royaltyPercentage: Number(royaltyPercentage),
+        startDate,
+        endDate: endDate || undefined,
+        contractReference: contractReference || undefined,
+      });
 
-    if (result.success) {
-      setStatus("done");
-      setTerritory("");
-      setContractReference("");
-      router.refresh();
-      setTimeout(() => onCreated?.(), 1000);
-    } else {
+      if (result.success) {
+        setStatus("done");
+        setTerritory("");
+        setContractReference("");
+        router.refresh();
+        setTimeout(() => onCreated?.(), 1000);
+      } else {
+        setStatus("error");
+        setError(result.error ?? "یه مشکلی پیش اومد");
+      }
+    } catch {
       setStatus("error");
-      setError(result.error ?? "یه مشکلی پیش اومد");
+      setError("درخواست ساخت لایسنس در سمت سرور شکست خورد؛ خطای اصلی را در لاگ Vercel بررسی کنید.");
     }
   }
 

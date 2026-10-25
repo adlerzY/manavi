@@ -3,7 +3,6 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireComicManageAccessByComicId } from "@/lib/auth";
-import { extractDominantColor } from "@/lib/color";
 import { safeError } from "@/lib/errors";
 import { isAllowedImageUrl } from "@/lib/image-url";
 import type { ReadingMode } from "@prisma/client";
@@ -12,6 +11,11 @@ interface ActionResult<T = undefined> {
   success: boolean;
   error?: string;
   data?: T;
+}
+
+async function getDominantColor(imageUrl: string): Promise<string | null> {
+  const { extractDominantColor } = await import("@/lib/color");
+  return extractDominantColor(imageUrl);
 }
 
 export async function updateComicAsPublisher(
@@ -47,7 +51,7 @@ export async function updateComicAsPublisher(
     if (!existing) return { success: false, error: "عنوان یافت نشد" };
 
     const coverChanged = existing.coverImage !== input.coverImage;
-    const dominantColor = coverChanged ? await extractDominantColor(input.coverImage) : undefined;
+    const dominantColor = coverChanged ? await getDominantColor(input.coverImage) : undefined;
     const nextApprovalStatus = existing.approvalStatus === "NEEDS_CHANGES" ? "PENDING_APPROVAL" : undefined;
 
     const comic = await prisma.$transaction(async (tx) => {

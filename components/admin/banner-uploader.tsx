@@ -18,6 +18,7 @@ export function ImageUploader({ entityId, currentUrl, onUploaded, kind, label, a
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [progress, setProgress] = useState(0);
+  const [uploadPhase, setUploadPhase] = useState<"preparing" | "uploading">("preparing");
   const [error, setError] = useState<string | null>(null);
 
   async function handleSelect(file: File) {
@@ -25,14 +26,19 @@ export function ImageUploader({ entityId, currentUrl, onUploaded, kind, label, a
     setProgress(0);
     setError(null);
 
-    const result = await uploadAssetFile(kind, entityId, file, file.type, setProgress);
+    try {
+      const result = await uploadAssetFile(kind, entityId, file, file.type, setProgress, setUploadPhase);
 
-    if (result.success && result.url) {
-      onUploaded(result.url);
-      setStatus("idle");
-    } else {
+      if (result.success && result.url) {
+        onUploaded(result.url);
+        setStatus("idle");
+      } else {
+        setStatus("error");
+        setError(result.error ?? "خطا در آپلود تصویر");
+      }
+    } catch {
       setStatus("error");
-      setError(result.error ?? "خطا در آپلود تصویر");
+      setError("آپلود به‌دلیل خطای ارتباط با سرور انجام نشد؛ دوباره تلاش کنید و لاگ سرور را بررسی کنید.");
     }
   }
 
@@ -61,7 +67,7 @@ export function ImageUploader({ entityId, currentUrl, onUploaded, kind, label, a
         disabled={status === "uploading"}
         className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-text-main disabled:opacity-50"
       >
-        {status === "uploading" ? `در حال آپلود… ${progress}%` : currentUrl ? "تغییر تصویر" : "آپلود تصویر"}
+        {status === "uploading" ? (uploadPhase === "preparing" ? "در حال آماده‌سازی آپلود…" : `در حال آپلود… ${progress}%`) : currentUrl ? "تغییر تصویر" : "آپلود تصویر"}
       </button>
       {error && <p className="text-xs text-red-400">{error}</p>}
     </div>

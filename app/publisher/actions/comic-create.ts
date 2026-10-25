@@ -6,7 +6,6 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser, getPublisherContext, requireComicManageAccess } from "@/lib/auth";
 import { isLicenseCurrentlyActive } from "@/lib/license";
 import { resolveComicApprovalStatus } from "@/lib/comic-approval";
-import { extractDominantColor } from "@/lib/color";
 import { safeError } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/audit-log";
 import { isAllowedImageUrl } from "@/lib/image-url";
@@ -19,6 +18,11 @@ interface ActionResult<T = undefined> {
 }
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
+
+async function getDominantColor(imageUrl: string): Promise<string | null> {
+  const { extractDominantColor } = await import("@/lib/color");
+  return extractDominantColor(imageUrl);
+}
 
 export async function createComicAsPublisher(input: {
   title: string;
@@ -67,7 +71,7 @@ export async function createComicAsPublisher(input: {
     }
 
     const approvalStatus = await resolveComicApprovalStatus(user.id, context.publisherId);
-    const dominantColor = await extractDominantColor(input.coverImage);
+    const dominantColor = await getDominantColor(input.coverImage);
 
     const comic = await prisma.comic.create({
       data: {
