@@ -4,6 +4,7 @@ import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { CreateComicForm } from "@/components/admin/create-comic-form";
 import { getAllGenres } from "@/lib/genres";
 import { getAllCategories } from "@/lib/categories";
+import { buildLicenseOptions } from "@/lib/platform-license";
 import { ComicStatus, Prisma } from "@prisma/client";
 
 const PAGE_SIZE = 30;
@@ -71,7 +72,7 @@ export default async function AdminComicsPage({ searchParams }: PageProps) {
   const publishedByComicId = new Map(publishedCounts.map((p) => [p.comicId, p._count._all]));
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const licenseOptions = licenses.map((l) => ({ id: l.id, publisherName: l.publisher.name, territory: l.territory, status: l.status }));
+  const licenseOptions = buildLicenseOptions(licenses);
 
   function buildHref(overrides: { q?: string; categoryId?: string; status?: string; page?: number }): string {
     const qp = new URLSearchParams();

@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getSessionUser } from "@/lib/auth";
+import { getSessionUser, invalidateSessionUserCache } from "@/lib/auth";
 import { sanitizeCustomLinks, isSafeUrl, type ProfileLink } from "@/lib/profile-links";
 import { isAllowedImageUrl } from "@/lib/image-url";
+import { canUploadAvatar } from "@/lib/roles";
 
 export async function updateProfileDetails(input: {
   bio?: string;
@@ -23,6 +24,9 @@ export async function updateProfileDetails(input: {
   const avatarUrl = input.avatarUrl?.trim();
   if (avatarUrl && !isAllowedImageUrl(avatarUrl)) {
     return { success: false, error: "آدرس تصویر معتبر نیست — از گزینه آپلود مستقیم استفاده کنید" };
+  }
+  if (!canUploadAvatar(user) && (avatarUrl || null) !== (user.avatarUrl ?? null)) {
+    return { success: false, error: "تغییر عکس پروفایل برای حساب شما فعال نیست" };
   }
 
   const donationLink = input.donationLink?.trim();
@@ -44,6 +48,7 @@ export async function updateProfileDetails(input: {
     },
   });
 
+  await invalidateSessionUserCache(user.id);
   revalidatePath("/app/profile");
   revalidatePath(`/app/team/${user.id}`);
 

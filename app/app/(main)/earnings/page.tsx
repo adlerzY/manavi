@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { getMyEarnings } from "@/app/actions/payouts";
+import { hasEarningsAccess } from "@/lib/roles";
 import { EarningsPanel } from "@/components/earnings/earnings-panel";
 import { BackButton } from "@/components/navigation/back-button";
 
@@ -11,6 +13,10 @@ export default async function EarningsPage() {
         <p className="text-sm text-text-muted">برای مشاهده‌ی درآمد، این صفحه را از داخل تلگرام باز کنید.</p>
       </main>
     );
+  }
+
+  if (!(await hasEarningsAccess(user))) {
+    redirect("/app/profile");
   }
 
   const overview = await getMyEarnings();

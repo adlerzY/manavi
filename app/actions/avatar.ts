@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { uploadUserAvatar } from "@/lib/s3";
 import { describeUploadError } from "@/lib/upload-error";
 import { assertRealImage, InvalidImageError } from "@/lib/image-validate";
+import { canUploadAvatar } from "@/lib/roles";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -20,6 +21,10 @@ export async function uploadOwnAvatarAction(formData: FormData): Promise<ActionR
   try {
     const user = await getSessionUser();
     if (!user) return { success: false, error: "برای این عملیات باید وارد شوید" };
+    if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
+    if (!canUploadAvatar(user)) {
+      return { success: false, error: "آپلود عکس پروفایل فقط برای ناشرها، اعضای تیم و مدیران فعال است" };
+    }
 
     const file = formData.get("avatar") as File | null;
     if (!file) return { success: false, error: "فایل تصویر یافت نشد" };

@@ -7,6 +7,7 @@ import { AvatarUploadCropper } from "@/components/profile/avatar-upload-cropper"
 import type { ProfileLink } from "@/lib/profile-links";
 
 interface EditProfileFormProps {
+  canUploadAvatar: boolean;
   initialBio: string | null;
   initialAvatarUrl: string | null;
   initialDonationLink: string | null;
@@ -17,6 +18,7 @@ interface EditProfileFormProps {
 }
 
 export function EditProfileForm({
+  canUploadAvatar,
   initialBio,
   initialAvatarUrl,
   initialDonationLink,
@@ -72,10 +74,18 @@ export function EditProfileForm({
     <form onSubmit={handleSubmit} className="space-y-4 rounded-md border border-border bg-surface p-4">
       <div className="space-y-1">
         <span className="text-sm text-text-muted">عکس پروفایل</span>
-        <p className="text-xs text-text-muted">
-          پیش‌فرض از عکس پروفایل تلگرام شما گرفته می‌شود. برای تنظیم دستی، یک تصویر آپلود کنید.
-        </p>
-        <AvatarUploadCropper uploadAction={uploadOwnAvatarAction} onUploaded={setAvatarUrl} />
+        {canUploadAvatar ? (
+          <>
+            <p className="text-xs text-text-muted">
+              پیش‌فرض از عکس پروفایل تلگرام شما گرفته می‌شود. برای تنظیم دستی، یک تصویر آپلود کنید.
+            </p>
+            <AvatarUploadCropper uploadAction={uploadOwnAvatarAction} onUploaded={setAvatarUrl} />
+          </>
+        ) : (
+          <p className="text-xs leading-6 text-text-muted">
+            عکس پروفایل شما از تلگرام گرفته می‌شود. آپلود عکس اختصاصی فقط برای ناشرها، اعضای تیم و مدیران فعال است.
+          </p>
+        )}
       </div>
 
       <div className="space-y-1">

@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { SidebarNav, type SidebarNavItem } from "@/components/dashboard/sidebar-nav";
+import { TelegramWebAppScript } from "@/components/telegram-web-app-script";
+import { TelegramPanelViewport } from "@/components/dashboard/telegram-panel-viewport";
 
 const NAV: SidebarNavItem[] = [
   { href: "/admin", label: "داشبورد", icon: "LayoutDashboard" },
@@ -17,18 +19,21 @@ const NAV: SidebarNavItem[] = [
   { href: "/admin/transactions", label: "تراکنش‌ها", icon: "Receipt" },
   { href: "/admin/analytics", label: "آمار", icon: "BarChart3" },
   { href: "/admin/payouts", label: "تسویه‌حساب ناشران", icon: "Wallet" },
-  { href: "/admin/notices", label: "اعلان‌ها", icon: "Megaphone" },  { href: "/admin/logs", label: "لاگ سیستم", icon: "ScrollText" },
+  { href: "/admin/notices", label: "اعلان‌ها", icon: "Megaphone" },
+  { href: "/admin/logs", label: "لاگ سیستم", icon: "ScrollText" },
   { href: "/admin/settings", label: "تنظیمات سراسری", icon: "LayoutDashboard" },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const user = await getSessionUser();
   if (!user || user.role !== "ADMIN") {
-    redirect("/");
+    redirect(user ? "/app/profile" : "/");
   }
 
   return (
     <div className="min-h-screen bg-background sm:pr-[68px]">
+      <TelegramWebAppScript />
+      <TelegramPanelViewport />
       <SidebarNav items={NAV} title="پنل مدیریت ماناوی خوش اومدی سلطان" />
       <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
     </div>

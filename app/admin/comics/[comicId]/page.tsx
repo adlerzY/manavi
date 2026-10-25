@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getAllGenres } from "@/lib/genres";
 import { getAllCategories } from "@/lib/categories";
+import { buildLicenseOptions } from "@/lib/platform-license";
 import { listComicStaff } from "@/app/admin/actions/comic-staff";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { EditComicForm } from "@/components/admin/edit-comic-form";
@@ -62,12 +63,7 @@ export default async function AdminComicDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const licenseOptions = licenses.map((l) => ({
-    id: l.id,
-    publisherName: l.publisher.name,
-    territory: l.territory,
-    status: l.status,
-  }));
+  const licenseOptions = buildLicenseOptions(licenses);
 
   return (
     <div className="space-y-8">

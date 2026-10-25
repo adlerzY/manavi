@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { Prisma } from "@prisma/client";
-import type { Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, invalidateSessionUserCache } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/audit-log";
 import { applyWalletDelta, InsufficientCoinsError } from "@/lib/ledger";
+import { applyRoleChange, RoleChangeError } from "@/lib/roles";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -80,14 +80,19 @@ export async function searchUsers(query: {
   };
 }
 
-export async function setUserRole(userId: string, role: Role): Promise<ActionResult> {
+export async function setUserRole(userId: string, role: Role): Promise<ActionResult<{ note: string | null }>> {
   try {
     const admin = await requireAdmin();
+    if (!Object.values(Role).includes(role)) {
+      return { success: false, error: "نقش نامعتبر است" };
+    }
     if (admin.id === userId && role !== "ADMIN") {
       return { success: false, error: "نمی‌توانید نقش خودتان را تغییر دهید" };
     }
-    await prisma.user.update({ where: { id: userId }, data: { role } });
+
+    const outcome = await applyRoleChange(userId, role);
     await invalidateSessionUserCache(userId);
+
     after(() =>
       logAuditEvent({
         actorId: admin.id,
@@ -95,12 +100,16 @@ export async function setUserRole(userId: string, role: Role): Promise<ActionRes
         action: "user.roleChange",
         targetType: "User",
         targetId: userId,
-        metadata: { role },
+        metadata: { role, note: outcome.note },
       })
     );
+
     revalidatePath("/admin/users");
-    return { success: true };
+    revalidatePath("/admin/publishers");
+    revalidatePath("/admin/licenses");
+    return { success: true, data: { note: outcome.note } };
   } catch (err) {
+    if (err instanceof RoleChangeError) return { success: false, error: err.message };
     return safeError(err);
   }
 }

@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, requireUploadAccess } from "@/lib/auth";
+import { requireAdmin, requireUploadAccess, invalidateSessionUserCache } from "@/lib/auth";
 import { deleteObject, deleteObjects } from "@/lib/s3";
 import { extractDominantColor } from "@/lib/color";
 import { invalidateChapterAccessList } from "@/lib/chapters";
@@ -11,6 +11,7 @@ import { safeError } from "@/lib/errors";
 import { isAllowedImageUrl } from "@/lib/image-url";
 import { logAuditEvent } from "@/lib/audit-log";
 import { LICENSE_STATUS_LABELS_FA } from "@/lib/license";
+import { PLATFORM_LICENSE_ID, PLATFORM_PUBLISHER_ID, ensurePlatformLicense } from "@/lib/platform-license";
 import { LicenseStatus, ChapterAccessType } from "@prisma/client";
 import type { ReadingMode } from "@prisma/client";
 
@@ -18,6 +19,11 @@ interface ActionResult<T = undefined> {
   success: boolean;
   error?: string;
   data?: T;
+}
+
+async function resolveLicenseId(requested: string | undefined): Promise<string> {
+  if (!requested || requested === PLATFORM_LICENSE_ID) return ensurePlatformLicense();
+  return requested;
 }
 
 export async function createPublisher(input: {
@@ -143,6 +149,10 @@ export async function activateLicense(licenseId: string): Promise<ActionResult> 
 export async function terminateLicense(licenseId: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
+    if (licenseId === PLATFORM_LICENSE_ID) {
+      return { success: false, error: "لایسنس داخلی پلتفرم قابل لغو نیست — تمام محتوای اختصاصی ماناوی به آن وابسته است" };
+    }
+
     await prisma.license.update({
       where: { id: licenseId },
       data: { status: LicenseStatus.TERMINATED, terminatedAt: new Date() },
@@ -171,7 +181,7 @@ export async function createComic(input: {
   description: string;
   coverImage: string;
   bannerImage?: string;
-  licenseId: string;
+  licenseId?: string;
   ageRating: "NORMAL" | "EIGHTEEN_PLUS" | "NSFW";
   categoryId: string;
   readingMode: ReadingMode;
@@ -180,8 +190,8 @@ export async function createComic(input: {
   try {
     const admin = await requireAdmin();
 
-    if (!input.title.trim() || !input.slug.trim() || !input.licenseId || !input.categoryId) {
-      return { success: false, error: "عنوان، اسلاگ، لایسنس و دسته‌بندی الزامی است" };
+    if (!input.title.trim() || !input.slug.trim() || !input.categoryId) {
+      return { success: false, error: "عنوان، اسلاگ و دسته‌بندی الزامی است" };
     }
 
     if (!input.coverImage || !isAllowedImageUrl(input.coverImage)) {
@@ -191,8 +201,10 @@ export async function createComic(input: {
       return { success: false, error: "تصویر بنر معتبر نیست" };
     }
 
+    const licenseId = await resolveLicenseId(input.licenseId);
+
     const [license, category] = await Promise.all([
-      prisma.license.findUnique({ where: { id: input.licenseId } }),
+      prisma.license.findUnique({ where: { id: licenseId } }),
       prisma.category.findUnique({ where: { id: input.categoryId } }),
     ]);
     if (!license) {
@@ -215,7 +227,7 @@ export async function createComic(input: {
         coverImage: input.coverImage,
         bannerImage: input.bannerImage || null,
         dominantColor,
-        licenseId: input.licenseId,
+        licenseId,
         ageRating: input.ageRating,
         categoryId: input.categoryId,
         readingMode: input.readingMode,
@@ -234,7 +246,7 @@ export async function createComic(input: {
         action: "comic.create",
         targetType: "Comic",
         targetId: comic.id,
-        metadata: { title: comic.title, licenseId: input.licenseId },
+        metadata: { title: comic.title, licenseId },
       })
     );
 
@@ -259,7 +271,7 @@ export async function updateComic(
     description: string;
     coverImage: string;
     bannerImage?: string;
-    licenseId: string;
+    licenseId?: string;
     ageRating: "NORMAL" | "EIGHTEEN_PLUS" | "NSFW";
     categoryId: string;
     readingMode: ReadingMode;
@@ -271,8 +283,8 @@ export async function updateComic(
   try {
     const admin = await requireAdmin();
 
-    if (!input.title.trim() || !input.slug.trim() || !input.licenseId || !input.categoryId) {
-      return { success: false, error: "عنوان، اسلاگ، لایسنس و دسته‌بندی الزامی است" };
+    if (!input.title.trim() || !input.slug.trim() || !input.categoryId) {
+      return { success: false, error: "عنوان، اسلاگ و دسته‌بندی الزامی است" };
     }
 
     if (!input.coverImage || !isAllowedImageUrl(input.coverImage)) {
@@ -288,8 +300,10 @@ export async function updateComic(
     });
     if (!existing) return { success: false, error: "عنوان یافت نشد" };
 
+    const licenseId = await resolveLicenseId(input.licenseId);
+
     const targetLicense = await prisma.license.findUnique({
-      where: { id: input.licenseId },
+      where: { id: licenseId },
       select: { publisherId: true },
     });
     if (!targetLicense) return { success: false, error: "لایسنس یافت نشد" };
@@ -305,10 +319,10 @@ export async function updateComic(
         }
       }
 
-      if (existing.licenseId !== input.licenseId) {
+      if (existing.licenseId !== licenseId) {
         await tx.edition.updateMany({
           where: { workId: comicId, licenseId: existing.licenseId },
-          data: { licenseId: input.licenseId, publisherId: targetLicense.publisherId },
+          data: { licenseId, publisherId: targetLicense.publisherId },
         });
       }
 
@@ -321,7 +335,7 @@ export async function updateComic(
           coverImage: input.coverImage,
           bannerImage: input.bannerImage || null,
           ...(dominantColor !== undefined ? { dominantColor } : {}),
-          licenseId: input.licenseId,
+          licenseId,
           ageRating: input.ageRating,
           categoryId: input.categoryId,
           readingMode: input.readingMode,
@@ -443,6 +457,7 @@ export async function removeChapterPage(chapterId: string, pageIndex: number): P
     return safeError(err);
   }
 }
+
 export async function deleteComic(comicId: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
@@ -517,22 +532,46 @@ export async function linkPublisherOwner(publisherId: string, telegramUsername: 
   try {
     const admin = await requireAdmin();
 
+    if (publisherId === PLATFORM_PUBLISHER_ID) {
+      return { success: false, error: "ناشر داخلی پلتفرم قابل اتصال به کاربر نیست" };
+    }
+
     const username = telegramUsername.trim().replace("@", "");
     if (!username) return { success: false, error: "یوزرنیم تلگرام الزامی است" };
 
-    const targetUser = await prisma.user.findFirst({ where: { username } });
+    const targetUser = await prisma.user.findFirst({ where: { username, deletedAt: null } });
     if (!targetUser) {
       return { success: false, error: "کاربری با این یوزرنیم پیدا نشد — باید حداقل یک‌بار مینی‌اپ را باز کرده باشد" };
     }
+
+    const publisher = await prisma.publisher.findUnique({
+      where: { id: publisherId },
+      select: { contractUserId: true },
+    });
+    if (!publisher) return { success: false, error: "ناشر یافت نشد" };
 
     const alreadyLinked = await prisma.publisher.findUnique({ where: { contractUserId: targetUser.id } });
     if (alreadyLinked && alreadyLinked.id !== publisherId) {
       return { success: false, error: "این کاربر قبلاً به ناشر دیگری متصل است" };
     }
 
-    await prisma.$transaction([
-      prisma.publisher.update({ where: { id: publisherId }, data: { contractUserId: targetUser.id } }),
-      prisma.user.update({ where: { id: targetUser.id }, data: { role: "PUBLISHER" } }),
+    const previousOwnerId =
+      publisher.contractUserId && publisher.contractUserId !== targetUser.id ? publisher.contractUserId : null;
+
+    await prisma.$transaction(async (tx) => {
+      if (previousOwnerId) {
+        await tx.publisher.update({ where: { id: publisherId }, data: { contractUserId: null } });
+        await tx.user.updateMany({ where: { id: previousOwnerId, role: "PUBLISHER" }, data: { role: "USER" } });
+      }
+      await tx.publisher.update({ where: { id: publisherId }, data: { contractUserId: targetUser.id } });
+      if (targetUser.role !== "ADMIN") {
+        await tx.user.update({ where: { id: targetUser.id }, data: { role: "PUBLISHER" } });
+      }
+    });
+
+    await Promise.all([
+      invalidateSessionUserCache(targetUser.id),
+      previousOwnerId ? invalidateSessionUserCache(previousOwnerId) : Promise.resolve(),
     ]);
 
     after(() =>
@@ -547,6 +586,7 @@ export async function linkPublisherOwner(publisherId: string, telegramUsername: 
     );
 
     revalidatePath("/admin/publishers");
+    revalidatePath("/admin/users");
     return { success: true };
   } catch (err) {
     return safeError(err);
@@ -556,7 +596,23 @@ export async function linkPublisherOwner(publisherId: string, telegramUsername: 
 export async function unlinkPublisherOwner(publisherId: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
-    await prisma.publisher.update({ where: { id: publisherId }, data: { contractUserId: null } });
+
+    const publisher = await prisma.publisher.findUnique({
+      where: { id: publisherId },
+      select: { contractUserId: true },
+    });
+    if (!publisher) return { success: false, error: "ناشر یافت نشد" };
+
+    const ownerId = publisher.contractUserId;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.publisher.update({ where: { id: publisherId }, data: { contractUserId: null } });
+      if (ownerId) {
+        await tx.user.updateMany({ where: { id: ownerId, role: "PUBLISHER" }, data: { role: "USER" } });
+      }
+    });
+
+    if (ownerId) await invalidateSessionUserCache(ownerId);
 
     after(() =>
       logAuditEvent({
@@ -569,6 +625,7 @@ export async function unlinkPublisherOwner(publisherId: string): Promise<ActionR
     );
 
     revalidatePath("/admin/publishers");
+    revalidatePath("/admin/users");
     return { success: true };
   } catch (err) {
     return safeError(err);

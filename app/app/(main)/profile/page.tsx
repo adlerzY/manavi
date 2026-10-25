@@ -11,6 +11,7 @@ import { SafeCoverImage } from "@/components/ui/safe-cover-image";
 import { getReferralLink } from "@/lib/site-config";
 import { parseCustomLinks } from "@/lib/profile-links";
 import { getReferralRewardCoins } from "@/lib/platform-settings";
+import { ROLE_LABELS, canUploadAvatar, hasEarningsAccess } from "@/lib/roles";
 
 export default async function ProfilePage() {
   const user = await getSessionUser();
@@ -22,7 +23,7 @@ export default async function ProfilePage() {
     );
   }
 
-  const [bookmarks, readHistory, referralRewardCoins, publisherContext] = await Promise.all([
+  const [bookmarks, readHistory, referralRewardCoins, publisherContext, showEarnings] = await Promise.all([
     prisma.bookmark.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -36,10 +37,12 @@ export default async function ProfilePage() {
     }),
     getReferralRewardCoins(),
     getPublisherContext(user),
+    hasEarningsAccess(user),
   ]);
 
   const showAdminPanel = user.role === "ADMIN" && !user.isBanned;
   const showPublisherPanel = Boolean(publisherContext) && !user.isBanned;
+  const avatarUploadAllowed = canUploadAvatar(user);
 
   const seedComicIds = Array.from(
     new Set([...readHistory.map((h) => h.comicId), ...bookmarks.map((b) => b.comicId)])
@@ -87,6 +90,11 @@ export default async function ProfilePage() {
               {user.firstName} {user.lastName ?? ""}
             </h1>
             <p className="text-sm text-text-muted">موجودی سکه: {user.coinsBalance.toLocaleString("fa-IR")}</p>
+            {user.role !== "USER" && (
+              <span className="mt-1 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                {ROLE_LABELS[user.role]}
+              </span>
+            )}
           </div>
         </div>
 
@@ -114,6 +122,7 @@ export default async function ProfilePage() {
         <section>
           <CollapsibleSection triggerLabel="ویرایش پروفایل">
             <EditProfileForm
+              canUploadAvatar={avatarUploadAllowed}
               initialBio={user.bio}
               initialAvatarUrl={user.avatarUrl}
               initialDonationLink={user.donationLink}
@@ -133,14 +142,16 @@ export default async function ProfilePage() {
           />
         </section>
 
-        <section>
-          <Link
-            href="/app/earnings"
-            className="block rounded-md border border-border bg-surface px-4 py-3 text-center text-sm text-text-main hover:border-primary"
-          >
-            درآمد و تسویه‌حساب‌های من
-          </Link>
-        </section>
+        {showEarnings && (
+          <section>
+            <Link
+              href="/app/earnings"
+              className="block rounded-md border border-border bg-surface px-4 py-3 text-center text-sm text-text-main hover:border-primary"
+            >
+              درآمد و تسویه‌حساب‌های من
+            </Link>
+          </section>
+        )}
 
         <section>
           <h2 className="mb-3 text-sm font-medium text-text-main">تنظیمات محتوا</h2>
