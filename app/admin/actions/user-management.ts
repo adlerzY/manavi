@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
+import { Prisma } from "@prisma/client";
+import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, invalidateSessionUserCache } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/audit-log";
-import type { Role } from "@prisma/client";
 import { applyWalletDelta, InsufficientCoinsError } from "@/lib/ledger";
 
 interface ActionResult<T = undefined> {
@@ -135,6 +136,10 @@ export async function banUser(userId: string, reason: string): Promise<ActionRes
 export async function unbanUser(userId: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { deletedAt: true } });
+    if (!target) return { success: false, error: "کاربر یافت نشد" };
+    if (target.deletedAt) return { success: false, error: "این حساب حذف شده و قابل رفع مسدودی نیست" };
+
     await prisma.user.update({ where: { id: userId }, data: { isBanned: false, bannedAt: null, banReason: null } });
     await invalidateSessionUserCache(userId);
     after(() =>
@@ -152,6 +157,7 @@ export async function unbanUser(userId: string): Promise<ActionResult> {
     return safeError(err);
   }
 }
+
 export async function grantCoins(userId: string, amount: number, note: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
@@ -229,6 +235,82 @@ export async function revokeCoins(userId: string, amount: number, note: string):
     return { success: true };
   } catch (err) {
     if (err instanceof InsufficientCoinsError) return { success: false, error: "موجودی کاربر کافی نیست" };
+    return safeError(err);
+  }
+}
+
+export async function deleteUserAccount(userId: string, confirmValue: string): Promise<ActionResult> {
+  try {
+    const admin = await requireAdmin();
+    if (admin.id === userId) {
+      return { success: false, error: "نمی‌توانید حساب خودتان را حذف کنید" };
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        username: true,
+        role: true,
+        deletedAt: true,
+        publisherProfile: { select: { id: true } },
+      },
+    });
+    if (!target || target.deletedAt) return { success: false, error: "کاربر یافت نشد" };
+    if (target.role === "ADMIN") {
+      return { success: false, error: "ابتدا نقش ادمین این کاربر را تغییر دهید" };
+    }
+    if (target.publisherProfile) {
+      return { success: false, error: "این کاربر مالک یک ناشر است — ابتدا اتصال او را از صفحه ناشران قطع کنید" };
+    }
+
+    const expected = (target.username ?? target.firstName).trim();
+    if (confirmValue.trim() !== expected) {
+      return { success: false, error: "عبارت تایید مطابقت ندارد" };
+    }
+
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: {
+          firstName: "حساب حذف‌شده",
+          lastName: null,
+          username: null,
+          bio: null,
+          avatarUrl: null,
+          telegramPhotoUrl: null,
+          donationLink: null,
+          cryptoWalletLabel: null,
+          cryptoWalletAddress: null,
+          customLinks: Prisma.JsonNull,
+          role: "USER",
+          isBanned: true,
+          bannedAt: now,
+          banReason: "حساب حذف شده",
+          deletedAt: now,
+        },
+      }),
+      prisma.bookmark.deleteMany({ where: { userId } }),
+      prisma.readHistory.deleteMany({ where: { userId } }),
+      prisma.publisherStaff.deleteMany({ where: { userId } }),
+      prisma.editionRequest.deleteMany({ where: { userId } }),
+    ]);
+
+    await invalidateSessionUserCache(userId);
+    after(() =>
+      logAuditEvent({
+        actorId: admin.id,
+        actorRole: admin.role,
+        action: "user.delete",
+        targetType: "User",
+        targetId: userId,
+      })
+    );
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (err) {
     return safeError(err);
   }
 }

@@ -6,7 +6,7 @@ import { requireAdmin, requireUploadAccess } from "@/lib/auth";
 import { assertLicenseActive, LicenseInactiveError } from "@/lib/license";
 import { executeScheduledPublish } from "@/lib/scheduled-publish";
 import { invalidateChapterAccessList } from "@/lib/chapters";
-import { deleteObject, deleteObjects, getSignedImageUrls } from "@/lib/s3";
+import { deleteObjects, getSignedImageUrls } from "@/lib/s3";
 import { safeError } from "@/lib/errors";
 
 interface ActionResult<T = undefined> {
@@ -18,7 +18,7 @@ interface ActionResult<T = undefined> {
 export async function scheduleChapter(chapterId: string, scheduledAt: string): Promise<ActionResult> {
   try {
     const date = new Date(scheduledAt);
-    if (date <= new Date()) {
+    if (Number.isNaN(date.getTime()) || date <= new Date()) {
       return { success: false, error: "زمان زمان‌بندی باید در آینده باشد" };
     }
 
@@ -77,6 +77,25 @@ export async function runScheduledPublish(): Promise<ActionResult<{ published: n
   }
 }
 
+export async function getChapterPagePreviews(
+  chapterId: string
+): Promise<ActionResult<{ pageKeys: string[]; previewUrls: string[] }>> {
+  try {
+    const chapter = await prisma.chapter.findUnique({
+      where: { id: chapterId },
+      select: { pages: true, comicId: true },
+    });
+    if (!chapter) return { success: false, error: "چپتر یافت نشد" };
+
+    await requireUploadAccess(chapter.comicId);
+
+    const previewUrls = await getSignedImageUrls(chapter.pages, undefined, { width: 320, quality: 70 });
+    return { success: true, data: { pageKeys: chapter.pages, previewUrls } };
+  } catch (err) {
+    return safeError(err);
+  }
+}
+
 export async function reorderChapterPages(chapterId: string, orderedPages: string[]): Promise<ActionResult> {
   try {
     const chapter = await prisma.chapter.findUnique({ where: { id: chapterId }, select: { comicId: true } });
@@ -92,6 +111,7 @@ export async function reorderChapterPages(chapterId: string, orderedPages: strin
     return safeError(err);
   }
 }
+
 export async function deleteChapter(chapterId: string): Promise<ActionResult> {
   try {
     const chapter = await prisma.chapter.findUnique({
