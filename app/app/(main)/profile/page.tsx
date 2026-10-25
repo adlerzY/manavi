@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSessionUser } from "@/lib/auth";
+import { getSessionUser, getPublisherContext } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { EditProfileForm } from "@/components/profile/edit-profile-form";
@@ -22,7 +22,7 @@ export default async function ProfilePage() {
     );
   }
 
-  const [bookmarks, readHistory, referralRewardCoins] = await Promise.all([
+  const [bookmarks, readHistory, referralRewardCoins, publisherContext] = await Promise.all([
     prisma.bookmark.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -35,7 +35,11 @@ export default async function ProfilePage() {
       include: { comic: { select: { slug: true, title: true, coverImage: true } } },
     }),
     getReferralRewardCoins(),
+    getPublisherContext(user),
   ]);
+
+  const showAdminPanel = user.role === "ADMIN" && !user.isBanned;
+  const showPublisherPanel = Boolean(publisherContext) && !user.isBanned;
 
   const seedComicIds = Array.from(
     new Set([...readHistory.map((h) => h.comicId), ...bookmarks.map((b) => b.comicId)])
@@ -85,6 +89,27 @@ export default async function ProfilePage() {
             <p className="text-sm text-text-muted">موجودی سکه: {user.coinsBalance.toLocaleString("fa-IR")}</p>
           </div>
         </div>
+
+        {(showAdminPanel || showPublisherPanel) && (
+          <section className="space-y-2">
+            {showAdminPanel && (
+              <Link
+                href="/admin"
+                className="block rounded-md bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground"
+              >
+                ورود به پنل مدیریت
+              </Link>
+            )}
+            {showPublisherPanel && (
+              <Link
+                href="/publisher"
+                className="block rounded-md border border-primary px-4 py-3 text-center text-sm font-medium text-primary"
+              >
+                ورود به پنل ناشر
+              </Link>
+            )}
+          </section>
+        )}
 
         <section>
           <CollapsibleSection triggerLabel="ویرایش پروفایل">

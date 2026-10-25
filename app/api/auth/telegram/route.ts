@@ -5,6 +5,7 @@ import { validateTelegramInitData, InvalidInitDataError, sanitizeTelegramPhotoUr
 import { createSessionToken, sessionCookieOptions, verifySessionToken } from "@/lib/session";
 import { generateReferralCode } from "@/lib/referral";
 import { checkRateLimit } from "@/lib/moderation";
+import { invalidateSessionUserCache } from "@/lib/auth";
 import type { Role } from "@prisma/client";
 
 function getBootstrapAdminTelegramIds(): Set<string> {
@@ -90,6 +91,12 @@ export async function POST(req: NextRequest) {
     if (existingSession) {
       const existingUser = await prisma.user.findUnique({ where: { id: existingSession.userId } });
       if (existingUser && !existingUser.deletedAt) {
+        const bootstrapAdmins = getBootstrapAdminTelegramIds();
+        if (existingUser.role !== "ADMIN" && bootstrapAdmins.has(String(existingUser.telegramId))) {
+          const promoted = await prisma.user.update({ where: { id: existingUser.id }, data: { role: "ADMIN" } });
+          await invalidateSessionUserCache(promoted.id);
+          return NextResponse.json({ user: publicUserPayload(promoted) });
+        }
         return NextResponse.json({ user: publicUserPayload(existingUser) });
       }
     }
@@ -143,6 +150,10 @@ export async function POST(req: NextRequest) {
         ...(shouldPromote ? { role: "ADMIN" as Role } : {}),
       },
     });
+
+    if (shouldPromote) {
+      await invalidateSessionUserCache(dbUser.id);
+    }
   } else {
     const referrer = startParam
       ? await prisma.user.findUnique({ where: { referralCode: startParam } })
