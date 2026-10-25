@@ -16,6 +16,7 @@ export default async function PublisherLayout({ children }: { children: ReactNod
     { href: "/publisher", label: "داشبورد", icon: "LayoutDashboard" },
     { href: "/publisher/comics", label: "آثار من", icon: "BookOpen" },
     { href: "/publisher/comments", label: "نظرات", icon: "MessageSquare" },
+    { href: "/publisher/earnings", label: "درآمد و تسویه", icon: "Wallet" },
   ];
 
   if (!context || context.isOwner) {

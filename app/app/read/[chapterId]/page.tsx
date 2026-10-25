@@ -31,12 +31,27 @@ export default async function ReadChapterPage({ params }: PageProps) {
     where: { id: chapterId },
     select: {
       id: true,
+      editionId: true,
       chapterNumber: true,
       title: true,
       pages: true,
       publishedAt: true,
       accessType: true,
       isLocked: true,
+      edition: {
+        select: {
+          status: true,
+          publisherId: true,
+          license: {
+            select: {
+              status: true,
+              terminatedAt: true,
+              startDate: true,
+              endDate: true,
+            },
+          },
+        },
+      },
       comic: {
         select: {
           id: true,
@@ -47,15 +62,6 @@ export default async function ReadChapterPage({ params }: PageProps) {
           approvalStatus: true,
           createdById: true,
           category: { select: { readingDirection: true } },
-          license: {
-            select: {
-              publisherId: true,
-              status: true,
-              terminatedAt: true,
-              startDate: true,
-              endDate: true,
-            },
-          },
         },
       },
     },
@@ -65,7 +71,7 @@ export default async function ReadChapterPage({ params }: PageProps) {
     notFound();
   }
 
-  if (!isLicenseCurrentlyActive(chapter.comic.license)) {
+  if (chapter.edition.status !== "ACTIVE" || !isLicenseCurrentlyActive(chapter.edition.license)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
         <p className="text-sm text-text-muted">این عنوان موقتاً در دسترس نیست.</p>
@@ -75,7 +81,7 @@ export default async function ReadChapterPage({ params }: PageProps) {
 
   const [user, accessList] = await Promise.all([
     getSessionUser(),
-    getChapterAccessList(chapter.comic.id),
+    getChapterAccessList(chapter.comic.id, chapter.editionId),
   ]);
 
   const rateLimitKey = user
@@ -100,7 +106,7 @@ export default async function ReadChapterPage({ params }: PageProps) {
     isPrivileged = user?.role === "ADMIN" || user?.id === chapter.comic.createdById;
     if (!isPrivileged && user) {
       const ownContext = await getPublisherContext(user);
-      isTeamMember = ownContext?.publisherId === chapter.comic.license.publisherId;
+      isTeamMember = ownContext?.publisherId === chapter.edition.publisherId;
     }
   }
 
@@ -137,12 +143,15 @@ export default async function ReadChapterPage({ params }: PageProps) {
     const hasAccess = await userHasChapterAccess(user?.id ?? null, chapterId, user?.role);
     if (!hasAccess) {
       const coinCost = await getChapterUnlockCoinCost();
+      const editionPrice = await prisma.edition
+        .findUnique({ where: { id: chapter.editionId }, select: { priceCoinsOverride: true } })
+        .then((edition) => edition?.priceCoinsOverride ?? coinCost);
       return (
         <LockedChapterGate
           chapterId={chapterId}
           comicSlug={chapter.comic.slug}
           coinsBalance={user?.coinsBalance ?? 0}
-          coinCost={coinCost}
+          coinCost={editionPrice}
         />
       );
     }
@@ -155,11 +164,11 @@ export default async function ReadChapterPage({ params }: PageProps) {
 
   let canReply = user?.role === "ADMIN";
   if (!canReply && user?.publisherProfile) {
-    canReply = user.publisherProfile.id === chapter.comic.license.publisherId;
+    canReply = user.publisherProfile.id === chapter.edition.publisherId;
   }
   if (!canReply && user) {
     const staffLink = await prisma.publisherStaff.findFirst({
-      where: { userId: user.id, publisherId: chapter.comic.license.publisherId },
+      where: { userId: user.id, publisherId: chapter.edition.publisherId },
       select: { id: true },
     });
     canReply = Boolean(staffLink);

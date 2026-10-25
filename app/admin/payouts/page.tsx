@@ -1,44 +1,31 @@
-import { getPublisherSettlementLog, listPayoutLog, listPendingOnChainPayouts } from "@/app/admin/actions/settlement";
-import { PublisherSettlementLog } from "@/components/admin/publisher-settlement-log";
+import { listSettlementPeriods, getUnsettledMicro } from "@/app/admin/actions/settlement-periods";
+import { listPayoutLog } from "@/app/admin/actions/settlement";
+import { SettlementPeriodsManager } from "@/components/admin/settlement-periods-manager";
 import { PayoutLogTable } from "@/components/admin/payout-log-table";
-import { PendingOnChainPayouts } from "@/components/admin/pending-onchain-payouts";
-import { TonConnectProvider } from "@/components/providers/ton-connect-provider";
-
-function firstDayOfMonth(): string {
-  const d = new Date();
-  d.setDate(1);
-  return d.toISOString().slice(0, 10);
-}
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { microToUsdt } from "@/lib/units";
 
 export default async function AdminPayoutsPage() {
-  const [settlementRows, payoutLog, pendingOnChain] = await Promise.all([
-    getPublisherSettlementLog(firstDayOfMonth(), today()),
+  const [periods, unsettledMicro, legacyLog] = await Promise.all([
+    listSettlementPeriods(),
+    getUnsettledMicro(),
     listPayoutLog(),
-    listPendingOnChainPayouts(),
   ]);
 
   return (
-    <TonConnectProvider>
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-xl font-semibold text-text-main">تسویه‌حساب ناشران</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            سهم هر ناشر از سکه‌های خرج‌شده روی چپترهاش رو بر اساس درصد لایسنس محاسبه می‌کنه و با نرخ فعلی سکه به TON تبدیل می‌کنه. با «پرداخت خودکار با کیف پول من» مبلغ و مقصد از قبل پر می‌شن و شما فقط توی اپ کیف پولتون تایید می‌زنید — بدون نگهداری کلید خصوصی روی سرور. چون نرخ سکه به TON ممکنه تغییر کنه، عدد نمایش‌داده‌شده برای دوره‌های گذشته بر اساس نرخ فعلیه نه نرخ زمان تراکنش‌ها.
-          </p>
-        </div>
-
-        <PublisherSettlementLog initialRows={settlementRows} />
-
-        <PendingOnChainPayouts rows={pendingOnChain} />
-
-        <div>
-          <h2 className="mb-3 text-lg font-medium text-text-main">تاریخچه پرداخت‌ها</h2>
-          <PayoutLogTable rows={payoutLog} />
-        </div>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-xl font-semibold text-text-main">تسویه‌حساب دوره‌ای</h1>
+        <p className="mt-1 text-sm leading-7 text-text-muted">
+          سهم هر ناشر و همکار از تخصیص‌های ثبت‌شده در لحظه‌ی فروش محاسبه می‌شود؛ تغییر قیمت سکه یا درصد قرارداد روی فروش‌های گذشته اثری ندارد. بعد از قفل دوره، ردیف‌ها را تأیید کنید، پرداخت واقعی را با مرجع تراکنش ثبت کنید و دریافت‌کننده تأیید یا مغایرت را از پنل خودش ثبت می‌کند.
+        </p>
       </div>
-    </TonConnectProvider>
+
+      <SettlementPeriodsManager initialPeriods={periods} unsettledUsdt={microToUsdt(unsettledMicro)} />
+
+      <div>
+        <h2 className="mb-3 text-lg font-medium text-text-main">تاریخچه‌ی قدیمی پرداخت‌ها</h2>
+        <PayoutLogTable rows={legacyLog} />
+      </div>
+    </div>
   );
 }

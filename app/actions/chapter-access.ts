@@ -1,11 +1,12 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser, invalidateSessionUserCache } from "@/lib/auth";
 import { invalidateChapterUnlockCache } from "@/lib/chapters";
-import { getChapterUnlockCoinCost } from "@/lib/platform-settings";
 import { checkRateLimit } from "@/lib/moderation";
+import { purchaseChapters, type PurchaseResult } from "@/lib/sales";
 import { ChapterAccessType } from "@prisma/client";
 
 interface UnlockResult {
@@ -13,13 +14,21 @@ interface UnlockResult {
   error?: string;
 }
 
-class InsufficientCoinsError extends Error {}
-
-function isUniqueConstraintError(err: unknown): boolean {
-  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002");
+function scopedKey(userId: string, key?: string): string {
+  return `${userId}:${(key && key.trim() ? key.trim() : randomUUID()).slice(0, 80)}`;
 }
 
-export async function unlockChapterWithCoins(chapterId: string): Promise<UnlockResult> {
+async function finalizePurchase(userId: string, result: PurchaseResult): Promise<void> {
+  const chapterIds = [...result.purchasedChapterIds, ...result.crossUnlockedChapterIds];
+  await Promise.all([
+    invalidateSessionUserCache(userId),
+    ...chapterIds.map((chapterId) => invalidateChapterUnlockCache(userId, chapterId)),
+  ]);
+  if (result.comicSlug) revalidatePath(`/app/comic/${result.comicSlug}`);
+  chapterIds.forEach((chapterId) => revalidatePath(`/app/read/${chapterId}`));
+}
+
+export async function unlockChapterWithCoins(chapterId: string, idempotencyKey?: string): Promise<UnlockResult> {
   const user = await getSessionUser();
   if (!user) return { success: false, error: "Not authenticated" };
   if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
@@ -29,56 +38,34 @@ export async function unlockChapterWithCoins(chapterId: string): Promise<UnlockR
 
   const chapter = await prisma.chapter.findUnique({
     where: { id: chapterId },
-    select: { id: true, comicId: true, accessType: true, isLocked: true },
+    select: { id: true, editionId: true, accessType: true, isLocked: true },
   });
   if (!chapter) return { success: false, error: "Chapter not found" };
-  if (chapter.isLocked) {
-    return { success: false, error: "این چپتر موقتاً در دسترس نیست" };
-  }
+  if (chapter.isLocked) return { success: false, error: "این چپتر موقتاً در دسترس نیست" };
   if (chapter.accessType !== ChapterAccessType.COIN) {
     return { success: false, error: "این چپتر با سکه قابل باز شدن نیست" };
   }
 
-  const cost = await getChapterUnlockCoinCost();
+  const owned = await prisma.entitlement.findUnique({
+    where: { userId_chapterId: { userId: user.id, chapterId } },
+    select: { id: true },
+  });
+  if (owned) return { success: true };
 
-  try {
-    await prisma.$transaction(async (tx) => {
-      try {
-        await tx.chapterUnlock.create({ data: { userId: user.id, chapterId, expiresAt: null } });
-      } catch (err) {
-        if (isUniqueConstraintError(err)) {
-          return;
-        }
-        throw err;
-      }
+  const result = await purchaseChapters({
+    buyerId: user.id,
+    editionId: chapter.editionId,
+    chapterIds: [chapterId],
+    kind: "SINGLE",
+    idempotencyKey: scopedKey(user.id, idempotencyKey),
+  });
+  if (!result.success) return { success: false, error: result.error };
 
-      const debited = await tx.user.updateMany({
-        where: { id: user.id, coinsBalance: { gte: cost } },
-        data: { coinsBalance: { decrement: cost } },
-      });
-      if (debited.count === 0) throw new InsufficientCoinsError();
-
-      await tx.transaction.create({
-        data: { type: "CHAPTER_UNLOCK", status: "PAID", amount: cost, currency: "COIN", payerId: user.id, comicId: chapter.comicId },
-      });
-    });
-  } catch (err) {
-    if (err instanceof InsufficientCoinsError) {
-      return { success: false, error: "سکه کافی نیست" };
-    }
-    throw err;
-  }
-
-  await Promise.all([
-    invalidateSessionUserCache(user.id),
-    invalidateChapterUnlockCache(user.id, chapterId),
-  ]);
-
-  revalidatePath(`/app/read/${chapterId}`);
+  await finalizePurchase(user.id, result);
   return { success: true };
 }
 
-export async function unlockComicWithCoins(comicId: string): Promise<UnlockResult> {
+export async function unlockComicWithCoins(editionId: string, idempotencyKey?: string): Promise<UnlockResult> {
   const user = await getSessionUser();
   if (!user) return { success: false, error: "Not authenticated" };
   if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
@@ -86,85 +73,14 @@ export async function unlockComicWithCoins(comicId: string): Promise<UnlockResul
   const allowed = await checkRateLimit(`unlock-comic:${user.id}`, 5);
   if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است، کمی صبر کنید" };
 
-  const comic = await prisma.comic.findUnique({ where: { id: comicId }, select: { slug: true } });
-  if (!comic) return { success: false, error: "عنوان یافت نشد" };
-
-  const cost = await getChapterUnlockCoinCost();
-
-  const chapters = await prisma.chapter.findMany({
-    where: { comicId, status: "PUBLISHED", accessType: ChapterAccessType.COIN, isLocked: false },
-    select: { id: true },
+  const result = await purchaseChapters({
+    buyerId: user.id,
+    editionId,
+    kind: "BULK",
+    idempotencyKey: scopedKey(user.id, idempotencyKey),
   });
-  if (chapters.length === 0) {
-    return { success: false, error: "چپتر سکه‌ای برای این عنوان وجود ندارد" };
-  }
+  if (!result.success) return { success: false, error: result.error };
 
-  const existingUnlocks = await prisma.chapterUnlock.findMany({
-    where: { userId: user.id, chapterId: { in: chapters.map((c) => c.id) }, expiresAt: null },
-    select: { chapterId: true },
-  });
-  const alreadyUnlockedIds = new Set(existingUnlocks.map((u) => u.chapterId));
-  const candidateChapterIds = chapters.map((c) => c.id).filter((id) => !alreadyUnlockedIds.has(id));
-
-  if (candidateChapterIds.length === 0) {
-    return { success: false, error: "همه چپترهای این عنوان قبلاً باز شده‌اند" };
-  }
-
-  let unlockedChapterIds: string[] = [];
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      const created = await tx.chapterUnlock.createManyAndReturn({
-        data: candidateChapterIds.map((chapterId) => ({ userId: user.id, chapterId, expiresAt: null })),
-        skipDuplicates: true,
-        select: { chapterId: true },
-      });
-
-      if (created.length === 0) {
-        return;
-      }
-
-      unlockedChapterIds = created.map((u) => u.chapterId);
-
-      const totalCost = unlockedChapterIds.length * cost;
-
-      const debited = await tx.user.updateMany({
-        where: { id: user.id, coinsBalance: { gte: totalCost } },
-        data: { coinsBalance: { decrement: totalCost } },
-      });
-      if (debited.count === 0) throw new InsufficientCoinsError();
-
-      await tx.transaction.create({
-        data: {
-          type: "CHAPTER_UNLOCK",
-          status: "PAID",
-          amount: totalCost,
-          currency: "COIN",
-          payerId: user.id,
-          comicId,
-          message: `باز کردن کل عنوان یکجا — ${unlockedChapterIds.length} چپتر`,
-        },
-      });
-    });
-  } catch (err) {
-    if (err instanceof InsufficientCoinsError) {
-      const totalCost = unlockedChapterIds.length * cost;
-      return { success: false, error: `سکه کافی نیست — ${totalCost.toLocaleString("fa-IR")} سکه لازم است` };
-    }
-    throw err;
-  }
-
-  if (unlockedChapterIds.length === 0) {
-    return { success: false, error: "همه چپترهای این عنوان قبلاً باز شده‌اند" };
-  }
-
-  await Promise.all([
-    invalidateSessionUserCache(user.id),
-    ...unlockedChapterIds.map((chapterId) => invalidateChapterUnlockCache(user.id, chapterId)),
-  ]);
-
-  revalidatePath(`/app/comic/${comic.slug}`);
-  unlockedChapterIds.forEach((chapterId) => revalidatePath(`/app/read/${chapterId}`));
-
+  await finalizePurchase(user.id, result);
   return { success: true };
 }

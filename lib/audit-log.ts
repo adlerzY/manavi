@@ -14,7 +14,10 @@ export type AuditAction =
   | "user.ban" | "user.unban" | "user.roleChange"
   | "user.coinGrant" | "user.coinRevoke" | "user.delete"
   | "platformSettings.update"
-  | "publisherStaff.permissionChange";
+  | "publisherStaff.permissionChange"
+  | "comicStaff.shareChange"
+  | "settlement.createPeriod" | "settlement.recalculate" | "settlement.lockPeriod"
+  | "settlement.lineStatus" | "settlement.payout" | "settlement.note";
 
 interface LogAuditEventInput {
   actorId: string;

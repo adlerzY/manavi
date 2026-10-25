@@ -10,11 +10,18 @@ import { ComicCard } from "@/components/catalog/comic-card";
 import { GenrePill } from "@/components/catalog/genre-pill";
 import { ComicDetailTabs } from "@/components/catalog/comic-detail-tabs";
 import { ChapterOnePreview } from "@/components/catalog/chapter-one-preview";
+import { EditionSelector } from "@/components/catalog/edition-selector";
+import { RatingPanel } from "@/components/catalog/rating-panel";
+import { ReportButton } from "@/components/catalog/report-button";
+import { RequestEditionCard } from "@/components/catalog/request-edition-card";
 import { BackButton } from "@/components/navigation/back-button";
 import { ComicUnlockButton } from "@/components/reader/comic-unlock-button";
 import { SafeAvatar } from "@/components/ui/safe-avatar";
 import { SafeCoverImage } from "@/components/ui/safe-cover-image";
-import { getChapterAccessList, getComicUnlockPreview, type ChapterAccessInfo } from "@/lib/chapters";
+import { getChapterAccessList, getEditionUnlockPreview, type ChapterAccessInfo } from "@/lib/chapters";
+import { getChapterUnlockCoinCost } from "@/lib/platform-settings";
+import { getWorkEditions, pickEdition, getUserRatingContext, getUserEditionRequest } from "@/lib/editions";
+import { averageScore, requiredReadChapters } from "@/lib/rating";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
 import { STAFF_ROLE_LABELS } from "@/lib/staff-roles";
 
@@ -22,6 +29,7 @@ export const revalidate = 300;
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ edition?: string; lang?: string }>;
 }
 
 function accessBadgeLabel(chapter: ChapterAccessInfo): string | null {
@@ -31,8 +39,9 @@ function accessBadgeLabel(chapter: ChapterAccessInfo): string | null {
   return "🪙 سکه‌ای";
 }
 
-export default async function ComicDetailPage({ params }: PageProps) {
+export default async function ComicDetailPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const { edition: editionParam, lang: langParam } = await searchParams;
 
   const comic = await prisma.comic.findUnique({
     where: { slug },
@@ -49,10 +58,18 @@ export default async function ComicDetailPage({ params }: PageProps) {
       approvalStatus: true,
       createdById: true,
       rejectionNote: true,
+      ratingCount: true,
+      ratingTotal: true,
       category: { select: { name: true } },
-      license: { select: { status: true, publisherId: true, publisher: { select: { id: true, name: true, avatarUrl: true } } } },
       genres: { include: { genre: true } },
-      staff: { include: { user: { select: { id: true, firstName: true, username: true } } } },
+      staff: {
+        select: {
+          id: true,
+          roleTitle: true,
+          editionId: true,
+          user: { select: { id: true, firstName: true, username: true } },
+        },
+      },
     },
   });
 
@@ -61,66 +78,76 @@ export default async function ComicDetailPage({ params }: PageProps) {
   }
 
   const user = await getSessionUser();
+  const editions = await getWorkEditions(comic.id);
 
   const isPrivileged = user?.role === "ADMIN" || user?.id === comic.createdById;
   let isTeamMember = false;
   if (!isPrivileged && user) {
     const ownContext = await getPublisherContext(user);
-    isTeamMember = ownContext?.publisherId === comic.license.publisherId;
+    isTeamMember = Boolean(ownContext && editions.some((edition) => edition.publisherId === ownContext.publisherId));
   }
 
   if (comic.approvalStatus !== "APPROVED" && !isPrivileged && !isTeamMember) {
     notFound();
   }
 
-  const [chapterAccess, allowedRatings] = await Promise.all([
-    getChapterAccessList(comic.id),
-    getAllowedAgeRatings(),
-  ]);
+  const selected = pickEdition(editions, editionParam, langParam);
+  const licenseActive = Boolean(selected && selected.status === "ACTIVE" && selected.licenseStatus === "ACTIVE");
+
+  const [allowedRatings, defaultPrice] = await Promise.all([getAllowedAgeRatings(), getChapterUnlockCoinCost()]);
+  const chapterAccess = selected ? await getChapterAccessList(comic.id, selected.id) : [];
 
   const sortedChapters = [...chapterAccess].sort((a, b) => a.chapterNumber - b.chapterNumber);
   const newestFirstChapters = [...sortedChapters].reverse();
-  const licenseActive = comic.license.status === "ACTIVE";
   const firstChapter = sortedChapters[0];
 
   const canPreviewAdultContent = comic.ageRating === "NORMAL" || Boolean(user?.isAgeVerified);
 
-  const [bookmarked, similarComics, firstChapterPages, readHistoryEntry, readChapterIds, hasRead, unlockPreview] = await Promise.all([
-    user
-      ? prisma.bookmark.findUnique({ where: { userId_comicId: { userId: user.id, comicId: comic.id } } }).then(Boolean)
-      : Promise.resolve(false),
-    comic.genres.length > 0
-      ? prisma.comic.findMany({
-          where: {
-            id: { not: comic.id },
-            ageRating: { in: allowedRatings },
-            approvalStatus: "APPROVED",
-            genres: { some: { genreId: { in: comic.genres.map((g) => g.genreId) } } },
-          },
-          orderBy: { viewCount: "desc" },
-          take: 12,
-          select: {
-            id: true,
-            title: true,
-            slug: true,
-            coverImage: true,
-            dominantColor: true,
-            chapters: { where: { publishedAt: { not: null } }, orderBy: { chapterNumber: "desc" }, take: 1, select: { chapterNumber: true } },
-          },
-        })
-      : Promise.resolve([]),
-    firstChapter && licenseActive && canPreviewAdultContent
-      ? prisma.chapter
-          .findUnique({ where: { id: firstChapter.id }, select: { pages: true } })
-          .then((c) => (c ? getSignedImageUrls(c.pages.slice(0, 3), undefined, { width: 640 }) : []))
-      : Promise.resolve([]),
-    user
-      ? prisma.readHistory.findUnique({ where: { userId_comicId: { userId: user.id, comicId: comic.id } } })
-      : Promise.resolve(null),
-    user ? getReadChapterIds(user.id, comic.id) : Promise.resolve(new Set<string>()),
-    user ? hasReadAnyChapter(user.id, comic.id) : Promise.resolve(false),
-    licenseActive ? getComicUnlockPreview(user?.id ?? null, comic.id) : Promise.resolve({ lockedCount: 0, totalCost: 0, coinCost: 0 }),
-  ]);
+  const emptyRatingContext = { workScore: null, editionScore: null, canRateWork: false, canRateEdition: false };
+
+  const [bookmarked, similarComics, firstChapterPages, readHistoryEntry, readChapterIds, hasRead, unlockPreview, ratingContext, editionRequest] =
+    await Promise.all([
+      user
+        ? prisma.bookmark.findUnique({ where: { userId_comicId: { userId: user.id, comicId: comic.id } } }).then(Boolean)
+        : Promise.resolve(false),
+      comic.genres.length > 0
+        ? prisma.comic.findMany({
+            where: {
+              id: { not: comic.id },
+              ageRating: { in: allowedRatings },
+              approvalStatus: "APPROVED",
+              genres: { some: { genreId: { in: comic.genres.map((g) => g.genreId) } } },
+            },
+            orderBy: { viewCount: "desc" },
+            take: 12,
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              coverImage: true,
+              dominantColor: true,
+              chapters: { where: { publishedAt: { not: null } }, orderBy: { chapterNumber: "desc" }, take: 1, select: { chapterNumber: true } },
+            },
+          })
+        : Promise.resolve([]),
+      firstChapter && licenseActive && canPreviewAdultContent
+        ? prisma.chapter
+            .findUnique({ where: { id: firstChapter.id }, select: { pages: true } })
+            .then((c) => (c ? getSignedImageUrls(c.pages.slice(0, 3), undefined, { width: 640 }) : []))
+        : Promise.resolve([]),
+      user
+        ? prisma.readHistory.findUnique({ where: { userId_comicId: { userId: user.id, comicId: comic.id } } })
+        : Promise.resolve(null),
+      user ? getReadChapterIds(user.id, comic.id) : Promise.resolve(new Set<string>()),
+      user ? hasReadAnyChapter(user.id, comic.id) : Promise.resolve(false),
+      selected && licenseActive
+        ? getEditionUnlockPreview(user?.id ?? null, selected.id)
+        : Promise.resolve({ lockedCount: 0, totalCost: 0, coinCost: defaultPrice }),
+      selected
+        ? getUserRatingContext(user?.id ?? null, comic.id, selected.id, selected.chapterCount)
+        : Promise.resolve(emptyRatingContext),
+      user ? getUserEditionRequest(user.id, comic.id) : Promise.resolve(null),
+    ]);
 
   const resumeChapter = readHistoryEntry ? sortedChapters.find((c) => c.id === readHistoryEntry.lastChapterId) ?? null : null;
 
@@ -130,6 +157,9 @@ export default async function ComicDetailPage({ params }: PageProps) {
         ? { chapterId: resumeChapter.id, label: `ادامه خواندن — چپتر ${resumeChapter.chapterNumber.toLocaleString("fa-IR")}` }
         : { chapterId: firstChapter.id, label: "شروع خواندن" }
       : null;
+
+  const editionOptions = editions.map((edition) => ({ ...edition, price: edition.priceCoinsOverride ?? defaultPrice }));
+  const visibleStaff = comic.staff.filter((s) => !s.editionId || s.editionId === selected?.id);
 
   const content = (
     <>
@@ -177,15 +207,21 @@ export default async function ComicDetailPage({ params }: PageProps) {
               <span>{comic.status}</span>
               <span>·</span>
               <span>{sortedChapters.length.toLocaleString("fa-IR")} چپتر</span>
+              {comic.ratingCount > 0 && (
+                <>
+                  <span>·</span>
+                  <span>★ {averageScore(comic.ratingTotal, comic.ratingCount).toLocaleString("fa-IR", { maximumFractionDigits: 1 })}</span>
+                </>
+              )}
             </p>
 
-            {comic.license.publisher && (
+            {selected && (
               <Link
-                href={`/app/publisher/${comic.license.publisher.id}`}
+                href={`/app/publisher/${selected.publisherId}`}
                 className="mt-2 inline-flex items-center gap-2 rounded-full bg-surface py-1 pl-3 pr-1 text-xs text-text-muted hover:text-primary"
               >
-                <SafeAvatar src={comic.license.publisher.avatarUrl} fallbackText={comic.license.publisher.name} size={20} />
-                {comic.license.publisher.name}
+                <SafeAvatar src={selected.publisherAvatarUrl} fallbackText={selected.publisherName} size={20} />
+                {selected.publisherName}
               </Link>
             )}
 
@@ -203,10 +239,16 @@ export default async function ComicDetailPage({ params }: PageProps) {
           <BookmarkButton comicId={comic.id} comicSlug={comic.slug} authenticated={Boolean(user)} initialBookmarked={bookmarked} />
         </div>
 
-        {licenseActive && unlockPreview.lockedCount > 0 && (
+        {selected && (
+          <div className="mt-4">
+            <EditionSelector slug={comic.slug} editions={editionOptions} selectedId={selected.id} />
+          </div>
+        )}
+
+        {selected && licenseActive && unlockPreview.lockedCount > 0 && (
           <div className="mt-4">
             <ComicUnlockButton
-              comicId={comic.id}
+              editionId={selected.id}
               lockedCount={unlockPreview.lockedCount}
               totalCost={unlockPreview.totalCost}
               authenticated={Boolean(user)}
@@ -231,11 +273,32 @@ export default async function ComicDetailPage({ params }: PageProps) {
             <div className="space-y-6">
               <p className="text-sm leading-7 text-text-muted">{comic.description}</p>
 
-              {comic.staff.length > 0 && (
+              {selected && (
+                <RatingPanel
+                  workId={comic.id}
+                  editionId={selected.id}
+                  authenticated={Boolean(user)}
+                  work={{
+                    average: averageScore(comic.ratingTotal, comic.ratingCount),
+                    count: comic.ratingCount,
+                    mine: ratingContext.workScore,
+                  }}
+                  edition={{
+                    average: averageScore(selected.ratingTotal, selected.ratingCount),
+                    count: selected.ratingCount,
+                    mine: ratingContext.editionScore,
+                  }}
+                  canRateWork={ratingContext.canRateWork}
+                  canRateEdition={ratingContext.canRateEdition}
+                  requiredEditionReads={requiredReadChapters(selected.chapterCount)}
+                />
+              )}
+
+              {visibleStaff.length > 0 && (
                 <div>
                   <h2 className="mb-2 text-sm font-medium text-text-main">دست‌اندرکاران</h2>
                   <div className="flex flex-wrap gap-2">
-                    {comic.staff.map((s) => (
+                    {visibleStaff.map((s) => (
                       <Link
                         key={s.id}
                         href={`/app/team/${s.user.id}`}
@@ -253,6 +316,15 @@ export default async function ComicDetailPage({ params }: PageProps) {
                 <div>
                   <h2 className="mb-2 text-sm font-medium text-text-main">پیش‌نمایش چپتر اول</h2>
                   <ChapterOnePreview chapterId={firstChapter.id} chapterNumber={firstChapter.chapterNumber} previewImages={firstChapterPages} />
+                </div>
+              )}
+
+              <RequestEditionCard workId={comic.id} authenticated={Boolean(user)} activeLanguage={editionRequest?.language ?? null} />
+
+              {user && (
+                <div className="flex flex-wrap items-center gap-4">
+                  {selected && <ReportButton targetType="EDITION" targetId={selected.id} label="گزارش مشکل این نسخه" />}
+                  <ReportButton targetType="WORK" targetId={comic.id} label="گزارش مشکل این اثر" />
                 </div>
               )}
             </div>

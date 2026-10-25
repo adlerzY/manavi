@@ -21,8 +21,8 @@ async function hasCoinUnlockCached(userId: string, chapterId: string): Promise<b
     if (cached !== null) return cached;
   } catch {}
 
-  const unlock = await prisma.chapterUnlock.findUnique({ where: { userId_chapterId: { userId, chapterId } } });
-  const hasUnlock = Boolean(unlock && (!unlock.expiresAt || unlock.expiresAt > new Date()));
+  const entitlement = await prisma.entitlement.findUnique({ where: { userId_chapterId: { userId, chapterId } } });
+  const hasUnlock = Boolean(entitlement && (!entitlement.expiresAt || entitlement.expiresAt > new Date()));
   redis.set(key, hasUnlock, { ex: COIN_UNLOCK_CACHE_TTL_SECONDS }).catch(() => {});
   return hasUnlock;
 }
@@ -31,9 +31,9 @@ export async function invalidateChapterUnlockCache(userId: string, chapterId: st
   await redis.del(coinUnlockCacheKey(userId, chapterId)).catch(() => {});
 }
 
-async function fetchChapterAccessList(comicId: string): Promise<ChapterAccessInfo[]> {
+async function fetchChapterAccessList(editionId: string): Promise<ChapterAccessInfo[]> {
   const chapters = await prisma.chapter.findMany({
-    where: { comicId, publishedAt: { not: null }, isLocked: false },
+    where: { editionId, publishedAt: { not: null }, isLocked: false },
     orderBy: { chapterNumber: "desc" },
     select: {
       id: true,
@@ -63,10 +63,10 @@ export function chapterAccessListTag(comicId: string): string {
   return `chapters-access:${comicId}`;
 }
 
-export const getChapterAccessList = (comicId: string) =>
+export const getChapterAccessList = (comicId: string, editionId: string) =>
   unstable_cache(
-    () => fetchChapterAccessList(comicId),
-    [`chapters-access-list:${comicId}`],
+    () => fetchChapterAccessList(editionId),
+    [`chapters-access-list:${editionId}`],
     { revalidate: CHAPTER_ACCESS_LIST_REVALIDATE_SECONDS, tags: [chapterAccessListTag(comicId)] }
   )();
 
@@ -92,17 +92,25 @@ export async function userHasChapterAccess(
   return hasCoinUnlockCached(userId, chapterId);
 }
 
+export async function getEditionChapterPrice(editionId: string): Promise<number> {
+  const [defaultCost, edition] = await Promise.all([
+    getChapterUnlockCoinCost(),
+    prisma.edition.findUnique({ where: { id: editionId }, select: { priceCoinsOverride: true } }),
+  ]);
+  return edition?.priceCoinsOverride ?? defaultCost;
+}
+
 export interface ComicUnlockPreview {
   lockedCount: number;
   totalCost: number;
   coinCost: number;
 }
 
-export async function getComicUnlockPreview(userId: string | null, comicId: string): Promise<ComicUnlockPreview> {
+export async function getEditionUnlockPreview(userId: string | null, editionId: string): Promise<ComicUnlockPreview> {
   const [cost, chapters] = await Promise.all([
-    getChapterUnlockCoinCost(),
+    getEditionChapterPrice(editionId),
     prisma.chapter.findMany({
-      where: { comicId, status: "PUBLISHED", accessType: ChapterAccessType.COIN, isLocked: false },
+      where: { editionId, status: "PUBLISHED", accessType: ChapterAccessType.COIN, isLocked: false },
       select: { id: true },
     }),
   ]);
@@ -111,17 +119,17 @@ export async function getComicUnlockPreview(userId: string | null, comicId: stri
     return { lockedCount: 0, totalCost: 0, coinCost: cost };
   }
 
-  const unlockedIds = userId
+  const ownedIds = userId
     ? new Set(
         (
-          await prisma.chapterUnlock.findMany({
+          await prisma.entitlement.findMany({
             where: { userId, chapterId: { in: chapters.map((c) => c.id) }, expiresAt: null },
             select: { chapterId: true },
           })
-        ).map((u) => u.chapterId)
+        ).map((entry) => entry.chapterId)
       )
     : new Set<string>();
 
-  const lockedCount = chapters.filter((c) => !unlockedIds.has(c.id)).length;
+  const lockedCount = chapters.filter((c) => !ownedIds.has(c.id)).length;
   return { lockedCount, totalCost: lockedCount * cost, coinCost: cost };
 }

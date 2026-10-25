@@ -109,6 +109,15 @@ export default async function ProfilePage() {
         </section>
 
         <section>
+          <Link
+            href="/app/earnings"
+            className="block rounded-md border border-border bg-surface px-4 py-3 text-center text-sm text-text-main hover:border-primary"
+          >
+            درآمد و تسویه‌حساب‌های من
+          </Link>
+        </section>
+
+        <section>
           <h2 className="mb-3 text-sm font-medium text-text-main">تنظیمات محتوا</h2>
           <AgeVerificationToggle current={user.isAgeVerified} />
         </section>

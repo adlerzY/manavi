@@ -1,5 +1,6 @@
 import { getRoyaltyDashboard } from "@/app/publisher/actions/royalty";
 import { getPublisherOverviewStats } from "@/app/publisher/actions/overview";
+import { languageLabel } from "@/lib/languages";
 
 export async function RoyaltyDashboard() {
   const [{ summaries, totalOwedCoins }, stats] = await Promise.all([
@@ -27,16 +28,16 @@ export async function RoyaltyDashboard() {
       )}
 
       <div className="rounded-md border border-border bg-surface p-4 text-center">
-        <p className="text-2xl font-semibold text-primary">{totalOwedCoins.toLocaleString("fa-IR")}</p>
-        <p className="mt-1 text-xs text-text-muted">سهم این ماه (سکه)</p>
+        <p className="text-2xl font-semibold text-primary">{totalOwedCoins.toLocaleString("fa-IR", { maximumFractionDigits: 2 })}</p>
+        <p className="mt-1 text-xs text-text-muted">سهم کل این ماه (سکه، شامل سهم اعضای تیم)</p>
       </div>
 
       <div className="divide-y divide-border rounded-md border border-border">
         {summaries.map((s) => (
-          <div key={s.licenseId} className="px-4 py-3">
-            <p className="text-sm text-text-main">{s.territory.join("/")}</p>
-            <p className="text-xs text-text-muted">
-              درصد رویالتی: {s.royaltyPercentage}% · سکه بازشده: {s.grossCoinsRedeemed.toLocaleString("fa-IR")} · سهم: {s.publisherShareCoins.toLocaleString("fa-IR")}
+          <div key={s.editionId} className="px-4 py-3">
+            <p className="text-sm text-text-main">{s.workTitle} — {languageLabel(s.language)}</p>
+            <p className="text-xs leading-6 text-text-muted">
+              درصد رویالتی: {s.royaltyPercentage}% · سکه خرج‌شده: {s.grossCoins.toLocaleString("fa-IR", { maximumFractionDigits: 2 })} · سهم ناشر: {s.publisherShareCoins.toLocaleString("fa-IR", { maximumFractionDigits: 2 })} · سهم اعضا: {s.memberShareCoins.toLocaleString("fa-IR", { maximumFractionDigits: 2 })} · باقی‌مانده نزد ناشر: {s.retainedCoins.toLocaleString("fa-IR", { maximumFractionDigits: 2 })}
             </p>
           </div>
         ))}
@@ -44,7 +45,7 @@ export async function RoyaltyDashboard() {
       </div>
 
       <p className="rounded-md border border-border bg-surface px-4 py-3 text-center text-xs text-text-muted">
-        تسویه‌حساب به‌صورت ماهانه و دستی توسط مدیریت انجام می‌شه — نیازی به درخواست از طرف شما نیست.
+        تسویه‌حساب دوره‌ای توسط مدیریت انجام می‌شود؛ جزئیات و تأیید دریافت در بخش «درآمد و تسویه» قابل مشاهده است.
       </p>
     </div>
   );

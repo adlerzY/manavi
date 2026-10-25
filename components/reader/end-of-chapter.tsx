@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChapterReactions } from "./chapter-reactions";
 import { ChapterAdSlot } from "./chapter-ad-slot";
 import { ChapterStaffCredits, type StaffCreditItem } from "./chapter-staff-credits";
+import { ReportButton } from "@/components/catalog/report-button";
 
 interface ReactionSummary { emoji: string; count: number }
 
@@ -35,6 +36,11 @@ export function EndOfChapter({ chapterId, comicSlug, nextChapterId, reactionSumm
           <p className="rounded-md border border-border py-3 text-center text-sm text-white/60">این آخرین چپتر منتشرشده است</p>
         )}
         <Link href={`/app/comic/${comicSlug}`} className="rounded-md border border-border px-4 py-3 text-center text-sm text-text-main">بازگشت به صفحه عنوان</Link>
+        {isAuthenticated && (
+          <div className="flex justify-center pt-2">
+            <ReportButton targetType="EDITION_CHAPTER" targetId={chapterId} label="گزارش مشکل این چپتر" />
+          </div>
+        )}
       </div>
     </div>
   );

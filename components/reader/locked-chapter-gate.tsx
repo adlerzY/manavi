@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { unlockChapterWithCoins } from "@/app/actions/chapter-access";
 
@@ -16,15 +16,24 @@ export function LockedChapterGate({ chapterId, comicSlug, coinsBalance, coinCost
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const keyRef = useRef<string | null>(null);
 
   async function handleCoinUnlock() {
+    if (pending) return;
     setPending(true);
     setError(null);
-    const result = await unlockChapterWithCoins(chapterId);
-    if (result.success) {
-      router.refresh();
-    } else {
-      setError(result.error ?? "خطا در باز کردن چپتر");
+    keyRef.current ??= crypto.randomUUID();
+
+    try {
+      const result = await unlockChapterWithCoins(chapterId, keyRef.current);
+      if (result.success) {
+        router.refresh();
+      } else {
+        keyRef.current = null;
+        setError(result.error ?? "خطا در باز کردن چپتر");
+      }
+    } catch {
+      setError("ارتباط با سرور برقرار نشد — دوباره تلاش کنید");
     }
     setPending(false);
   }
@@ -58,7 +67,7 @@ export function LockedChapterGate({ chapterId, comicSlug, coinsBalance, coinCost
       )}
 
       <Link href={`/app/comic/${comicSlug}`} className="text-xs text-accent underline">
-        باز کردن کل عنوان یکجا از صفحه‌ی عنوان
+        باز کردن کل نسخه یکجا از صفحه‌ی عنوان
       </Link>
 
       {error && <p className="text-sm text-red-400">{error}</p>}

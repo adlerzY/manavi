@@ -282,8 +282,17 @@ export async function updateComic(
       return { success: false, error: "تصویر بنر معتبر نیست" };
     }
 
-    const existing = await prisma.comic.findUnique({ where: { id: comicId }, select: { coverImage: true } });
+    const existing = await prisma.comic.findUnique({
+      where: { id: comicId },
+      select: { coverImage: true, licenseId: true },
+    });
     if (!existing) return { success: false, error: "عنوان یافت نشد" };
+
+    const targetLicense = await prisma.license.findUnique({
+      where: { id: input.licenseId },
+      select: { publisherId: true },
+    });
+    if (!targetLicense) return { success: false, error: "لایسنس یافت نشد" };
 
     const coverChanged = existing.coverImage !== input.coverImage;
     const dominantColor = coverChanged ? await extractDominantColor(input.coverImage) : undefined;
@@ -294,6 +303,13 @@ export async function updateComic(
         if (input.genreIds.length > 0) {
           await tx.comicGenre.createMany({ data: input.genreIds.map((genreId) => ({ comicId, genreId })) });
         }
+      }
+
+      if (existing.licenseId !== input.licenseId) {
+        await tx.edition.updateMany({
+          where: { workId: comicId, licenseId: existing.licenseId },
+          data: { licenseId: input.licenseId, publisherId: targetLicense.publisherId },
+        });
       }
 
       return tx.comic.update({
@@ -427,7 +443,6 @@ export async function removeChapterPage(chapterId: string, pageIndex: number): P
     return safeError(err);
   }
 }
-
 export async function deleteComic(comicId: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
@@ -437,10 +452,17 @@ export async function deleteComic(comicId: string): Promise<ActionResult> {
       select: {
         title: true,
         slug: true,
-        chapters: { select: { id: true, pages: true } },
+        chapters: { select: { id: true, pages: true, _count: { select: { saleLines: true } } } },
       },
     });
     if (!comic) return { success: false, error: "عنوان یافت نشد" };
+
+    if (comic.chapters.some((chapter) => chapter._count.saleLines > 0)) {
+      return {
+        success: false,
+        error: "این عنوان سابقه‌ی فروش دارد و حذف نمی‌شود — به‌جای حذف، لایسنس یا چپترها را غیرفعال یا قفل کنید",
+      };
+    }
 
     const chapterIds = comic.chapters.map((c) => c.id);
 
@@ -448,13 +470,19 @@ export async function deleteComic(comicId: string): Promise<ActionResult> {
       prisma.chapterReadMark.deleteMany({ where: { comicId } }),
       prisma.chapterReaction.deleteMany({ where: { chapterId: { in: chapterIds } } }),
       prisma.chapterUnlock.deleteMany({ where: { chapterId: { in: chapterIds } } }),
+      prisma.entitlement.deleteMany({ where: { chapterId: { in: chapterIds } } }),
       prisma.chapterStaff.deleteMany({ where: { chapterId: { in: chapterIds } } }),
       prisma.comment.deleteMany({ where: { chapterId: { in: chapterIds } } }),
       prisma.chapter.deleteMany({ where: { comicId } }),
+      prisma.workEpisode.deleteMany({ where: { workId: comicId } }),
       prisma.comicGenre.deleteMany({ where: { comicId } }),
       prisma.comicStaff.deleteMany({ where: { comicId } }),
       prisma.bookmark.deleteMany({ where: { comicId } }),
       prisma.readHistory.deleteMany({ where: { comicId } }),
+      prisma.workRating.deleteMany({ where: { workId: comicId } }),
+      prisma.editionRequest.deleteMany({ where: { workId: comicId } }),
+      prisma.editionRating.deleteMany({ where: { edition: { workId: comicId } } }),
+      prisma.edition.deleteMany({ where: { workId: comicId } }),
       prisma.comic.delete({ where: { id: comicId } }),
     ]);
 

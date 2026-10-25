@@ -7,6 +7,7 @@ import { requireAdmin, invalidateSessionUserCache } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/audit-log";
 import type { Role } from "@prisma/client";
+import { applyWalletDelta, InsufficientCoinsError } from "@/lib/ledger";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -151,18 +152,27 @@ export async function unbanUser(userId: string): Promise<ActionResult> {
     return safeError(err);
   }
 }
-
 export async function grantCoins(userId: string, amount: number, note: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
-    if (amount <= 0) return { success: false, error: "مقدار باید مثبت باشد" };
+    if (!Number.isInteger(amount) || amount <= 0) return { success: false, error: "مقدار باید عدد صحیح مثبت باشد" };
 
-    await prisma.$transaction([
-      prisma.user.update({ where: { id: userId }, data: { coinsBalance: { increment: amount } } }),
-      prisma.transaction.create({
-        data: { type: "ADMIN_GRANT", status: "PAID", amount, currency: "COIN", payerId: userId, message: note.trim() || null },
-      }),
-    ]);
+    const cleanNote = note.trim() || null;
+
+    await prisma.$transaction(async (tx) => {
+      const transaction = await tx.transaction.create({
+        data: { type: "ADMIN_GRANT", status: "PAID", amount, currency: "COIN", payerId: userId, message: cleanNote },
+        select: { id: true },
+      });
+      await applyWalletDelta(tx, {
+        userId,
+        coinsDelta: amount,
+        sourceType: "ADMIN_GRANT",
+        sourceId: transaction.id,
+        idempotencyKey: `admin-grant:${transaction.id}`,
+        note: cleanNote,
+      });
+    });
 
     await invalidateSessionUserCache(userId);
     after(() =>
@@ -172,7 +182,7 @@ export async function grantCoins(userId: string, amount: number, note: string): 
         action: "user.coinGrant",
         targetType: "User",
         targetId: userId,
-        metadata: { amount, note: note.trim() || null },
+        metadata: { amount, note: cleanNote },
       })
     );
     revalidatePath("/admin/users");
@@ -185,18 +195,23 @@ export async function grantCoins(userId: string, amount: number, note: string): 
 export async function revokeCoins(userId: string, amount: number, note: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
-    if (amount <= 0) return { success: false, error: "مقدار باید مثبت باشد" };
+    if (!Number.isInteger(amount) || amount <= 0) return { success: false, error: "مقدار باید عدد صحیح مثبت باشد" };
 
-    const result = await prisma.user.updateMany({
-      where: { id: userId, coinsBalance: { gte: amount } },
-      data: { coinsBalance: { decrement: amount } },
-    });
-    if (result.count === 0) {
-      return { success: false, error: "موجودی کاربر کافی نیست" };
-    }
+    const cleanNote = note.trim() || null;
 
-    await prisma.transaction.create({
-      data: { type: "ADMIN_REVOKE", status: "PAID", amount, currency: "COIN", payerId: userId, message: note.trim() || null },
+    await prisma.$transaction(async (tx) => {
+      const transaction = await tx.transaction.create({
+        data: { type: "ADMIN_REVOKE", status: "PAID", amount, currency: "COIN", payerId: userId, message: cleanNote },
+        select: { id: true },
+      });
+      await applyWalletDelta(tx, {
+        userId,
+        coinsDelta: -amount,
+        sourceType: "ADMIN_REVOKE",
+        sourceId: transaction.id,
+        idempotencyKey: `admin-revoke:${transaction.id}`,
+        note: cleanNote,
+      });
     });
 
     await invalidateSessionUserCache(userId);
@@ -207,62 +222,13 @@ export async function revokeCoins(userId: string, amount: number, note: string):
         action: "user.coinRevoke",
         targetType: "User",
         targetId: userId,
-        metadata: { amount, note: note.trim() || null },
+        metadata: { amount, note: cleanNote },
       })
     );
     revalidatePath("/admin/users");
     return { success: true };
   } catch (err) {
-    return safeError(err);
-  }
-}
-
-export async function deleteUserAccount(userId: string, confirmationName: string): Promise<ActionResult> {
-  try {
-    const admin = await requireAdmin();
-    if (admin.id === userId) {
-      return { success: false, error: "نمی‌توانید حساب خودتان را حذف کنید" };
-    }
-
-    const target = await prisma.user.findUnique({ where: { id: userId } });
-    if (!target) return { success: false, error: "کاربر یافت نشد" };
-
-    const expectedName = target.username ?? target.firstName;
-    if (confirmationName.trim() !== expectedName) {
-      return { success: false, error: "نام تاییدیه مطابقت ندارد" };
-    }
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        firstName: "کاربر حذف‌شده",
-        lastName: null,
-        username: null,
-        avatarUrl: null,
-        bio: null,
-        donationLink: null,
-        cryptoWalletLabel: null,
-        cryptoWalletAddress: null,
-        isBanned: true,
-        bannedAt: new Date(),
-        banReason: "حذف حساب توسط مدیر",
-        deletedAt: new Date(),
-      },
-    });
-
-    await invalidateSessionUserCache(userId);
-    after(() =>
-      logAuditEvent({
-        actorId: admin.id,
-        actorRole: admin.role,
-        action: "user.delete",
-        targetType: "User",
-        targetId: userId,
-      })
-    );
-    revalidatePath("/admin/users");
-    return { success: true };
-  } catch (err) {
+    if (err instanceof InsufficientCoinsError) return { success: false, error: "موجودی کاربر کافی نیست" };
     return safeError(err);
   }
 }

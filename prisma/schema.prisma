@@ -51,6 +51,13 @@ model User {
   publisherStaffRoles PublisherStaff[]
   uploadedChapters    Chapter[]         @relation("ChapterUploader")
   createdComics       Comic[]           @relation("ComicCreator")
+  entitlements        Entitlement[]
+  sales               Sale[]
+  workRatings         WorkRating[]
+  editionRatings      EditionRating[]
+  contentReports      ContentReport[]
+  editionRequests     EditionRequest[]
+  payoutConfirmations PayoutConfirmation[]
 
   @@index([role])
   @@index([referredById])
@@ -89,6 +96,7 @@ model Publisher {
   staff              PublisherStaff[]
   payoutRequests     PayoutRequest[]
   payoutTransactions Transaction[]    @relation("PublisherPayoutTransactions")
+  editions            Edition[]
 
   @@index([isVerified])
 }
@@ -132,6 +140,8 @@ model License {
 
   comics      Comic[]
   settlements RoyaltySettlement[]
+  editions    Edition[]
+  terms       LicenseTerm[]
 
   @@index([publisherId])
   @@index([status])
@@ -192,13 +202,19 @@ model Comic {
   licenseId        String
   license          License @relation(fields: [licenseId], references: [id])
 
-  chapters     Chapter[]
-  staff        ComicStaff[]
-  bookmarks    Bookmark[]
-  transactions Transaction[]
-  genres       ComicGenre[]
-  readHistory  ReadHistory[]
-  readMarks    ChapterReadMark[]
+  ratingCount     Int @default(0)
+  ratingTotal     Int @default(0)
+  chapters        Chapter[]
+  editions        Edition[]
+  episodes        WorkEpisode[]
+  ratings         WorkRating[]
+  editionRequests EditionRequest[]
+  staff           ComicStaff[]
+  bookmarks       Bookmark[]
+  transactions    Transaction[]
+  genres          ComicGenre[]
+  readHistory     ReadHistory[]
+  readMarks       ChapterReadMark[]
 
   @@index([categoryId])
   @@index([licenseId])
@@ -248,13 +264,17 @@ model ComicGenre {
 model ComicStaff {
   id        String    @id @default(uuid())
   comicId   String
+  editionId String?
   userId    String
   roleTitle StaffRole
+  shareBps  Int       @default(0)
 
-  comic Comic @relation(fields: [comicId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
+  comic   Comic    @relation(fields: [comicId], references: [id])
+  edition Edition? @relation(fields: [editionId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
 
   @@unique([comicId, userId, roleTitle])
+  @@index([editionId])
 }
 
 enum StaffRole {
@@ -279,6 +299,8 @@ enum ChapterAccessType {
 model Chapter {
   id             String            @id @default(uuid())
   comicId        String
+  editionId      String
+  episodeId      String?
   chapterNumber  Float
   title          String?
   pages          String[]
@@ -291,16 +313,22 @@ model Chapter {
   uploadedById   String?
   createdAt      DateTime          @default(now())
 
-  comic      Comic             @relation(fields: [comicId], references: [id])
-  uploadedBy User?             @relation("ChapterUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
-  comments   Comment[]
-  staff      ChapterStaff[]
-  unlocks    ChapterUnlock[]
-  reactions  ChapterReaction[]
-  readMarks  ChapterReadMark[]
+  comic        Comic             @relation(fields: [comicId], references: [id])
+  edition      Edition           @relation(fields: [editionId], references: [id])
+  episode      WorkEpisode?      @relation(fields: [episodeId], references: [id])
+  uploadedBy   User?             @relation("ChapterUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  comments     Comment[]
+  staff        ChapterStaff[]
+  unlocks      ChapterUnlock[]
+  reactions    ChapterReaction[]
+  readMarks    ChapterReadMark[]
+  entitlements Entitlement[]
+  saleLines    SaleLine[]
 
   @@index([comicId, publishedAt])
-  @@unique([comicId, chapterNumber])
+  @@unique([editionId, chapterNumber])
+  @@index([editionId, publishedAt])
+  @@index([episodeId])
   @@index([status, scheduledAt])
   @@index([viewCount])
   @@index([uploadedById])
@@ -311,6 +339,7 @@ model ChapterStaff {
   chapterId String
   userId    String
   roleTitle StaffRole
+  shareBps  Int       @default(0)
 
   chapter Chapter @relation(fields: [chapterId], references: [id])
   user    User    @relation(fields: [userId], references: [id])
@@ -611,4 +640,388 @@ model AdminNotice {
   expiresAt   DateTime
 
   @@index([expiresAt])
+}
+
+enum EditionStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum EntitlementType {
+  PURCHASE
+  CROSS_UNLOCK
+  LEGACY_UNLOCK
+  ADMIN_GRANT
+}
+
+enum SaleKind {
+  SINGLE
+  BULK
+}
+
+enum BeneficiaryType {
+  PLATFORM
+  PUBLISHER
+  USER
+}
+
+enum LedgerAccount {
+  USER_COIN_WALLET
+  PLATFORM_REVENUE
+  BENEFICIARY_PAYABLE
+  BENEFICIARY_PAID
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum LedgerOwnerType {
+  USER
+  PUBLISHER
+  PLATFORM
+}
+
+enum LedgerCurrency {
+  COIN_UNIT
+  USDT_MICRO
+}
+
+enum ReportTargetType {
+  EDITION_CHAPTER
+  COMMENT
+  EDITION
+  WORK
+}
+
+enum ReportCategory {
+  TRANSLATION_ERROR
+  BROKEN_IMAGES
+  UNLABELED_SPOILER
+  INAPPROPRIATE
+  RIGHTS_VIOLATION
+  MISLEADING_CREDIT
+  BILLING_ACCESS
+}
+
+enum ReportStatus {
+  OPEN
+  UNDER_REVIEW
+  ACTION_TAKEN
+  REJECTED
+  RESOLVED
+}
+
+enum EditionRequestStatus {
+  ACTIVE
+  CANCELLED
+  FULFILLED
+}
+
+enum SettlementPeriodStatus {
+  OPEN
+  LOCKED
+}
+
+enum SettlementLineStatus {
+  CALCULATED
+  APPROVED_FOR_PAYMENT
+  PAID_BY_ADMIN
+  CONFIRMED_BY_RECIPIENT
+  ON_HOLD
+  PARTIALLY_PAID
+  DISPUTED
+  CANCELLED
+}
+
+enum PayoutConfirmationStatus {
+  CONFIRMED
+  DISPUTED
+}
+
+model LicenseTerm {
+  id                String   @id @default(uuid())
+  licenseId         String
+  royaltyPercentage Decimal  @db.Decimal(5, 2)
+  validFrom         DateTime
+  createdById       String?
+  createdAt         DateTime @default(now())
+
+  license License @relation(fields: [licenseId], references: [id])
+  sales   Sale[]
+
+  @@unique([licenseId, validFrom])
+}
+
+model Edition {
+  id                 String        @id @default(uuid())
+  workId             String
+  publisherId        String
+  licenseId          String
+  language           String        @default("fa")
+  format             String        @default("COMIC")
+  title              String?
+  status             EditionStatus @default(ACTIVE)
+  priceCoinsOverride Int?
+  crossUnlockEnabled Boolean       @default(false)
+  ratingCount        Int           @default(0)
+  ratingTotal        Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  work      Comic           @relation(fields: [workId], references: [id])
+  publisher Publisher       @relation(fields: [publisherId], references: [id])
+  license   License         @relation(fields: [licenseId], references: [id])
+  chapters  Chapter[]
+  staff     ComicStaff[]
+  ratings   EditionRating[]
+  sales     Sale[]
+
+  @@unique([workId, publisherId, language])
+  @@index([workId, status])
+  @@index([publisherId])
+  @@index([licenseId])
+}
+
+model WorkEpisode {
+  id             String   @id @default(uuid())
+  workId         String
+  canonicalIndex Float
+  title          String?
+  createdAt      DateTime @default(now())
+
+  work     Comic     @relation(fields: [workId], references: [id])
+  chapters Chapter[]
+
+  @@unique([workId, canonicalIndex])
+}
+
+model Entitlement {
+  id         String          @id @default(uuid())
+  userId     String
+  chapterId  String
+  type       EntitlementType
+  saleLineId String?         @unique
+  createdAt  DateTime        @default(now())
+  expiresAt  DateTime?
+
+  user     User      @relation(fields: [userId], references: [id])
+  chapter  Chapter   @relation(fields: [chapterId], references: [id])
+  saleLine SaleLine? @relation(fields: [saleLineId], references: [id])
+
+  @@unique([userId, chapterId])
+  @@index([chapterId])
+}
+
+model Sale {
+  id             String   @id @default(uuid())
+  buyerId        String
+  editionId      String
+  kind           SaleKind
+  totalCoins     Int
+  coinPriceUsdt  Decimal  @db.Decimal(20, 6)
+  idempotencyKey String   @unique
+  licenseTermId  String?
+  createdAt      DateTime @default(now())
+
+  buyer       User         @relation(fields: [buyerId], references: [id])
+  edition     Edition      @relation(fields: [editionId], references: [id])
+  licenseTerm LicenseTerm? @relation(fields: [licenseTermId], references: [id])
+  lines       SaleLine[]
+
+  @@index([buyerId, createdAt])
+  @@index([editionId])
+}
+
+model SaleLine {
+  id          String   @id @default(uuid())
+  saleId      String
+  chapterId   String
+  coinAmount  Int
+  unitsAmount Int
+  createdAt   DateTime @default(now())
+
+  sale        Sale                @relation(fields: [saleId], references: [id])
+  chapter     Chapter             @relation(fields: [chapterId], references: [id])
+  entitlement Entitlement?
+  allocations RevenueAllocation[]
+
+  @@index([saleId])
+  @@index([chapterId])
+}
+
+model RevenueAllocation {
+  id               String          @id @default(uuid())
+  saleLineId       String
+  beneficiaryType  BeneficiaryType
+  beneficiaryId    String?
+  role             StaffRole?
+  baseUnits        Int
+  publisherBps     Int
+  memberShareBps   Int?
+  allocatedUnits   Int
+  usdtMicro        Int
+  licenseTermId    String?
+  settlementLineId String?
+  createdAt        DateTime        @default(now())
+
+  saleLine       SaleLine        @relation(fields: [saleLineId], references: [id])
+  settlementLine SettlementLine? @relation(fields: [settlementLineId], references: [id])
+
+  @@index([saleLineId])
+  @@index([beneficiaryType, beneficiaryId, settlementLineId])
+  @@index([createdAt])
+}
+
+model LedgerEntry {
+  id             String          @id @default(uuid())
+  account        LedgerAccount
+  ownerType      LedgerOwnerType
+  ownerId        String?
+  direction      LedgerDirection
+  amountUnits    BigInt
+  currency       LedgerCurrency  @default(COIN_UNIT)
+  sourceType     String
+  sourceId       String
+  idempotencyKey String          @unique
+  note           String?
+  createdAt      DateTime        @default(now())
+
+  @@index([account, ownerType, ownerId])
+  @@index([sourceType, sourceId])
+  @@index([createdAt])
+}
+
+model WorkRating {
+  id        String   @id @default(uuid())
+  userId    String
+  workId    String
+  score     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User  @relation(fields: [userId], references: [id])
+  work Comic @relation(fields: [workId], references: [id])
+
+  @@unique([userId, workId])
+  @@index([workId])
+}
+
+model EditionRating {
+  id        String   @id @default(uuid())
+  userId    String
+  editionId String
+  score     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  edition Edition @relation(fields: [editionId], references: [id])
+
+  @@unique([userId, editionId])
+  @@index([editionId])
+}
+
+model ContentReport {
+  id             String           @id @default(uuid())
+  reporterId     String
+  targetType     ReportTargetType
+  targetId       String
+  category       ReportCategory
+  details        String?
+  status         ReportStatus     @default(OPEN)
+  moderatorId    String?
+  resolutionNote String?
+  createdAt      DateTime         @default(now())
+  resolvedAt     DateTime?
+
+  reporter User @relation(fields: [reporterId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reporterId])
+}
+
+model EditionRequest {
+  id        String               @id @default(uuid())
+  userId    String
+  workId    String
+  language  String
+  reason    String?
+  status    EditionRequestStatus @default(ACTIVE)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  user User  @relation(fields: [userId], references: [id])
+  work Comic @relation(fields: [workId], references: [id])
+
+  @@unique([userId, workId])
+  @@index([workId, language, status])
+}
+
+model SettlementPeriod {
+  id          String                 @id @default(uuid())
+  periodStart DateTime
+  periodEnd   DateTime
+  status      SettlementPeriodStatus @default(OPEN)
+  lockedAt    DateTime?
+  lockedById  String?
+  createdAt   DateTime               @default(now())
+
+  lines SettlementLine[]
+
+  @@index([periodStart])
+}
+
+model SettlementLine {
+  id              String               @id @default(uuid())
+  periodId        String
+  beneficiaryType BeneficiaryType
+  beneficiaryId   String
+  owedMicro       BigInt
+  paidMicro       BigInt               @default(0)
+  status          SettlementLineStatus @default(CALCULATED)
+  note            String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  period      SettlementPeriod    @relation(fields: [periodId], references: [id])
+  allocations RevenueAllocation[]
+  payouts     Payout[]
+
+  @@unique([periodId, beneficiaryType, beneficiaryId])
+  @@index([beneficiaryType, beneficiaryId])
+  @@index([status])
+}
+
+model Payout {
+  id               String   @id @default(uuid())
+  settlementLineId String
+  amountMicro      BigInt
+  reference        String?
+  receiptUrl       String?
+  note             String?
+  paidById         String
+  paidAt           DateTime @default(now())
+
+  settlementLine SettlementLine       @relation(fields: [settlementLineId], references: [id])
+  confirmation   PayoutConfirmation?
+
+  @@index([settlementLineId])
+}
+
+model PayoutConfirmation {
+  id          String                   @id @default(uuid())
+  payoutId    String                   @unique
+  recipientId String
+  status      PayoutConfirmationStatus
+  note        String?
+  createdAt   DateTime                 @default(now())
+
+  payout    Payout @relation(fields: [payoutId], references: [id])
+  recipient User   @relation(fields: [recipientId], references: [id])
 }

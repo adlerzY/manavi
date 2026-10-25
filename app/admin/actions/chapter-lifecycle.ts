@@ -92,21 +92,33 @@ export async function reorderChapterPages(chapterId: string, orderedPages: strin
     return safeError(err);
   }
 }
-
 export async function deleteChapter(chapterId: string): Promise<ActionResult> {
   try {
     const chapter = await prisma.chapter.findUnique({
       where: { id: chapterId },
-      select: { pages: true, comicId: true, comic: { select: { slug: true } } },
+      select: {
+        pages: true,
+        comicId: true,
+        comic: { select: { slug: true } },
+        _count: { select: { saleLines: true } },
+      },
     });
     if (!chapter) return { success: false, error: "چپتر یافت نشد" };
 
     await requireUploadAccess(chapter.comicId);
 
+    if (chapter._count.saleLines > 0) {
+      return {
+        success: false,
+        error: "این چپتر سابقه‌ی فروش دارد و حذف نمی‌شود — برای مخفی‌کردن آن از «قفل دستی» استفاده کنید",
+      };
+    }
+
     await prisma.$transaction([
       prisma.chapterReadMark.deleteMany({ where: { chapterId } }),
       prisma.chapterReaction.deleteMany({ where: { chapterId } }),
       prisma.chapterUnlock.deleteMany({ where: { chapterId } }),
+      prisma.entitlement.deleteMany({ where: { chapterId } }),
       prisma.chapterStaff.deleteMany({ where: { chapterId } }),
       prisma.comment.deleteMany({ where: { chapterId } }),
       prisma.chapter.delete({ where: { id: chapterId } }),
@@ -127,20 +139,6 @@ export async function deleteChapter(chapterId: string): Promise<ActionResult> {
     revalidatePath("/app");
     revalidatePath("/app/explore");
     return { success: true };
-  } catch (err) {
-    return safeError(err);
-  }
-}
-
-export async function getChapterPagePreviews(chapterId: string): Promise<ActionResult<{ pageKeys: string[]; previewUrls: string[] }>> {
-  try {
-    const chapter = await prisma.chapter.findUnique({ where: { id: chapterId }, select: { pages: true, comicId: true } });
-    if (!chapter) return { success: false, error: "چپتر یافت نشد" };
-
-    await requireUploadAccess(chapter.comicId);
-
-    const previewUrls = chapter.pages.length ? await getSignedImageUrls(chapter.pages, 900, { width: 300 }) : [];
-    return { success: true, data: { pageKeys: chapter.pages, previewUrls } };
   } catch (err) {
     return safeError(err);
   }
