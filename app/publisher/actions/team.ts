@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser, invalidateSessionUserCache } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/audit-log";
-import type { StaffRole } from "@prisma/client";
+import { StaffRole } from "@prisma/client";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -28,12 +28,27 @@ export async function addPublisherStaff(input: {
     if (publisherUser.isBanned) {
       return { success: false, error: "حساب شما مسدود شده است" };
     }
+    if (!Object.values(StaffRole).includes(input.role)) {
+      return { success: false, error: "نقش نامعتبر است" };
+    }
+
+    const username = input.telegramUsername.trim().replace("@", "");
+    if (!username) {
+      return { success: false, error: "یوزرنیم تلگرام الزامی است" };
+    }
 
     const targetUser = await prisma.user.findFirst({
-      where: { username: input.telegramUsername.replace("@", ""), deletedAt: null },
+      where: { username: { equals: username, mode: "insensitive" }, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
     });
     if (!targetUser) {
       return { success: false, error: "کاربری با این یوزرنیم پیدا نشد" };
+    }
+    if (targetUser.id === publisherUser.id) {
+      return { success: false, error: "مالک ناشر نیازی به افزودن خودش به تیم ندارد" };
+    }
+    if (targetUser.isBanned) {
+      return { success: false, error: "این کاربر مسدود است" };
     }
 
     await prisma.$transaction(async (tx) => {
@@ -101,7 +116,7 @@ export async function removePublisherStaff(staffId: string): Promise<ActionResul
 
     const staffRow = await prisma.publisherStaff.findFirst({
       where: { id: staffId, publisherId },
-      select: { userId: true },
+      select: { userId: true, role: true, canUpload: true, canManageComics: true },
     });
     if (!staffRow) return { success: true };
 
@@ -118,6 +133,17 @@ export async function removePublisherStaff(staffId: string): Promise<ActionResul
     });
 
     await invalidateSessionUserCache(staffRow.userId);
+
+    after(() =>
+      logAuditEvent({
+        actorId: publisherUser.id,
+        actorRole: publisherUser.role,
+        action: "publisherStaff.permissionChange",
+        targetType: "User",
+        targetId: staffRow.userId,
+        metadata: { role: staffRow.role, removed: true },
+      })
+    );
 
     revalidatePath("/publisher/team");
     return { success: true };

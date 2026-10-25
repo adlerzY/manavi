@@ -81,7 +81,12 @@ function claimReplayGuardInMemory(hash: string, ttlSeconds: number): boolean {
   return true;
 }
 
-export async function validateTelegramInitData(initData: string): Promise<ValidatedInitData> {
+interface SignedPayload {
+  params: URLSearchParams;
+  hash: string;
+}
+
+function verifySignature(initData: string): SignedPayload {
   const params = new URLSearchParams(initData);
 
   const hash = params.get("hash");
@@ -95,25 +100,52 @@ export async function validateTelegramInitData(initData: string): Promise<Valida
     .map(([key, value]) => `${key}=${value}`)
     .join("\n");
 
-  const secretKey = crypto
-    .createHmac("sha256", "WebAppData")
-    .update(getBotToken())
-    .digest();
+  const secretKey = crypto.createHmac("sha256", "WebAppData").update(getBotToken()).digest();
 
-  const computedHash = crypto
-    .createHmac("sha256", secretKey)
-    .update(dataCheckString)
-    .digest("hex");
+  const computedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
 
   const hashBuffer = Buffer.from(hash, "hex");
   const computedBuffer = Buffer.from(computedHash, "hex");
   const validSignature =
-    hashBuffer.length === computedBuffer.length &&
-    crypto.timingSafeEqual(hashBuffer, computedBuffer);
+    hashBuffer.length === computedBuffer.length && crypto.timingSafeEqual(hashBuffer, computedBuffer);
 
   if (!validSignature) {
     throw new InvalidInitDataError("hash mismatch — data was not signed by this bot");
   }
+
+  return { params, hash };
+}
+
+function parseUser(params: URLSearchParams): TelegramUser {
+  const userRaw = params.get("user");
+  if (!userRaw) {
+    throw new InvalidInitDataError("missing user field");
+  }
+
+  let user: TelegramUser;
+  try {
+    user = JSON.parse(userRaw);
+  } catch {
+    throw new InvalidInitDataError("user field is not valid JSON");
+  }
+
+  if (!user.id) {
+    throw new InvalidInitDataError("user.id missing");
+  }
+  return user;
+}
+
+export function peekTelegramUserId(initData: string): string | null {
+  try {
+    const { params } = verifySignature(initData);
+    return String(parseUser(params).id);
+  } catch {
+    return null;
+  }
+}
+
+export async function validateTelegramInitData(initData: string): Promise<ValidatedInitData> {
+  const { params, hash } = verifySignature(initData);
 
   const authDateRaw = params.get("auth_date");
   if (!authDateRaw) {
@@ -122,7 +154,7 @@ export async function validateTelegramInitData(initData: string): Promise<Valida
   const authDate = new Date(Number(authDateRaw) * 1000);
   const ageSeconds = (Date.now() - authDate.getTime()) / 1000;
 
-  if (ageSeconds > MAX_AUTH_AGE_SECONDS) {
+  if (!Number.isFinite(ageSeconds) || ageSeconds > MAX_AUTH_AGE_SECONDS) {
     throw new InvalidInitDataError("auth_date is too old — possible replay");
   }
   if (ageSeconds < -60) {
@@ -152,21 +184,7 @@ export async function validateTelegramInitData(initData: string): Promise<Valida
     }
   }
 
-  const userRaw = params.get("user");
-  if (!userRaw) {
-    throw new InvalidInitDataError("missing user field");
-  }
-
-  let user: TelegramUser;
-  try {
-    user = JSON.parse(userRaw);
-  } catch {
-    throw new InvalidInitDataError("user field is not valid JSON");
-  }
-
-  if (!user.id) {
-    throw new InvalidInitDataError("user.id missing");
-  }
+  const user = parseUser(params);
 
   return {
     user,

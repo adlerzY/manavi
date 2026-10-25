@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { addPublisherStaff, removePublisherStaff } from "@/app/publisher/actions/team";
 import type { StaffRole } from "@prisma/client";
 import { STAFF_ROLE_LABELS } from "@/lib/staff-roles";
@@ -16,6 +17,7 @@ interface StaffMember {
 const ROLES: StaffRole[] = ["LOCALIZATION_SPECIALIST", "EDITOR", "CLEANER", "TYPIST"];
 
 export function TeamManager({ initialStaff }: { initialStaff: StaffMember[] }) {
+  const router = useRouter();
   const [staff, setStaff] = useState(initialStaff);
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<StaffRole>("LOCALIZATION_SPECIALIST");
@@ -23,6 +25,10 @@ export function TeamManager({ initialStaff }: { initialStaff: StaffMember[] }) {
   const [canManageComics, setCanManageComics] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    setStaff(initialStaff);
+  }, [initialStaff]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -40,15 +46,21 @@ export function TeamManager({ initialStaff }: { initialStaff: StaffMember[] }) {
       setError(result.error ?? "خطا");
     } else {
       setUsername("");
+      router.refresh();
     }
     setPending(false);
   }
 
   async function handleRemove(staffId: string) {
+    if (!confirm("این عضو از تیم حذف بشه؟")) return;
     setPending(true);
+    setError(null);
     const result = await removePublisherStaff(staffId);
     if (result.success) {
       setStaff((prev) => prev.filter((s) => s.id !== staffId));
+      router.refresh();
+    } else {
+      setError(result.error ?? "خطا");
     }
     setPending(false);
   }

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { validateTelegramInitData, InvalidInitDataError, sanitizeTelegramPhotoUrl } from "@/lib/telegram";
+import {
+  validateTelegramInitData,
+  peekTelegramUserId,
+  InvalidInitDataError,
+  sanitizeTelegramPhotoUrl,
+} from "@/lib/telegram";
 import { createSessionToken, sessionCookieOptions, verifySessionToken } from "@/lib/session";
 import { generateReferralCode } from "@/lib/referral";
 import { checkRateLimit } from "@/lib/moderation";
@@ -83,31 +88,6 @@ function publicUserPayload(user: { id: string; firstName: string; lastName: stri
 }
 
 export async function POST(req: NextRequest) {
-  const cookieStore = await cookies();
-  const existingToken = cookieStore.get("session")?.value;
-
-  if (existingToken) {
-    const existingSession = verifySessionToken(existingToken);
-    if (existingSession) {
-      const existingUser = await prisma.user.findUnique({ where: { id: existingSession.userId } });
-      if (existingUser && !existingUser.deletedAt) {
-        const bootstrapAdmins = getBootstrapAdminTelegramIds();
-        if (existingUser.role !== "ADMIN" && bootstrapAdmins.has(String(existingUser.telegramId))) {
-          const promoted = await prisma.user.update({ where: { id: existingUser.id }, data: { role: "ADMIN" } });
-          await invalidateSessionUserCache(promoted.id);
-          return NextResponse.json({ user: publicUserPayload(promoted) });
-        }
-        return NextResponse.json({ user: publicUserPayload(existingUser) });
-      }
-    }
-  }
-
-  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const allowed = await checkRateLimit(`auth-telegram:${ip}`, 20);
-  if (!allowed) {
-    return NextResponse.json({ error: "too many requests" }, { status: 429 });
-  }
-
   let initData: unknown;
   try {
     const body = await req.json();
@@ -118,6 +98,38 @@ export async function POST(req: NextRequest) {
 
   if (!initData || typeof initData !== "string") {
     return NextResponse.json({ error: "initData is required" }, { status: 400 });
+  }
+
+  const cookieStore = await cookies();
+  const existingToken = cookieStore.get("session")?.value;
+
+  if (existingToken) {
+    const existingSession = verifySessionToken(existingToken);
+    if (existingSession) {
+      const existingUser = await prisma.user.findUnique({ where: { id: existingSession.userId } });
+      if (existingUser && !existingUser.deletedAt) {
+        const peekedTelegramId = peekTelegramUserId(initData);
+        if (peekedTelegramId === null) {
+          return NextResponse.json({ error: "invalid initData" }, { status: 401 });
+        }
+
+        if (peekedTelegramId === String(existingUser.telegramId)) {
+          const bootstrapAdmins = getBootstrapAdminTelegramIds();
+          if (existingUser.role !== "ADMIN" && bootstrapAdmins.has(String(existingUser.telegramId))) {
+            const promoted = await prisma.user.update({ where: { id: existingUser.id }, data: { role: "ADMIN" } });
+            await invalidateSessionUserCache(promoted.id);
+            return NextResponse.json({ user: publicUserPayload(promoted) });
+          }
+          return NextResponse.json({ user: publicUserPayload(existingUser) });
+        }
+      }
+    }
+  }
+
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const allowed = await checkRateLimit(`auth-telegram:${ip}`, 20);
+  if (!allowed) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
   }
 
   let validated;
@@ -134,6 +146,10 @@ export async function POST(req: NextRequest) {
   const telegramPhotoUrl = sanitizeTelegramPhotoUrl(user.photo_url);
 
   const existing = await prisma.user.findUnique({ where: { telegramId: BigInt(user.id) } });
+  if (existing?.deletedAt) {
+    return NextResponse.json({ error: "account deleted" }, { status: 403 });
+  }
+
   const bootstrapAdmins = getBootstrapAdminTelegramIds();
 
   let dbUser;
@@ -151,9 +167,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (shouldPromote) {
-      await invalidateSessionUserCache(dbUser.id);
-    }
+    await invalidateSessionUserCache(dbUser.id);
   } else {
     const referrer = startParam
       ? await prisma.user.findUnique({ where: { referralCode: startParam } })

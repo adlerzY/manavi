@@ -28,6 +28,12 @@ export interface UserSearchResult {
   createdAt: string;
 }
 
+async function findActiveUser(userId: string) {
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, deletedAt: true } });
+  if (!target || target.deletedAt) return null;
+  return target;
+}
+
 export async function searchUsers(query: {
   q?: string;
   role?: Role;
@@ -37,8 +43,8 @@ export async function searchUsers(query: {
 }): Promise<{ users: UserSearchResult[]; total: number }> {
   await requireAdmin();
 
-  const page = query.page ?? 1;
-  const pageSize = query.pageSize ?? 25;
+  const page = Math.max(1, query.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 25));
 
   const where = {
     role: query.role,
@@ -120,6 +126,9 @@ export async function banUser(userId: string, reason: string): Promise<ActionRes
     if (admin.id === userId) {
       return { success: false, error: "نمی‌توانید خودتان را مسدود کنید" };
     }
+    const target = await findActiveUser(userId);
+    if (!target) return { success: false, error: "کاربر یافت نشد" };
+
     await prisma.user.update({
       where: { id: userId },
       data: { isBanned: true, bannedAt: new Date(), banReason: reason.trim() || null },
@@ -172,6 +181,9 @@ export async function grantCoins(userId: string, amount: number, note: string): 
     const admin = await requireAdmin();
     if (!Number.isInteger(amount) || amount <= 0) return { success: false, error: "مقدار باید عدد صحیح مثبت باشد" };
 
+    const target = await findActiveUser(userId);
+    if (!target) return { success: false, error: "کاربر یافت نشد" };
+
     const cleanNote = note.trim() || null;
 
     await prisma.$transaction(async (tx) => {
@@ -211,6 +223,9 @@ export async function revokeCoins(userId: string, amount: number, note: string):
   try {
     const admin = await requireAdmin();
     if (!Number.isInteger(amount) || amount <= 0) return { success: false, error: "مقدار باید عدد صحیح مثبت باشد" };
+
+    const target = await findActiveUser(userId);
+    if (!target) return { success: false, error: "کاربر یافت نشد" };
 
     const cleanNote = note.trim() || null;
 
@@ -304,6 +319,8 @@ export async function deleteUserAccount(userId: string, confirmValue: string): P
       prisma.bookmark.deleteMany({ where: { userId } }),
       prisma.readHistory.deleteMany({ where: { userId } }),
       prisma.publisherStaff.deleteMany({ where: { userId } }),
+      prisma.comicStaff.deleteMany({ where: { userId } }),
+      prisma.chapterStaff.deleteMany({ where: { userId } }),
       prisma.editionRequest.deleteMany({ where: { userId } }),
     ]);
 

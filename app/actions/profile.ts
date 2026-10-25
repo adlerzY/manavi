@@ -20,6 +20,9 @@ export async function updateProfileDetails(input: {
   if (!user) {
     return { success: false, error: "برای ویرایش پروفایل باید وارد شوید" };
   }
+  if (user.isBanned) {
+    return { success: false, error: "حساب شما مسدود شده است" };
+  }
 
   const avatarUrl = input.avatarUrl?.trim();
   if (avatarUrl && !isAllowedImageUrl(avatarUrl)) {

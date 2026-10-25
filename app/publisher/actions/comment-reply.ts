@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { safeError } from "@/lib/errors";
 import { getSessionUser } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/moderation";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -21,20 +22,27 @@ export async function replyToComment(commentId: string, content: string): Promis
       return { success: false, error: "حساب شما مسدود شده است" };
     }
 
+    const allowed = await checkRateLimit(`comment-reply:${user.id}`, 10);
+    if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است، کمی صبر کنید" };
+
     const parent = await prisma.comment.findUnique({
       where: { id: commentId },
-      select: { chapterId: true, chapter: { select: { comic: { select: { id: true, licenseId: true } } } } },
+      select: {
+        chapterId: true,
+        parentId: true,
+        chapter: { select: { edition: { select: { publisherId: true } } } },
+      },
     });
     if (!parent) return { success: false, error: "نظر یافت نشد" };
 
-    const license = await prisma.license.findUnique({ where: { id: parent.chapter.comic.licenseId }, select: { publisherId: true } });
+    const publisherId = parent.chapter.edition.publisherId;
 
     let isStaff = user.role === "ADMIN";
     if (!isStaff && user.publisherProfile) {
-      isStaff = license?.publisherId === user.publisherProfile.id;
+      isStaff = user.publisherProfile.id === publisherId;
     }
-    if (!isStaff && license) {
-      const staffLink = await prisma.publisherStaff.findFirst({ where: { userId: user.id, publisherId: license.publisherId } });
+    if (!isStaff) {
+      const staffLink = await prisma.publisherStaff.findFirst({ where: { userId: user.id, publisherId } });
       isStaff = Boolean(staffLink);
     }
     if (!isStaff) {
@@ -43,9 +51,16 @@ export async function replyToComment(commentId: string, content: string): Promis
 
     const trimmed = content.trim();
     if (!trimmed) return { success: false, error: "متن پاسخ خالی است" };
+    if (trimmed.length > 2000) return { success: false, error: "متن پاسخ بیش از حد طولانی است" };
 
     await prisma.comment.create({
-      data: { chapterId: parent.chapterId, userId: user.id, content: trimmed, parentId: commentId, isStaffReply: true },
+      data: {
+        chapterId: parent.chapterId,
+        userId: user.id,
+        content: trimmed,
+        parentId: parent.parentId ?? commentId,
+        isStaffReply: true,
+      },
     });
 
     revalidatePath(`/app/read/${parent.chapterId}`);

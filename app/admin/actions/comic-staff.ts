@@ -8,7 +8,7 @@ import { safeError } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getPrimaryEditionId } from "@/lib/editions";
 import { BPS_DENOMINATOR } from "@/lib/units";
-import type { StaffRole } from "@prisma/client";
+import { StaffRole } from "@prisma/client";
 
 interface ActionResult<T = undefined> { success: boolean; error?: string; data?: T }
 
@@ -35,11 +35,19 @@ export async function listComicStaff(comicId: string): Promise<ComicStaffRow[]> 
 export async function addComicStaff(comicId: string, telegramUsername: string, roleTitle: StaffRole): Promise<ActionResult> {
   try {
     await requireComicManageAccessByComicId(comicId);
+    if (!Object.values(StaffRole).includes(roleTitle)) {
+      return { success: false, error: "نقش نامعتبر است" };
+    }
+
     const username = telegramUsername.trim().replace("@", "");
     if (!username) return { success: false, error: "یوزرنیم تلگرام الزامی است" };
 
-    const targetUser = await prisma.user.findFirst({ where: { username } });
+    const targetUser = await prisma.user.findFirst({
+      where: { username: { equals: username, mode: "insensitive" }, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
+    });
     if (!targetUser) return { success: false, error: "کاربری با این یوزرنیم پیدا نشد" };
+    if (targetUser.isBanned) return { success: false, error: "این کاربر مسدود است" };
 
     const editionId = await getPrimaryEditionId(comicId);
 
@@ -105,8 +113,33 @@ export async function setComicStaffShare(comicId: string, staffId: string, share
 
 export async function removeComicStaff(comicId: string, staffId: string): Promise<ActionResult> {
   try {
-    await requireComicManageAccessByComicId(comicId);
-    await prisma.comicStaff.deleteMany({ where: { id: staffId, comicId } });
+    const actor = await requireComicManageAccessByComicId(comicId);
+
+    const target = await prisma.comicStaff.findFirst({
+      where: { id: staffId, comicId },
+      select: { id: true, userId: true, roleTitle: true },
+    });
+    if (!target) return { success: true };
+
+    await prisma.$transaction([
+      prisma.chapterStaff.updateMany({
+        where: { userId: target.userId, roleTitle: target.roleTitle, chapter: { comicId } },
+        data: { shareBps: 0 },
+      }),
+      prisma.comicStaff.delete({ where: { id: target.id } }),
+    ]);
+
+    after(() =>
+      logAuditEvent({
+        actorId: actor.id,
+        actorRole: actor.role,
+        action: "comicStaff.shareChange",
+        targetType: "ComicStaff",
+        targetId: staffId,
+        metadata: { comicId, userId: target.userId, role: target.roleTitle, shareBps: 0, removed: true },
+      })
+    );
+
     revalidatePath(`/admin/comics/${comicId}`);
     revalidatePath(`/publisher/comics/${comicId}`);
     return { success: true };

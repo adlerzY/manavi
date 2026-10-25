@@ -18,6 +18,8 @@ interface ActionResult<T = undefined> {
   data?: T;
 }
 
+const SLUG_PATTERN = /^[a-z0-9-]+$/;
+
 export async function createComicAsPublisher(input: {
   title: string;
   slug: string;
@@ -39,6 +41,9 @@ export async function createComicAsPublisher(input: {
     if (!input.title.trim() || !input.slug.trim() || !input.categoryId) {
       return { success: false, error: "عنوان، اسلاگ و دسته‌بندی الزامی است" };
     }
+    if (!SLUG_PATTERN.test(input.slug.trim())) {
+      return { success: false, error: "اسلاگ فقط می‌تواند شامل حروف کوچک انگلیسی، اعداد و خط تیره باشد" };
+    }
 
     if (!input.coverImage || !isAllowedImageUrl(input.coverImage)) {
       return { success: false, error: "تصویر کاور معتبر نیست — از آپلودگر تصویر استفاده کنید" };
@@ -47,11 +52,12 @@ export async function createComicAsPublisher(input: {
       return { success: false, error: "تصویر بنر معتبر نیست" };
     }
 
-    const license = await prisma.license.findFirst({
+    const licenses = await prisma.license.findMany({
       where: { publisherId: context.publisherId },
       orderBy: { createdAt: "desc" },
     });
-    if (!license || !isLicenseCurrentlyActive(license)) {
+    const license = licenses.find((candidate) => isLicenseCurrentlyActive(candidate));
+    if (!license) {
       return { success: false, error: "لایسنس فعالی برای این ناشر یافت نشد — با پشتیبانی تماس بگیرید" };
     }
 

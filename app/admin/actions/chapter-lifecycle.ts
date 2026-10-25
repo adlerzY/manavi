@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, requireUploadAccess } from "@/lib/auth";
+import { requireAdmin, requireUploadAccess, getUploaderVerification } from "@/lib/auth";
 import { assertLicenseActive, LicenseInactiveError } from "@/lib/license";
 import { executeScheduledPublish } from "@/lib/scheduled-publish";
 import { invalidateChapterAccessList } from "@/lib/chapters";
@@ -24,18 +24,25 @@ export async function scheduleChapter(chapterId: string, scheduledAt: string): P
 
     const chapter = await prisma.chapter.findUnique({
       where: { id: chapterId },
-      select: { id: true, publishedAt: true, comic: { select: { id: true } } },
+      select: { id: true, publishedAt: true, status: true, comic: { select: { id: true } } },
     });
     if (!chapter) return { success: false, error: "چپتر یافت نشد" };
     if (chapter.publishedAt) return { success: false, error: "چپتر قبلاً منتشر شده است" };
+    if (chapter.status !== "DRAFT") return { success: false, error: "فقط چپتر پیش‌نویس قابل زمان‌بندی است" };
 
-    await requireUploadAccess(chapter.comic.id);
+    const user = await requireUploadAccess(chapter.comic.id);
     await assertLicenseActive(chapter.comic.id);
 
-    await prisma.chapter.update({
-      where: { id: chapterId },
+    const verified = await getUploaderVerification(user.id, chapter.comic.id);
+    if (!verified) {
+      return { success: false, error: "زمان‌بندی فقط برای حساب‌های دارای تیک آبی ممکن است — چپتر را برای تایید ادمین ارسال کنید" };
+    }
+
+    const updated = await prisma.chapter.updateMany({
+      where: { id: chapterId, status: "DRAFT", publishedAt: null },
       data: { status: "SCHEDULED", scheduledAt: date },
     });
+    if (updated.count === 0) return { success: false, error: "وضعیت چپتر تغییر کرده است — دوباره تلاش کنید" };
 
     revalidatePath("/admin/comics");
     revalidatePath("/publisher/comics");
@@ -55,10 +62,12 @@ export async function cancelSchedule(chapterId: string): Promise<ActionResult> {
 
     await requireUploadAccess(chapter.comicId);
 
-    await prisma.chapter.update({
-      where: { id: chapterId },
+    const updated = await prisma.chapter.updateMany({
+      where: { id: chapterId, status: "SCHEDULED", publishedAt: null },
       data: { status: "DRAFT", scheduledAt: null },
     });
+    if (updated.count === 0) return { success: false, error: "این چپتر در وضعیت زمان‌بندی‌شده نیست" };
+
     revalidatePath("/admin/comics");
     revalidatePath("/publisher/comics");
     return { success: true };
@@ -98,10 +107,19 @@ export async function getChapterPagePreviews(
 
 export async function reorderChapterPages(chapterId: string, orderedPages: string[]): Promise<ActionResult> {
   try {
-    const chapter = await prisma.chapter.findUnique({ where: { id: chapterId }, select: { comicId: true } });
+    const chapter = await prisma.chapter.findUnique({ where: { id: chapterId }, select: { comicId: true, pages: true } });
     if (!chapter) return { success: false, error: "چپتر یافت نشد" };
 
     await requireUploadAccess(chapter.comicId);
+
+    if (!Array.isArray(orderedPages) || orderedPages.length !== chapter.pages.length) {
+      return { success: false, error: "لیست صفحات نامعتبر است" };
+    }
+    const expected = [...chapter.pages].sort();
+    const received = [...orderedPages].sort();
+    if (!expected.every((key, index) => key === received[index])) {
+      return { success: false, error: "لیست صفحات نامعتبر است" };
+    }
 
     await prisma.chapter.update({ where: { id: chapterId }, data: { pages: orderedPages } });
     revalidatePath("/admin/comics");

@@ -25,14 +25,14 @@ export interface SearchCommentsParams {
 export async function searchComments(
   params: SearchCommentsParams
 ): Promise<{ comments: ModeratedCommentRow[]; total: number }> {
-  const page = params.page ?? 1;
-  const pageSize = params.pageSize ?? 25;
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 25));
 
   const where = {
     status: params.status,
     chapter: {
       comicId: params.comicId,
-      comic: params.publisherId ? { license: { publisherId: params.publisherId } } : undefined,
+      ...(params.publisherId ? { edition: { publisherId: params.publisherId } } : {}),
     },
   };
 

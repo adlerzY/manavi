@@ -13,20 +13,22 @@ interface ActionResult<T = undefined> {
   data?: T;
 }
 
-async function requirePublisherId(): Promise<string> {
+async function requirePublisherAccess(requireManage: boolean): Promise<{ userId: string; publisherId: string }> {
   const user = await getSessionUser();
-  if (user?.isBanned) throw new Error("حساب شما مسدود شده است");
+  if (!user) throw new Error("دسترسی غیرمجاز");
+  if (user.isBanned) throw new Error("حساب شما مسدود شده است");
   const context = await getPublisherContext(user);
   if (!context) throw new Error("دسترسی غیرمجاز");
-  return context.publisherId;
+  if (requireManage && !context.isOwner && !context.canManageComics) throw new Error("دسترسی غیرمجاز");
+  return { userId: user.id, publisherId: context.publisherId };
 }
 
 async function assertCommentBelongsToPublisher(commentId: string, publisherId: string): Promise<string> {
   const comment = await prisma.comment.findUnique({
     where: { id: commentId },
-    select: { chapterId: true, chapter: { select: { comic: { select: { license: { select: { publisherId: true } } } } } } },
+    select: { chapterId: true, chapter: { select: { edition: { select: { publisherId: true } } } } },
   });
-  if (!comment || comment.chapter.comic.license.publisherId !== publisherId) {
+  if (!comment || comment.chapter.edition.publisherId !== publisherId) {
     throw new Error("این نظر متعلق به آثار شما نیست");
   }
   return comment.chapterId;
@@ -35,19 +37,18 @@ async function assertCommentBelongsToPublisher(commentId: string, publisherId: s
 export async function listCommentsPublisher(
   params: Omit<SearchCommentsParams, "publisherId">
 ): Promise<{ comments: ModeratedCommentRow[]; total: number }> {
-  const publisherId = await requirePublisherId();
+  const { publisherId } = await requirePublisherAccess(false);
   return searchComments({ ...params, publisherId });
 }
 
 export async function setCommentStatusPublisher(commentId: string, status: CommentStatus): Promise<ActionResult> {
   try {
-    const publisherId = await requirePublisherId();
+    const { userId, publisherId } = await requirePublisherAccess(true);
     const chapterId = await assertCommentBelongsToPublisher(commentId, publisherId);
-    const user = await getSessionUser();
 
     await prisma.comment.update({
       where: { id: commentId },
-      data: { status, moderatedById: user?.id, moderatedAt: new Date() },
+      data: { status, moderatedById: userId, moderatedAt: new Date() },
     });
     revalidatePath(`/app/read/${chapterId}`);
     revalidatePath("/publisher/comments");
@@ -59,7 +60,7 @@ export async function setCommentStatusPublisher(commentId: string, status: Comme
 
 export async function updateCommentContentPublisher(commentId: string, content: string): Promise<ActionResult> {
   try {
-    const publisherId = await requirePublisherId();
+    const { publisherId } = await requirePublisherAccess(true);
     const chapterId = await assertCommentBelongsToPublisher(commentId, publisherId);
 
     const trimmed = content.trim();
@@ -77,7 +78,7 @@ export async function updateCommentContentPublisher(commentId: string, content: 
 
 export async function deleteCommentPublisher(commentId: string): Promise<ActionResult> {
   try {
-    const publisherId = await requirePublisherId();
+    const { publisherId } = await requirePublisherAccess(true);
     const chapterId = await assertCommentBelongsToPublisher(commentId, publisherId);
 
     await prisma.$transaction([

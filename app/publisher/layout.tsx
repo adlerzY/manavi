@@ -8,6 +8,7 @@ import { TelegramPanelViewport } from "@/components/dashboard/telegram-panel-vie
 export default async function PublisherLayout({ children }: { children: ReactNode }) {
   const user = await getSessionUser();
   if (!user) redirect("/");
+  if (user.isBanned) redirect("/app/profile");
 
   const context = await getPublisherContext(user);
   if (!context && user.role !== "ADMIN") {

@@ -13,7 +13,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { LICENSE_STATUS_LABELS_FA } from "@/lib/license";
 import { PLATFORM_LICENSE_ID, PLATFORM_PUBLISHER_ID, ensurePlatformLicense } from "@/lib/platform-license";
 import { LicenseStatus, ChapterAccessType } from "@prisma/client";
-import type { ReadingMode } from "@prisma/client";
+import type { Prisma, ReadingMode } from "@prisma/client";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -21,9 +21,25 @@ interface ActionResult<T = undefined> {
   data?: T;
 }
 
+const SLUG_PATTERN = /^[a-z0-9-]+$/;
+const TERRITORY_PATTERN = /^[A-Z0-9_-]{2,20}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isUniqueViolation(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002");
+}
+
 async function resolveLicenseId(requested: string | undefined): Promise<string> {
   if (!requested || requested === PLATFORM_LICENSE_ID) return ensurePlatformLicense();
   return requested;
+}
+
+async function demoteFormerOwner(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+  const staffCount = await tx.publisherStaff.count({ where: { userId } });
+  await tx.user.updateMany({
+    where: { id: userId, role: "PUBLISHER" },
+    data: { role: staffCount > 0 ? "STAFF" : "USER" },
+  });
 }
 
 export async function createPublisher(input: {
@@ -36,6 +52,9 @@ export async function createPublisher(input: {
 
     if (!input.name.trim() || !input.contactEmail.trim()) {
       return { success: false, error: "نام و ایمیل ارتباطی الزامی است" };
+    }
+    if (!EMAIL_PATTERN.test(input.contactEmail.trim())) {
+      return { success: false, error: "ایمیل ارتباطی معتبر نیست" };
     }
 
     const publisher = await prisma.publisher.create({
@@ -58,6 +77,7 @@ export async function createPublisher(input: {
     );
 
     revalidatePath("/admin/publishers");
+    revalidatePath("/admin/licenses");
     return { success: true, data: { id: publisher.id } };
   } catch (err) {
     return safeError(err);
@@ -75,31 +95,54 @@ export async function createLicense(input: {
   try {
     const admin = await requireAdmin();
 
-    if (!input.publisherId) {
+    const publisherId = input.publisherId?.trim();
+    if (!publisherId) {
       return { success: false, error: "انتخاب ناشر الزامی است" };
     }
-    if (input.territory.length === 0) {
+
+    const territory = [...new Set((input.territory ?? []).map((item) => item.trim().toUpperCase()).filter(Boolean))];
+    if (territory.length === 0) {
       return { success: false, error: "حداقل یک قلمرو باید مشخص شود" };
     }
-    if (input.royaltyPercentage < 0 || input.royaltyPercentage > 100) {
-      return { success: false, error: "درصد رویالتی باید بین ۰ تا ۱۰۰ باشد" };
+    if (territory.some((item) => !TERRITORY_PATTERN.test(item))) {
+      return { success: false, error: "قلمرو نامعتبر است — از کدهای انگلیسی مثل IR یا GLOBAL استفاده کنید" };
     }
 
+    const royalty = Number(input.royaltyPercentage);
+    if (!Number.isFinite(royalty) || royalty < 0 || royalty > 100) {
+      return { success: false, error: "درصد رویالتی باید بین ۰ تا ۱۰۰ باشد" };
+    }
+    const royaltyPercentage = Math.round(royalty * 100) / 100;
+
     const startDate = new Date(input.startDate);
+    if (Number.isNaN(startDate.getTime())) {
+      return { success: false, error: "تاریخ شروع نامعتبر است" };
+    }
     const endDate = input.endDate ? new Date(input.endDate) : null;
+    if (endDate && Number.isNaN(endDate.getTime())) {
+      return { success: false, error: "تاریخ پایان نامعتبر است" };
+    }
     if (endDate && endDate <= startDate) {
       return { success: false, error: "تاریخ پایان باید بعد از تاریخ شروع باشد" };
     }
 
+    const publisher = await prisma.publisher.findUnique({ where: { id: publisherId }, select: { id: true } });
+    if (!publisher) {
+      return { success: false, error: "ناشر یافت نشد" };
+    }
+
     const license = await prisma.license.create({
       data: {
-        publisherId: input.publisherId,
-        territory: input.territory,
-        royaltyPercentage: input.royaltyPercentage,
+        publisherId,
+        territory,
+        royaltyPercentage,
         startDate,
         endDate,
         contractReference: input.contractReference?.trim() || null,
         status: LicenseStatus.PENDING,
+        terms: {
+          create: { royaltyPercentage, validFrom: new Date(), createdById: admin.id },
+        },
       },
     });
 
@@ -110,20 +153,31 @@ export async function createLicense(input: {
         action: "license.create",
         targetType: "License",
         targetId: license.id,
-        metadata: { publisherId: input.publisherId, territory: input.territory, royaltyPercentage: input.royaltyPercentage },
+        metadata: { publisherId, territory, royaltyPercentage },
       })
     );
 
     revalidatePath("/admin/licenses");
     return { success: true, data: { id: license.id } };
   } catch (err) {
-    return safeError(err);
+    return safeError(err, "ثبت لایسنس ناموفق بود — جزئیات در لاگ سرور ثبت شد");
   }
 }
 
 export async function activateLicense(licenseId: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
+
+    const license = await prisma.license.findUnique({
+      where: { id: licenseId },
+      select: { status: true, terminatedAt: true },
+    });
+    if (!license) return { success: false, error: "لایسنس یافت نشد" };
+    if (license.terminatedAt || license.status === LicenseStatus.TERMINATED || license.status === LicenseStatus.EXPIRED) {
+      return { success: false, error: `لایسنس ${LICENSE_STATUS_LABELS_FA[license.status]} قابل فعال‌سازی نیست — یک لایسنس جدید بسازید` };
+    }
+    if (license.status === LicenseStatus.ACTIVE) return { success: true };
+
     await prisma.license.update({
       where: { id: licenseId },
       data: { status: LicenseStatus.ACTIVE },
@@ -152,6 +206,10 @@ export async function terminateLicense(licenseId: string): Promise<ActionResult>
     if (licenseId === PLATFORM_LICENSE_ID) {
       return { success: false, error: "لایسنس داخلی پلتفرم قابل لغو نیست — تمام محتوای اختصاصی ماناوی به آن وابسته است" };
     }
+
+    const license = await prisma.license.findUnique({ where: { id: licenseId }, select: { status: true } });
+    if (!license) return { success: false, error: "لایسنس یافت نشد" };
+    if (license.status === LicenseStatus.TERMINATED) return { success: true };
 
     await prisma.license.update({
       where: { id: licenseId },
@@ -192,6 +250,9 @@ export async function createComic(input: {
 
     if (!input.title.trim() || !input.slug.trim() || !input.categoryId) {
       return { success: false, error: "عنوان، اسلاگ و دسته‌بندی الزامی است" };
+    }
+    if (!SLUG_PATTERN.test(input.slug.trim())) {
+      return { success: false, error: "اسلاگ فقط می‌تواند شامل حروف کوچک انگلیسی، اعداد و خط تیره باشد" };
     }
 
     if (!input.coverImage || !isAllowedImageUrl(input.coverImage)) {
@@ -256,7 +317,7 @@ export async function createComic(input: {
     revalidatePath("/app");
     return { success: true, data: { id: comic.id } };
   } catch (err) {
-    if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+    if (isUniqueViolation(err)) {
       return { success: false, error: "این اسلاگ قبلاً استفاده شده — لطفاً یک اسلاگ دیگر انتخاب کنید" };
     }
     return safeError(err);
@@ -286,6 +347,9 @@ export async function updateComic(
     if (!input.title.trim() || !input.slug.trim() || !input.categoryId) {
       return { success: false, error: "عنوان، اسلاگ و دسته‌بندی الزامی است" };
     }
+    if (!SLUG_PATTERN.test(input.slug.trim())) {
+      return { success: false, error: "اسلاگ فقط می‌تواند شامل حروف کوچک انگلیسی، اعداد و خط تیره باشد" };
+    }
 
     if (!input.coverImage || !isAllowedImageUrl(input.coverImage)) {
       return { success: false, error: "تصویر کاور معتبر نیست — از آپلودگر تصویر استفاده کنید" };
@@ -296,7 +360,7 @@ export async function updateComic(
 
     const existing = await prisma.comic.findUnique({
       where: { id: comicId },
-      select: { coverImage: true, licenseId: true },
+      select: { coverImage: true, licenseId: true, slug: true },
     });
     if (!existing) return { success: false, error: "عنوان یافت نشد" };
 
@@ -304,9 +368,15 @@ export async function updateComic(
 
     const targetLicense = await prisma.license.findUnique({
       where: { id: licenseId },
-      select: { publisherId: true },
+      select: { publisherId: true, status: true },
     });
     if (!targetLicense) return { success: false, error: "لایسنس یافت نشد" };
+    if (
+      existing.licenseId !== licenseId &&
+      (targetLicense.status === LicenseStatus.EXPIRED || targetLicense.status === LicenseStatus.TERMINATED)
+    ) {
+      return { success: false, error: `امکان اتصال محتوا به لایسنس ${LICENSE_STATUS_LABELS_FA[targetLicense.status]} وجود ندارد` };
+    }
 
     const coverChanged = existing.coverImage !== input.coverImage;
     const dominantColor = coverChanged ? await extractDominantColor(input.coverImage) : undefined;
@@ -360,11 +430,12 @@ export async function updateComic(
     revalidatePath("/admin/comics");
     revalidatePath(`/admin/comics/${comicId}`);
     revalidatePath(`/app/comic/${comic.slug}`);
+    if (existing.slug !== comic.slug) revalidatePath(`/app/comic/${existing.slug}`);
     revalidatePath("/app");
     revalidatePath("/app/explore");
     return { success: true };
   } catch (err) {
-    if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+    if (isUniqueViolation(err)) {
       return { success: false, error: "این اسلاگ قبلاً استفاده شده — لطفاً یک اسلاگ دیگر انتخاب کنید" };
     }
     return safeError(err);
@@ -418,6 +489,9 @@ export async function updateChapter(
     invalidateChapterAccessList(chapter.comic.id);
     return { success: true };
   } catch (err) {
+    if (isUniqueViolation(err)) {
+      return { success: false, error: "این شماره چپتر قبلاً برای این نسخه ثبت شده است" };
+    }
     return safeError(err);
   }
 }
@@ -429,7 +503,7 @@ export async function removeChapterPage(chapterId: string, pageIndex: number): P
 
     const actor = await requireUploadAccess(chapter.comicId);
 
-    if (pageIndex < 0 || pageIndex >= chapter.pages.length) {
+    if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= chapter.pages.length) {
       return { success: false, error: "صفحه یافت نشد" };
     }
 
@@ -539,9 +613,15 @@ export async function linkPublisherOwner(publisherId: string, telegramUsername: 
     const username = telegramUsername.trim().replace("@", "");
     if (!username) return { success: false, error: "یوزرنیم تلگرام الزامی است" };
 
-    const targetUser = await prisma.user.findFirst({ where: { username, deletedAt: null } });
+    const targetUser = await prisma.user.findFirst({
+      where: { username: { equals: username, mode: "insensitive" }, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
+    });
     if (!targetUser) {
       return { success: false, error: "کاربری با این یوزرنیم پیدا نشد — باید حداقل یک‌بار مینی‌اپ را باز کرده باشد" };
+    }
+    if (targetUser.isBanned) {
+      return { success: false, error: "این کاربر مسدود است" };
     }
 
     const publisher = await prisma.publisher.findUnique({
@@ -561,7 +641,7 @@ export async function linkPublisherOwner(publisherId: string, telegramUsername: 
     await prisma.$transaction(async (tx) => {
       if (previousOwnerId) {
         await tx.publisher.update({ where: { id: publisherId }, data: { contractUserId: null } });
-        await tx.user.updateMany({ where: { id: previousOwnerId, role: "PUBLISHER" }, data: { role: "USER" } });
+        await demoteFormerOwner(tx, previousOwnerId);
       }
       await tx.publisher.update({ where: { id: publisherId }, data: { contractUserId: targetUser.id } });
       if (targetUser.role !== "ADMIN") {
@@ -608,7 +688,7 @@ export async function unlinkPublisherOwner(publisherId: string): Promise<ActionR
     await prisma.$transaction(async (tx) => {
       await tx.publisher.update({ where: { id: publisherId }, data: { contractUserId: null } });
       if (ownerId) {
-        await tx.user.updateMany({ where: { id: ownerId, role: "PUBLISHER" }, data: { role: "USER" } });
+        await demoteFormerOwner(tx, ownerId);
       }
     });
 
@@ -638,6 +718,9 @@ export async function bulkUpdateChapterAccessType(
 ): Promise<ActionResult<{ updated: number }>> {
   try {
     if (chapterIds.length === 0) return { success: false, error: "چپتری انتخاب نشده" };
+    if (!Object.values(ChapterAccessType).includes(accessType)) {
+      return { success: false, error: "نوع دسترسی نامعتبر است" };
+    }
 
     const chapters = await prisma.chapter.findMany({
       where: { id: { in: chapterIds } },
@@ -650,7 +733,7 @@ export async function bulkUpdateChapterAccessType(
     const actor = actors[0];
 
     const result = await prisma.chapter.updateMany({
-      where: { id: { in: chapterIds } },
+      where: { id: { in: chapters.map((c) => c.id) } },
       data: { accessType },
     });
 

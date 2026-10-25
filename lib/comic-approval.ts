@@ -18,9 +18,15 @@ export async function resolveComicApprovalStatus(
     return publisher.isVerified ? "APPROVED" : "PENDING_APPROVAL";
   }
 
-  const staffLink = await prisma.publisherStaff.findFirst({
-    where: { userId: creatorId, publisherId },
-    select: { isVerified: true },
+  const verifiedStaff = await prisma.publisherStaff.findFirst({
+    where: { userId: creatorId, publisherId, isVerified: true },
+    select: { id: true },
   });
-  return staffLink?.isVerified ? "APPROVED" : "PENDING_APPROVAL";
+  if (verifiedStaff) return "APPROVED";
+
+  const anyStaff = await prisma.publisherStaff.findFirst({
+    where: { userId: creatorId, publisherId },
+    select: { id: true },
+  });
+  return anyStaff && publisher.isVerified ? "APPROVED" : "PENDING_APPROVAL";
 }

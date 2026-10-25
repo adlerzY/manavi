@@ -45,8 +45,16 @@ export async function createComment(input: CreateCommentInput): Promise<CreateCo
     return { success: false, error: "متن نظر بیش از حد طولانی است" };
   }
 
+  const chapter = await prisma.chapter.findUnique({
+    where: { id: input.chapterId },
+    select: { publishedAt: true, isLocked: true },
+  });
+  if (!chapter || !chapter.publishedAt || chapter.isLocked) {
+    return { success: false, error: "چپتر یافت نشد" };
+  }
+
   const comment = await prisma.comment.create({
-    data: { chapterId: input.chapterId, userId: user.id, content, isSpoiler: input.isSpoiler },
+    data: { chapterId: input.chapterId, userId: user.id, content, isSpoiler: Boolean(input.isSpoiler) },
     select: { id: true, content: true, isSpoiler: true, createdAt: true, user: { select: { firstName: true, lastName: true, username: true } } },
   });
 

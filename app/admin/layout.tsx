@@ -26,7 +26,7 @@ const NAV: SidebarNavItem[] = [
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const user = await getSessionUser();
-  if (!user || user.role !== "ADMIN") {
+  if (!user || user.role !== "ADMIN" || user.isBanned) {
     redirect(user ? "/app/profile" : "/");
   }
 
