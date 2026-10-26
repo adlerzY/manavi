@@ -602,9 +602,9 @@ export async function deleteComic(comicId: string): Promise<ActionResult> {
         comic.coverImage,
         comic.bannerImage,
       ].filter(
-        (key): key is string =>
-          Boolean(key) && !key.startsWith("http://")
-      );
+  (key): key is string =>
+    typeof key === "string" && !key.startsWith("http://")
+);
 
       await deleteObjects(legacyTargets).catch((err) =>
         console.error("[deleteComic] legacy cleanup failed", err)
