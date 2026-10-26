@@ -3,12 +3,16 @@ import { prisma } from "./prisma";
 import { ChapterAccessType } from "@prisma/client";
 import { LICENSE_STATUS_LABELS_FA } from "./license";
 import { getPrimaryEditionId } from "./editions";
+import { deleteObjects, listObjectSizes, parsePrivatePageKey, privatePagesPrefix } from "./s3";
+import { MAX_PAGE_SIZE_BYTES } from "./page-limits";
+import { ENTITY_ID_PATTERN } from "./asset-kinds";
 
 export const MAX_CHAPTER_PAGES = 500;
 
 export interface IngestChapterInput {
   comicId: string;
   editionId?: string | null;
+  chapterId?: string | null;
   chapterNumber: number;
   title?: string | null;
   accessType?: string | null;
@@ -24,6 +28,33 @@ export interface IngestChapterResult {
 
 function isUniqueConstraintError(err: unknown): boolean {
   return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002");
+}
+
+type PageKeyCheck = { ok: true; chapterId: string } | { ok: false; error: string };
+
+const INVALID_KEYS_ERROR = "کلید صفحات نامعتبر است — آپلود را دوباره انجام دهید";
+
+
+function checkPageKeys(comicId: string, editionId: string, expectedChapterId: string | null, pageKeys: string[]): PageKeyCheck {
+  const first = parsePrivatePageKey(pageKeys[0]);
+  if (!first) return { ok: false, error: INVALID_KEYS_ERROR };
+
+  const chapterId = expectedChapterId ?? first.chapterId;
+  if (!ENTITY_ID_PATTERN.test(chapterId)) return { ok: false, error: INVALID_KEYS_ERROR };
+
+  for (let i = 0; i < pageKeys.length; i += 1) {
+    const parsed = parsePrivatePageKey(pageKeys[i]);
+    if (
+      !parsed ||
+      parsed.comicId !== comicId ||
+      parsed.editionId !== editionId ||
+      parsed.chapterId !== chapterId ||
+      parsed.index !== i
+    ) {
+      return { ok: false, error: INVALID_KEYS_ERROR };
+    }
+  }
+  return { ok: true, chapterId };
 }
 
 export async function ingestChapter(input: IngestChapterInput): Promise<IngestChapterResult> {
@@ -51,12 +82,43 @@ export async function ingestChapter(input: IngestChapterInput): Promise<IngestCh
     return { success: false, error: `آپلود ممکن نیست — لایسنس ${LICENSE_STATUS_LABELS_FA[edition.license.status]} است` };
   }
 
-  const duplicate = await prisma.chapter.findFirst({
-    where: { editionId, chapterNumber: input.chapterNumber },
-    select: { id: true },
+  const keyCheck = checkPageKeys(input.comicId, editionId, input.chapterId ?? null, input.pageKeys);
+  if (!keyCheck.ok) return { success: false, error: keyCheck.error };
+  const chapterId = keyCheck.chapterId;
+
+  const [sameId, sameNumber] = await Promise.all([
+    prisma.chapter.findUnique({ where: { id: chapterId }, select: { id: true } }),
+    prisma.chapter.findFirst({ where: { editionId, chapterNumber: input.chapterNumber }, select: { id: true } }),
+  ]);
+  if (sameId) return { success: false, error: "این آپلود قبلاً ثبت شده است — صفحه را رفرش و دوباره آپلود کنید" };
+  if (sameNumber) return { success: false, error: `چپتر ${input.chapterNumber} قبلاً برای این نسخه ثبت شده است` };
+
+  let sizes: Map<string, number>;
+  try {
+    sizes = await listObjectSizes("private", privatePagesPrefix(input.comicId, editionId, chapterId));
+  } catch (err) {
+    console.error("[chapter-ingest] listing uploaded pages failed", err);
+    return { success: false, error: "بررسی فایل‌های آپلودشده ناموفق بود — دوباره تلاش کنید" };
+  }
+
+  const missing = input.pageKeys.filter((key) => !sizes.has(key));
+  if (missing.length > 0) {
+    return {
+      success: false,
+      error: `${missing.length.toLocaleString("fa-IR")} صفحه در فضای ذخیره‌سازی پیدا نشد — آپلود را کامل کنید`,
+    };
+  }
+
+  const invalidSize = input.pageKeys.filter((key) => {
+    const size = sizes.get(key) ?? 0;
+    return size <= 0 || size > MAX_PAGE_SIZE_BYTES;
   });
-  if (duplicate) {
-    return { success: false, error: `چپتر ${input.chapterNumber} قبلاً برای این نسخه ثبت شده است` };
+  if (invalidSize.length > 0) {
+    await deleteObjects(invalidSize).catch(() => {});
+    return {
+      success: false,
+      error: `${invalidSize.length.toLocaleString("fa-IR")} صفحه خالی است یا از ${MAX_PAGE_SIZE_BYTES / 1024 / 1024} مگابایت بزرگ‌تر است — دوباره آپلود کنید`,
+    };
   }
 
   const accessType: ChapterAccessType =
@@ -75,6 +137,7 @@ export async function ingestChapter(input: IngestChapterInput): Promise<IngestCh
   try {
     chapter = await prisma.chapter.create({
       data: {
+        id: chapterId,
         comicId: input.comicId,
         editionId,
         episodeId: episode.id,
@@ -92,6 +155,10 @@ export async function ingestChapter(input: IngestChapterInput): Promise<IngestCh
     }
     throw err;
   }
+
+  const wanted = new Set(input.pageKeys);
+  const extras = [...sizes.keys()].filter((key) => !wanted.has(key));
+  if (extras.length > 0) await deleteObjects(extras).catch(() => {});
 
   const comicStaff = await prisma.comicStaff.findMany({
     where: { comicId: input.comicId, OR: [{ editionId }, { editionId: null }] },

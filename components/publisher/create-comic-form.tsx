@@ -21,6 +21,7 @@ export function PublisherCreateComicForm({ genres, categories }: { genres: Genre
   const router = useRouter();
   const close = useCollapsibleClose();
 
+  const [draftId, setDraftId] = useState(() => crypto.randomUUID());
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
@@ -60,6 +61,7 @@ export function PublisherCreateComicForm({ genres, categories }: { genres: Genre
     setError(null);
 
     const result = await createComicAsPublisher({
+      id: draftId,
       title, slug, description, coverImage, bannerImage: bannerImage || undefined,
       ageRating, categoryId, readingMode, genreIds,
     });
@@ -69,6 +71,7 @@ export function PublisherCreateComicForm({ genres, categories }: { genres: Genre
       setResultNote(result.data?.approvalStatus === "APPROVED" ? "عنوان منتشر شد." : "عنوان ثبت شد و در انتظار تایید ادمین است.");
       setTitle(""); setSlug(""); setDescription(""); setCoverImage(""); setBannerImage(""); setGenreIds([]);
       setReadingModeTouched(false);
+      setDraftId(crypto.randomUUID());
       router.refresh();
       setTimeout(() => close?.(), 1200);
     } else {
@@ -105,16 +108,8 @@ export function PublisherCreateComicForm({ genres, categories }: { genres: Genre
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <CoverUploader
-          entityId={null}
-          currentUrl={coverImage}
-          onUploaded={setCoverImage}
-        />
-        <BannerUploader
-          entityId={null}
-          currentUrl={bannerImage}
-          onUploaded={setBannerImage}
-        />
+        <CoverUploader entityId={draftId} currentUrl={coverImage} onUploaded={setCoverImage} />
+        <BannerUploader entityId={draftId} currentUrl={bannerImage} onUploaded={setBannerImage} />
       </div>
 
       <div className="grid grid-cols-3 gap-4">

@@ -2,11 +2,11 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import { uploadAssetFile } from "@/lib/client/asset-upload";
+import { uploadAssetFile, type AssetUploadPhase } from "@/lib/client/asset-upload";
 import type { AssetKind } from "@/lib/asset-kinds";
 
 interface ImageUploaderProps {
-  entityId: string | null;
+  entityId: string;
   currentUrl: string;
   onUploaded: (url: string) => void;
   kind: AssetKind;
@@ -14,20 +14,26 @@ interface ImageUploaderProps {
   aspectClassName?: string;
 }
 
+const PHASE_LABELS: Record<Exclude<AssetUploadPhase, "uploading">, string> = {
+  preparing: "در حال بهینه‌سازی تصویر…",
+  processing: "در حال پردازش و ذخیره…",
+};
+
 export function ImageUploader({ entityId, currentUrl, onUploaded, kind, label, aspectClassName = "h-32" }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [progress, setProgress] = useState(0);
-  const [uploadPhase, setUploadPhase] = useState<"preparing" | "uploading">("preparing");
+  const [phase, setPhase] = useState<AssetUploadPhase>("preparing");
   const [error, setError] = useState<string | null>(null);
 
   async function handleSelect(file: File) {
     setStatus("uploading");
     setProgress(0);
+    setPhase("preparing");
     setError(null);
 
     try {
-      const result = await uploadAssetFile(kind, entityId, file, file.type, setProgress, setUploadPhase);
+      const result = await uploadAssetFile(kind, entityId, file, setProgress, setPhase);
 
       if (result.success && result.url) {
         onUploaded(result.url);
@@ -38,18 +44,31 @@ export function ImageUploader({ entityId, currentUrl, onUploaded, kind, label, a
       }
     } catch {
       setStatus("error");
-      setError("آپلود به‌دلیل خطای ارتباط با سرور انجام نشد؛ دوباره تلاش کنید و لاگ سرور را بررسی کنید.");
+      setError("آپلود به‌دلیل خطای غیرمنتظره انجام نشد؛ دوباره تلاش کنید.");
+    } finally {
+      setProgress(0);
     }
   }
+
+  const uploading = status === "uploading";
+  const buttonLabel = uploading
+    ? phase === "uploading"
+      ? `در حال ارسال… ${progress.toLocaleString("fa-IR")}٪`
+      : PHASE_LABELS[phase]
+    : currentUrl
+    ? "تغییر تصویر"
+    : "آپلود تصویر";
 
   return (
     <div className="space-y-2 rounded-md border border-border bg-background p-3">
       <p className="text-xs text-text-muted">{label}</p>
+
       {currentUrl && (
         <div className={`relative w-full overflow-hidden rounded-md bg-surface ${aspectClassName}`}>
-          <Image src={currentUrl} alt={label} fill sizes="600px" className="object-cover" />
+          <Image src={currentUrl} alt={label} fill sizes="600px" unoptimized className="object-cover" />
         </div>
       )}
+
       <input
         ref={inputRef}
         type="file"
@@ -61,14 +80,22 @@ export function ImageUploader({ entityId, currentUrl, onUploaded, kind, label, a
         }}
         className="hidden"
       />
+
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        disabled={status === "uploading"}
+        disabled={uploading}
         className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-text-main disabled:opacity-50"
       >
-        {status === "uploading" ? (uploadPhase === "preparing" ? "در حال آماده‌سازی آپلود…" : `در حال آپلود… ${progress}%`) : currentUrl ? "تغییر تصویر" : "آپلود تصویر"}
+        {buttonLabel}
       </button>
+
+      {uploading && phase === "uploading" && (
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+          <div className="h-full bg-primary transition-all duration-200" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+
       {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
   );
@@ -79,7 +106,7 @@ export function BannerUploader({
   currentUrl,
   onUploaded,
 }: {
-  entityId: string | null;
+  entityId: string;
   currentUrl: string;
   onUploaded: (url: string) => void;
 }) {
@@ -89,7 +116,7 @@ export function BannerUploader({
       currentUrl={currentUrl}
       onUploaded={onUploaded}
       kind="comic-banner"
-      label="تصویر بنر هیرو (کیفیت بالا، برای نمایش در صفحه اصلی)"
+      label="تصویر عریض پس‌زمینه‌ی عنوان (کیفیت بالا، برای نمایش در صفحه اصلی)"
       aspectClassName="h-32"
     />
   );
@@ -100,7 +127,7 @@ export function CoverUploader({
   currentUrl,
   onUploaded,
 }: {
-  entityId: string | null;
+  entityId: string;
   currentUrl: string;
   onUploaded: (url: string) => void;
 }) {
@@ -121,7 +148,7 @@ export function CategoryImageUploader({
   currentUrl,
   onUploaded,
 }: {
-  entityId: string | null;
+  entityId: string;
   currentUrl: string;
   onUploaded: (url: string) => void;
 }) {

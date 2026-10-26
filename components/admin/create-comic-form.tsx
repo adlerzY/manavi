@@ -1,3 +1,4 @@
+// components/admin/create-comic-form.tsx
 "use client";
 
 import { useState, type FormEvent } from "react";
@@ -50,6 +51,8 @@ export function CreateComicForm({
   const close = useCollapsibleClose();
   const eligible = licenses.filter((l) => l.status !== "EXPIRED" && l.status !== "TERMINATED");
 
+  // این شناسه هم مسیر آپلود کاور/بنر است و هم id نهایی اثر؛ بنابراین جابه‌جایی فایل لازم نیست.
+  const [draftId, setDraftId] = useState(() => crypto.randomUUID());
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
@@ -89,6 +92,7 @@ export function CreateComicForm({
     setError(null);
 
     const result = await createComic({
+      id: draftId,
       title,
       slug,
       description,
@@ -110,6 +114,7 @@ export function CreateComicForm({
       setBannerImage("");
       setGenreIds([]);
       setReadingModeTouched(false);
+      setDraftId(crypto.randomUUID());
       router.refresh();
       setTimeout(() => close?.(), 1000);
     } else {
@@ -167,8 +172,8 @@ export function CreateComicForm({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <CoverUploader entityId={null} currentUrl={coverImage} onUploaded={setCoverImage} />
-        <BannerUploader entityId={null} currentUrl={bannerImage} onUploaded={setBannerImage} />
+        <CoverUploader entityId={draftId} currentUrl={coverImage} onUploaded={setCoverImage} />
+        <BannerUploader entityId={draftId} currentUrl={bannerImage} onUploaded={setBannerImage} />
       </div>
 
       <div className="grid grid-cols-3 gap-4">

@@ -9,6 +9,7 @@ import { resolveComicApprovalStatus } from "@/lib/comic-approval";
 import { safeError } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/audit-log";
 import { isAllowedImageUrl } from "@/lib/image-url";
+import { ENTITY_ID_PATTERN } from "@/lib/asset-kinds";
 import type { ReadingMode } from "@prisma/client";
 
 interface ActionResult<T = undefined> {
@@ -25,6 +26,7 @@ async function getDominantColor(imageUrl: string): Promise<string | null> {
 }
 
 export async function createComicAsPublisher(input: {
+  id?: string;
   title: string;
   slug: string;
   description: string;
@@ -56,6 +58,15 @@ export async function createComicAsPublisher(input: {
       return { success: false, error: "تصویر بنر معتبر نیست" };
     }
 
+    const draftId = input.id?.trim() || undefined;
+    if (draftId) {
+      if (!ENTITY_ID_PATTERN.test(draftId)) {
+        return { success: false, error: "شناسه‌ی فرم نامعتبر است — صفحه را رفرش کنید" };
+      }
+      const taken = await prisma.comic.findUnique({ where: { id: draftId }, select: { id: true } });
+      if (taken) return { success: false, error: "این فرم قبلاً ثبت شده است — صفحه را رفرش کنید" };
+    }
+
     const licenses = await prisma.license.findMany({
       where: { publisherId: context.publisherId },
       orderBy: { createdAt: "desc" },
@@ -75,6 +86,7 @@ export async function createComicAsPublisher(input: {
 
     const comic = await prisma.comic.create({
       data: {
+        ...(draftId ? { id: draftId } : {}),
         title: input.title.trim(),
         slug: input.slug.trim(),
         description: input.description.trim(),

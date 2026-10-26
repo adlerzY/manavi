@@ -1,35 +1,43 @@
 import type { NextConfig } from "next";
 
-function buildRemotePatterns() {
-  const patterns: { protocol: "https"; hostname: string }[] = [];
+interface RemotePatternEntry {
+  protocol: "https";
+  hostname: string;
+  pathname?: string;
+}
+
+function parseUrl(raw: string | undefined): URL | null {
+  if (!raw) return null;
+  try {
+    return new URL(raw.trim());
+  } catch {
+    return null;
+  }
+}
+
+function buildRemotePatterns(): RemotePatternEntry[] {
+  const patterns: RemotePatternEntry[] = [];
   const seen = new Set<string>();
 
-  function addHostFromUrl(rawUrl: string | undefined) {
-    if (!rawUrl) return;
-    try {
-      const hostname = new URL(rawUrl).hostname;
-      if (!seen.has(hostname)) {
-        seen.add(hostname);
-        patterns.push({ protocol: "https", hostname });
-      }
-    } catch {
-
-    }
+  function add(hostname: string, pathname?: string) {
+    const id = `${hostname}|${pathname ?? ""}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    patterns.push(pathname ? { protocol: "https", hostname, pathname } : { protocol: "https", hostname });
   }
 
-  addHostFromUrl(process.env.S3_PUBLIC_BASE_URL);
-  addHostFromUrl(process.env.STORAGE_CDN_BASE_URL);
+  const publicBase = parseUrl(process.env.S3_PUBLIC_BASE_URL);
+  if (publicBase) {
+    const basePath = publicBase.pathname.replace(/\/+$/, "");
+    add(publicBase.hostname, `${basePath}/public/**`);
+  }
 
-  const extraHosts = (process.env.NEXT_PUBLIC_IMAGE_HOSTS ?? "")
-    .split(",")
-    .map((host) => host.trim())
-    .filter(Boolean);
+  const cdn = parseUrl(process.env.STORAGE_CDN_BASE_URL);
+  if (cdn) add(cdn.hostname);
 
-  for (const hostname of extraHosts) {
-    if (!seen.has(hostname)) {
-      seen.add(hostname);
-      patterns.push({ protocol: "https", hostname });
-    }
+  for (const host of (process.env.NEXT_PUBLIC_IMAGE_HOSTS ?? "").split(",")) {
+    const trimmed = host.trim();
+    if (trimmed) add(trimmed);
   }
 
   return patterns;

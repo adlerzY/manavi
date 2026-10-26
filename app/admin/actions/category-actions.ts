@@ -4,6 +4,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
+import { isAllowedImageUrl } from "@/lib/image-url";
+import { ENTITY_ID_PATTERN } from "@/lib/asset-kinds";
 import type { ReadingDirection, ReadingMode } from "@prisma/client";
 
 interface ActionResult<T = undefined> {
@@ -11,6 +13,8 @@ interface ActionResult<T = undefined> {
   error?: string;
   data?: T;
 }
+
+const INVALID_IMAGE_ERROR = "آدرس تصویر معتبر نیست — از آپلودگر تصویر استفاده کنید";
 
 function slugify(value: string): string {
   return value
@@ -21,6 +25,7 @@ function slugify(value: string): string {
 }
 
 export async function createCategory(input: {
+  id?: string;
   name: string;
   slug?: string;
   imageUrl?: string;
@@ -37,11 +42,26 @@ export async function createCategory(input: {
     const slug = slugify(input.slug?.trim() || name);
     if (!slug) return { success: false, error: "اسلاگ نامعتبر است" };
 
+    const draftId = input.id?.trim() || undefined;
+    if (draftId) {
+      if (!ENTITY_ID_PATTERN.test(draftId)) {
+        return { success: false, error: "شناسه‌ی فرم نامعتبر است — صفحه را رفرش کنید" };
+      }
+      const taken = await prisma.category.findUnique({ where: { id: draftId }, select: { id: true } });
+      if (taken) return { success: false, error: "این فرم قبلاً ثبت شده است — صفحه را رفرش کنید" };
+    }
+
+    const imageUrl = input.imageUrl?.trim() || null;
+    if (imageUrl && !isAllowedImageUrl(imageUrl)) {
+      return { success: false, error: INVALID_IMAGE_ERROR };
+    }
+
     const category = await prisma.category.create({
       data: {
+        ...(draftId ? { id: draftId } : {}),
         name,
         slug,
-        imageUrl: input.imageUrl?.trim() || null,
+        imageUrl,
         readingDirection: input.readingDirection,
         defaultReadingMode: input.defaultReadingMode,
         showOnHomepage: input.showOnHomepage,
@@ -56,7 +76,7 @@ export async function createCategory(input: {
     return { success: true, data: { id: category.id } };
   } catch (err) {
     if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
-      return { success: false, error: "این اسلاگ قبلاً استفاده شده — یک اسلاگ دیگر انتخاب کنید" };
+      return { success: false, error: "این اسلاگ یا نام قبلاً استفاده شده — مقدار دیگری انتخاب کنید" };
     }
     return safeError(err);
   }
@@ -81,12 +101,20 @@ export async function updateCategory(
     const slug = slugify(input.slug.trim() || name);
     if (!name || !slug) return { success: false, error: "نام و اسلاگ الزامی است" };
 
+    const existing = await prisma.category.findUnique({ where: { id: categoryId }, select: { imageUrl: true } });
+    if (!existing) return { success: false, error: "دسته‌بندی یافت نشد" };
+
+    const imageUrl = input.imageUrl?.trim() || null;
+    if (imageUrl && imageUrl !== existing.imageUrl && !isAllowedImageUrl(imageUrl)) {
+      return { success: false, error: INVALID_IMAGE_ERROR };
+    }
+
     await prisma.category.update({
       where: { id: categoryId },
       data: {
         name,
         slug,
-        imageUrl: input.imageUrl?.trim() || null,
+        imageUrl,
         readingDirection: input.readingDirection,
         defaultReadingMode: input.defaultReadingMode,
         showOnHomepage: input.showOnHomepage,
@@ -102,7 +130,7 @@ export async function updateCategory(
     return { success: true };
   } catch (err) {
     if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
-      return { success: false, error: "این اسلاگ قبلاً استفاده شده — یک اسلاگ دیگر انتخاب کنید" };
+      return { success: false, error: "این اسلاگ یا نام قبلاً استفاده شده — مقدار دیگری انتخاب کنید" };
     }
     return safeError(err);
   }
@@ -145,6 +173,14 @@ export async function deleteCategory(categoryId: string): Promise<ActionResult> 
       };
     }
     await prisma.category.delete({ where: { id: categoryId } });
+
+    try {
+      const { deletePrefix } = await import("@/lib/s3");
+      await deletePrefix("public", `public/categories/${categoryId}`);
+    } catch (cleanupErr) {
+      console.error("[category-actions] asset cleanup failed", cleanupErr);
+    }
+
     revalidateTag("categories", "max");
     revalidatePath("/admin/categories");
     return { success: true };

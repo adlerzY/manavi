@@ -10,6 +10,7 @@ import { isAllowedImageUrl } from "@/lib/image-url";
 import { logAuditEvent } from "@/lib/audit-log";
 import { LICENSE_STATUS_LABELS_FA } from "@/lib/license";
 import { PLATFORM_LICENSE_ID, PLATFORM_PUBLISHER_ID, ensurePlatformLicense } from "@/lib/platform-license";
+import { ENTITY_ID_PATTERN } from "@/lib/asset-kinds";
 import { LicenseStatus, ChapterAccessType } from "@prisma/client";
 import type { Prisma, ReadingMode } from "@prisma/client";
 
@@ -23,8 +24,6 @@ const SLUG_PATTERN = /^[a-z0-9-]+$/;
 const TERRITORY_PATTERN = /^[A-Z0-9_-]{2,20}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Image processing is only needed when a comic cover changes. Keep unrelated
-// admin actions (especially license creation) independent of Sharp's native runtime.
 async function getDominantColor(imageUrl: string): Promise<string | null> {
   const { extractDominantColor } = await import("@/lib/color");
   return extractDominantColor(imageUrl);
@@ -239,6 +238,8 @@ export async function terminateLicense(licenseId: string): Promise<ActionResult>
 }
 
 export async function createComic(input: {
+  /** شناسه‌ی از پیش‌ساخته‌شده در فرم (draftId)؛ کاور و بنر از همان ابتدا زیر این شناسه آپلود شده‌اند */
+  id?: string;
   title: string;
   slug: string;
   description: string;
@@ -267,6 +268,15 @@ export async function createComic(input: {
       return { success: false, error: "تصویر بنر معتبر نیست" };
     }
 
+    const draftId = input.id?.trim() || undefined;
+    if (draftId) {
+      if (!ENTITY_ID_PATTERN.test(draftId)) {
+        return { success: false, error: "شناسه‌ی فرم نامعتبر است — صفحه را رفرش کنید" };
+      }
+      const taken = await prisma.comic.findUnique({ where: { id: draftId }, select: { id: true } });
+      if (taken) return { success: false, error: "این فرم قبلاً ثبت شده است — صفحه را رفرش کنید" };
+    }
+
     const licenseId = await resolveLicenseId(input.licenseId);
 
     const [license, category] = await Promise.all([
@@ -287,6 +297,7 @@ export async function createComic(input: {
 
     const comic = await prisma.comic.create({
       data: {
+        ...(draftId ? { id: draftId } : {}),
         title: input.title.trim(),
         slug: input.slug.trim(),
         description: input.description.trim(),
@@ -547,6 +558,8 @@ export async function deleteComic(comicId: string): Promise<ActionResult> {
       select: {
         title: true,
         slug: true,
+        coverImage: true,
+        bannerImage: true,
         chapters: { select: { id: true, pages: true, _count: { select: { saleLines: true } } } },
       },
     });
@@ -581,11 +594,25 @@ export async function deleteComic(comicId: string): Promise<ActionResult> {
       prisma.comic.delete({ where: { id: comicId } }),
     ]);
 
-    const keysToDelete = comic.chapters
-      .flatMap((c) => c.pages)
-      .filter((key): key is string => Boolean(key) && !key.startsWith("http://") && !key.startsWith("https://"));
-    const { deleteObjects } = await import("@/lib/s3");
-    await deleteObjects(keysToDelete).catch(() => {});
+    try {
+      const { deleteObjects, deletePrefix } = await import("@/lib/s3");
+
+      const legacyTargets = [
+        ...comic.chapters.flatMap((c) => c.pages),
+        comic.coverImage,
+        comic.bannerImage,
+      ].filter((key): key is string => Boolean(key) && !key.startsWith("http://"));
+      await deleteObjects(legacyTargets).catch((err) => console.error("[deleteComic] legacy cleanup failed", err));
+
+      await deletePrefix("public", `public/comics/${comicId}`).catch((err) =>
+        console.error("[deleteComic] public cleanup failed", err)
+      );
+      await deletePrefix("private", `private/comics/${comicId}`).catch((err) =>
+        console.error("[deleteComic] private cleanup failed", err)
+      );
+    } catch (cleanupErr) {
+      console.error("[deleteComic] storage cleanup failed", cleanupErr);
+    }
 
     after(() =>
       logAuditEvent({

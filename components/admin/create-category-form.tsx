@@ -13,6 +13,7 @@ const READING_MODES: ReadingMode[] = ["VERTICAL", "HORIZONTAL"];
 export function CreateCategoryForm() {
   const router = useRouter();
   const close = useCollapsibleClose();
+  const [draftId, setDraftId] = useState(() => crypto.randomUUID());
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -29,6 +30,7 @@ export function CreateCategoryForm() {
     setError(null);
 
     const result = await createCategory({
+      id: draftId,
       name,
       slug: slug || undefined,
       imageUrl: imageUrl || undefined,
@@ -43,6 +45,7 @@ export function CreateCategoryForm() {
       setName("");
       setSlug("");
       setImageUrl("");
+      setDraftId(crypto.randomUUID());
       router.refresh();
       setTimeout(() => close?.(), 1000);
     } else {
@@ -66,7 +69,7 @@ export function CreateCategoryForm() {
         </div>
       </div>
 
-      <CategoryImageUploader entityId={null} currentUrl={imageUrl} onUploaded={setImageUrl} />
+      <CategoryImageUploader entityId={draftId} currentUrl={imageUrl} onUploaded={setImageUrl} />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="space-y-1">

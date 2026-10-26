@@ -125,6 +125,7 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
   const failedCount = queue.items.filter((item) => item.status === "error").length;
   const doneCount = queue.items.filter((item) => item.status === "done").length;
   const allDone = queue.items.length > 0 && doneCount === queue.items.length;
+  const firstItemError = queue.items.find((item) => item.status === "error" && item.error)?.error ?? null;
 
   return (
     <form onSubmit={handleCommit} className="space-y-4 rounded-md border border-border bg-surface p-6">
@@ -194,6 +195,7 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
                 />
               ))}
             </div>
+            {failedCount > 0 && firstItemError && <p className="text-xs text-red-400">{firstItemError}</p>}
             {failedCount > 0 && !queue.isRunning && (
               <button type="button" onClick={() => queue.retryFailed()} className="rounded-md border border-red-400 px-3 py-1 text-xs text-red-400">
                 تلاش دوباره برای موارد ناموفق
