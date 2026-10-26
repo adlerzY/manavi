@@ -50,9 +50,13 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
           setError("هیچ تصویری در فایل ZIP یافت نشد");
           return;
         }
-        images = extracted.map((img) => ({ name: img.name, contentType: img.contentType, blob: img.blob }));
+        images = extracted.map((img) => ({
+          name: img.name,
+          contentType: img.contentType,
+          blob: img.blob,
+        }));
       } else {
-        const invalidType = files.find((f) => !ALLOWED_IMAGE_TYPES.has(f.type));
+        const invalidType = files.find((file) => !ALLOWED_IMAGE_TYPES.has(file.type));
         if (invalidType) {
           setStatus("error");
           setError(`فرمت فایل پشتیبانی نمی‌شود: ${invalidType.type || invalidType.name}`);
@@ -60,7 +64,7 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
         }
         images = files
           .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-          .map((f) => ({ name: f.name, contentType: f.type, blob: f }));
+          .map((file) => ({ name: file.name, contentType: file.type, blob: file }));
       }
     } catch {
       setStatus("error");
@@ -68,7 +72,7 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
       return;
     }
 
-    const oversized = images.find((img) => img.blob.size > MAX_PAGE_SIZE_BYTES);
+    const oversized = images.find((image) => image.blob.size > MAX_PAGE_SIZE_BYTES);
     if (oversized) {
       setStatus("error");
       setError(`حجم «${oversized.name}» بیش از ${MAX_PAGE_SIZE_BYTES / 1024 / 1024} مگابایت است`);
@@ -122,10 +126,10 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
     return <div className="rounded-md border border-border bg-surface p-6 text-sm text-text-muted">عنوانی موجود نیست — ابتدا یک عنوان بسازید.</div>;
   }
 
-  const failedCount = queue.items.filter((item) => item.status === "error").length;
+  const failedItems = queue.items.filter((item) => item.status === "error");
+  const failedCount = failedItems.length;
   const doneCount = queue.items.filter((item) => item.status === "done").length;
   const allDone = queue.items.length > 0 && doneCount === queue.items.length;
-  const firstItemError = queue.items.find((item) => item.status === "error" && item.error)?.error ?? null;
 
   return (
     <form onSubmit={handleCommit} className="space-y-4 rounded-md border border-border bg-surface p-6">
@@ -134,8 +138,8 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
       <div className="space-y-1">
         <label className="text-sm text-text-muted" htmlFor="chapter-comic">عنوان</label>
         <select id="chapter-comic" value={comicId} onChange={(e) => setComicId(e.target.value)} required className="w-full rounded-md border border-border bg-background px-3 py-2 text-text-main outline-none focus:border-primary">
-          {comics.map((c) => (
-            <option key={c.id} value={c.id}>{c.title}</option>
+          {comics.map((comic) => (
+            <option key={comic.id} value={comic.id}>{comic.title}</option>
           ))}
         </select>
       </div>
@@ -159,8 +163,8 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
           onChange={(e) => setAccessType(e.target.value as ChapterAccessType)}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-text-main outline-none focus:border-primary"
         >
-          {accessOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          {accessOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
       </div>
@@ -179,23 +183,44 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
         />
 
         {queue.items.length > 0 && (
-          <div className="space-y-2 rounded-md border border-border bg-background p-3">
+          <div className="space-y-3 rounded-md border border-border bg-background p-3">
             <p className="text-xs text-text-muted">
               {doneCount.toLocaleString("fa-IR")} از {queue.items.length.toLocaleString("fa-IR")} صفحه آپلود شد
               {failedCount > 0 && <span className="text-red-400"> — {failedCount.toLocaleString("fa-IR")} خطا</span>}
             </p>
+
             <div className="grid grid-cols-6 gap-1 sm:grid-cols-10">
               {queue.items.map((item) => (
                 <div
                   key={item.index}
                   title={item.name}
                   className={`h-2 rounded-full ${
-                    item.status === "done" ? "bg-primary" : item.status === "error" ? "bg-red-500" : item.status === "uploading" ? "bg-accent" : "bg-border"
+                    item.status === "done"
+                      ? "bg-primary"
+                      : item.status === "error"
+                        ? "bg-red-500"
+                        : item.status === "uploading"
+                          ? "bg-accent"
+                          : "bg-border"
                   }`}
                 />
               ))}
             </div>
-            {failedCount > 0 && firstItemError && <p className="text-xs text-red-400">{firstItemError}</p>}
+
+            {failedCount > 0 && (
+              <div className="space-y-3 rounded-md border border-red-400/30 bg-red-400/5 p-3">
+                <p className="text-xs font-medium text-red-400">جزئیات خطاها — این متن را برای بررسی ارسال کنید</p>
+                {failedItems.map((item) => (
+                  <div key={item.index} className="space-y-1 border-b border-red-400/20 pb-2 last:border-0 last:pb-0">
+                    <p className="text-xs font-medium text-red-400">
+                      صفحه {item.index + 1}: {item.name}
+                    </p>
+                    <pre className="whitespace-pre-wrap break-words text-xs text-red-300">{item.error}</pre>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {failedCount > 0 && !queue.isRunning && (
               <button type="button" onClick={() => queue.retryFailed()} className="rounded-md border border-red-400 px-3 py-1 text-xs text-red-400">
                 تلاش دوباره برای موارد ناموفق
