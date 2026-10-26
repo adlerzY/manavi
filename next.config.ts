@@ -30,6 +30,7 @@ function buildRemotePatterns(): RemotePatternEntry[] {
   if (publicBase) {
     const basePath = publicBase.pathname.replace(/\/+$/, "");
     add(publicBase.hostname, `${basePath}/public/**`);
+    add("**.public.blob.vercel-storage.com");
   }
 
   const cdn = parseUrl(process.env.STORAGE_CDN_BASE_URL);

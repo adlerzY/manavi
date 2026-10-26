@@ -1,3 +1,4 @@
+
 import "server-only";
 
 function parseUrl(raw: string | undefined): URL | null {
@@ -25,6 +26,7 @@ function getLegacyHosts(): Set<string> {
     const trimmed = host.trim();
     if (trimmed) hosts.add(trimmed);
   }
+
   return hosts;
 }
 
@@ -33,11 +35,21 @@ export function isAllowedImageUrl(url: string): boolean {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return false;
 
+    if (
+      parsed.hostname.endsWith(".public.blob.vercel-storage.com") &&
+      parsed.pathname.startsWith("/public/")
+    ) {
+      return true;
+    }
+
     const prefix = getManagedPublicPrefix();
     if (prefix) {
       const full = `${parsed.origin}${parsed.pathname}`;
-      if (full.startsWith(prefix) && full.slice(prefix.length).startsWith("public/")) return true;
+      if (full.startsWith(prefix) && full.slice(prefix.length).startsWith("public/")) {
+        return true;
+      }
     }
+
     return getLegacyHosts().has(parsed.hostname);
   } catch {
     return false;

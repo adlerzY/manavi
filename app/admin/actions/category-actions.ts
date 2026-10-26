@@ -175,8 +175,8 @@ export async function deleteCategory(categoryId: string): Promise<ActionResult> 
     await prisma.category.delete({ where: { id: categoryId } });
 
     try {
-      const { deletePrefix } = await import("@/lib/s3");
-      await deletePrefix("public", `public/categories/${categoryId}`);
+      const { deletePublicPrefix } = await import("@/lib/blob");
+      await deletePublicPrefix(`public/categories/${categoryId}`);
     } catch (cleanupErr) {
       console.error("[category-actions] asset cleanup failed", cleanupErr);
     }

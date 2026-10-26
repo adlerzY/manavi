@@ -598,20 +598,41 @@ export async function deleteComic(comicId: string): Promise<ActionResult> {
       const { deleteObjects, deletePrefix } = await import("@/lib/s3");
 
       const legacyTargets = [
-        ...comic.chapters.flatMap((c) => c.pages),
+        ...comic.chapters.flatMap((chapter) => chapter.pages),
         comic.coverImage,
         comic.bannerImage,
-      ].filter((key): key is string => Boolean(key) && !key.startsWith("http://"));
-      await deleteObjects(legacyTargets).catch((err) => console.error("[deleteComic] legacy cleanup failed", err));
+      ].filter(
+        (key): key is string =>
+          Boolean(key) && !key.startsWith("http://")
+      );
+
+      await deleteObjects(legacyTargets).catch((err) =>
+        console.error("[deleteComic] legacy cleanup failed", err)
+      );
 
       await deletePrefix("public", `public/comics/${comicId}`).catch((err) =>
-        console.error("[deleteComic] public cleanup failed", err)
+        console.error("[deleteComic] legacy public cleanup failed", err)
       );
+
       await deletePrefix("private", `private/comics/${comicId}`).catch((err) =>
         console.error("[deleteComic] private cleanup failed", err)
       );
     } catch (cleanupErr) {
-      console.error("[deleteComic] storage cleanup failed", cleanupErr);
+      console.error("[deleteComic] Backblaze cleanup failed", cleanupErr);
+    }
+
+    try {
+      const { deletePublicObjects, deletePublicPrefix } =
+        await import("@/lib/blob");
+
+      await deletePublicObjects([
+        comic.coverImage,
+        comic.bannerImage,
+      ]);
+
+      await deletePublicPrefix(`public/comics/${comicId}`);
+    } catch (cleanupErr) {
+      console.error("[deleteComic] Vercel Blob cleanup failed", cleanupErr);
     }
 
     after(() =>

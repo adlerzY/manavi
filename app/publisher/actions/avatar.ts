@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { uploadPublisherAvatar } from "@/lib/s3";
+import { uploadPublisherAvatar } from "@/lib/blob";
 import { describeUploadError } from "@/lib/upload-error";
 import { assertRealImage, InvalidImageError } from "@/lib/image-validate";
 

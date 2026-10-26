@@ -11,7 +11,11 @@ import {
   isAssetKind,
   type AssetKind,
 } from "@/lib/asset-kinds";
-import { putPublicObject, PublicStorageMisconfiguredError, StorageNotConfiguredError } from "@/lib/s3";
+import {
+  putPublicObject,
+  PublicBlobMisconfiguredError,
+  BlobStorageNotConfiguredError,
+} from "@/lib/blob";
 import { optimizeToWebp, ImageProcessorUnavailableError, UnsupportedImageError } from "@/lib/image-process";
 
 export const runtime = "nodejs";
@@ -137,11 +141,12 @@ export async function POST(req: NextRequest) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
-    if (err instanceof StorageNotConfiguredError || err instanceof PublicStorageMisconfiguredError) {
-      console.error("[asset-upload] storage config error:", err.message);
-      return fail(503, err.message);
-    }
-    console.error("[asset-upload] put failed", err);
-    return fail(502, "ذخیره‌ی فایل در فضای ذخیره‌سازی ناموفق بود — لاگ سرور را بررسی کنید");
+if (
+  err instanceof BlobStorageNotConfiguredError ||
+  err instanceof PublicBlobMisconfiguredError
+) {
+  console.error("[asset-upload] storage config error:", err.message);
+  return fail(503, err.message);
+}
   }
 }
