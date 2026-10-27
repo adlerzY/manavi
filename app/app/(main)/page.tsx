@@ -14,6 +14,7 @@ import type { HomeFeedComic } from "@/lib/home-feed";
 import { getHomeFeedComics } from "@/app/actions/home-feed";
 import { UserHeaderSection } from "@/components/home/user-header-async";
 import { UserHeaderSkeleton } from "@/components/home/user-header-skeleton";
+import { ContinueReadingSection } from "@/components/home/continue-reading-section";
 import { HeroCarousel } from "@/components/home/hero-carousel";
 import { NewestPopularSection } from "@/components/home/newest-popular-section";
 import { RecommendedSectionAsync } from "@/components/home/recommended-section-async";
@@ -56,15 +57,17 @@ export default async function AppHomePage() {
     categoryPreviewsPromise,
   ]);
 
-  const shuffledHeroComics = heroComics.length > 1 ? [...heroComics].sort(() => Math.random() - 0.5) : heroComics;
-
   return (
     <main className="min-h-screen bg-background">
       <Suspense fallback={<UserHeaderSkeleton />}>
         <UserHeaderSection />
       </Suspense>
 
-      <HeroCarousel comics={shuffledHeroComics} />
+      <Suspense fallback={null}>
+        <ContinueReadingSection allowedRatings={allowedRatings} />
+      </Suspense>
+
+      <HeroCarousel comics={heroComics} />
 
       <NewestPopularSection initialNewest={newest} initialPopular={popular} genres={genres.map((g) => ({ id: g.id, name: g.name }))} />
 

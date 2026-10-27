@@ -15,16 +15,32 @@ interface GenreFilterOption {
   name: string;
 }
 
+interface LanguageFilterOption {
+  code: string;
+  label: string;
+}
+
+interface AppliedFilters {
+  type: string | null;
+  genreIds: string[];
+  status: string | null;
+  access: string | null;
+  lang: string | null;
+}
+
 interface FilterDrawerProps {
   open: boolean;
   onClose: () => void;
   categories: CategoryFilterOption[];
   genres: GenreFilterOption[];
+  languages: LanguageFilterOption[];
   initialType: string | null;
   initialGenreIds: string[];
   initialStatus: string | null;
+  initialAccess: string | null;
+  initialLanguage: string | null;
   currentQuery: string;
-  onApply: (next: { type: string | null; genreIds: string[]; status: string | null }) => void;
+  onApply: (next: AppliedFilters) => void;
 }
 
 const STATUS_OPTIONS: { value: "ONGOING" | "COMPLETED" | "HIATUS"; label: string }[] = [
@@ -33,22 +49,36 @@ const STATUS_OPTIONS: { value: "ONGOING" | "COMPLETED" | "HIATUS"; label: string
   { value: "HIATUS", label: "متوقف‌شده" },
 ];
 
+const ACCESS_OPTIONS: { value: "FREE" | "COIN"; label: string }[] = [
+  { value: "FREE", label: "دارای چپتر رایگان" },
+  { value: "COIN", label: "دارای چپتر سکه‌ای" },
+];
+
 const COUNT_DEBOUNCE_MS = 400;
+
+function pillClass(active: boolean): string {
+  return `rounded-full border px-3 py-2 text-xs ${active ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted"}`;
+}
 
 export function FilterDrawer({
   open,
   onClose,
   categories,
   genres,
+  languages,
   initialType,
   initialGenreIds,
   initialStatus,
+  initialAccess,
+  initialLanguage,
   currentQuery,
   onApply,
 }: FilterDrawerProps) {
   const [type, setType] = useState<string | null>(initialType);
   const [genreIds, setGenreIds] = useState<string[]>(initialGenreIds);
   const [status, setStatus] = useState<string | null>(initialStatus);
+  const [access, setAccess] = useState<string | null>(initialAccess);
+  const [language, setLanguage] = useState<string | null>(initialLanguage);
   const [count, setCount] = useState<number | null>(null);
   const [loadingCount, setLoadingCount] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,7 +89,9 @@ export function FilterDrawer({
     setType(initialType);
     setGenreIds(initialGenreIds);
     setStatus(initialStatus);
-  }, [open, initialType, initialGenreIds, initialStatus]);
+    setAccess(initialAccess);
+    setLanguage(initialLanguage);
+  }, [open, initialType, initialGenreIds, initialStatus, initialAccess, initialLanguage]);
 
   useEffect(() => {
     if (!open) return;
@@ -73,6 +105,8 @@ export function FilterDrawer({
           categorySlug: type ?? undefined,
           genreIds,
           status: (status as "ONGOING" | "COMPLETED" | "HIATUS" | null) ?? undefined,
+          access: (access as "FREE" | "COIN" | null) ?? undefined,
+          language: language ?? undefined,
         });
         if (requestId === requestIdRef.current) setCount(result);
       } finally {
@@ -82,7 +116,7 @@ export function FilterDrawer({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [open, type, genreIds, status, currentQuery]);
+  }, [open, type, genreIds, status, access, language, currentQuery]);
 
   function toggleGenre(genreId: string) {
     setGenreIds((prev) => (prev.includes(genreId) ? prev.filter((id) => id !== genreId) : [...prev, genreId]));
@@ -92,6 +126,8 @@ export function FilterDrawer({
     setType(null);
     setGenreIds([]);
     setStatus(null);
+    setAccess(null);
+    setLanguage(null);
   }
 
   if (!open) return null;
@@ -105,7 +141,7 @@ export function FilterDrawer({
 
         <div className="flex items-center justify-between px-4 pt-2">
           <h2 className="text-sm font-medium text-text-main">فیلترها</h2>
-          <button onClick={onClose} aria-label="بستن" className="rounded-full p-1.5 text-text-muted hover:bg-background">
+          <button onClick={onClose} aria-label="بستن" className="rounded-full p-2.5 text-text-muted hover:bg-background">
             <X size={18} />
           </button>
         </div>
@@ -115,11 +151,9 @@ export function FilterDrawer({
             <div className="space-y-2">
               <h3 className="text-xs font-medium text-text-muted">نوع اثر</h3>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setType(null)} className={`rounded-full border px-3 py-1.5 text-xs ${type === null ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted"}`}>
-                  همه
-                </button>
+                <button type="button" onClick={() => setType(null)} className={pillClass(type === null)}>همه</button>
                 {categories.map((category) => (
-                  <button key={category.id} type="button" onClick={() => setType(category.slug)} className={`rounded-full border px-3 py-1.5 text-xs ${type === category.slug ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted"}`}>
+                  <button key={category.id} type="button" onClick={() => setType(category.slug)} className={pillClass(type === category.slug)}>
                     {category.name}
                   </button>
                 ))}
@@ -133,14 +167,11 @@ export function FilterDrawer({
             <div className="space-y-2">
               <h3 className="text-xs font-medium text-text-muted">ژانرها</h3>
               <div className="flex flex-wrap gap-2">
-                {genres.map((genre) => {
-                  const selected = genreIds.includes(genre.id);
-                  return (
-                    <button key={genre.id} type="button" onClick={() => toggleGenre(genre.id)} className={`rounded-full border px-3 py-1.5 text-xs ${selected ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted"}`}>
-                      {genre.name}
-                    </button>
-                  );
-                })}
+                {genres.map((genre) => (
+                  <button key={genre.id} type="button" onClick={() => toggleGenre(genre.id)} className={pillClass(genreIds.includes(genre.id))}>
+                    {genre.name}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -150,16 +181,45 @@ export function FilterDrawer({
           <div className="space-y-2">
             <h3 className="text-xs font-medium text-text-muted">وضعیت انتشار</h3>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => setStatus(null)} className={`rounded-full border px-3 py-1.5 text-xs ${status === null ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted"}`}>
-                همه
-              </button>
+              <button type="button" onClick={() => setStatus(null)} className={pillClass(status === null)}>همه</button>
               {STATUS_OPTIONS.map((option) => (
-                <button key={option.value} type="button" onClick={() => setStatus(option.value)} className={`rounded-full border px-3 py-1.5 text-xs ${status === option.value ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted"}`}>
+                <button key={option.value} type="button" onClick={() => setStatus(option.value)} className={pillClass(status === option.value)}>
                   {option.label}
                 </button>
               ))}
             </div>
           </div>
+
+          <div className="border-t border-border" />
+
+          <div className="space-y-2">
+            <h3 className="text-xs font-medium text-text-muted">نوع دسترسی</h3>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setAccess(null)} className={pillClass(access === null)}>همه</button>
+              {ACCESS_OPTIONS.map((option) => (
+                <button key={option.value} type="button" onClick={() => setAccess(option.value)} className={pillClass(access === option.value)}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {languages.length > 0 && (
+            <>
+              <div className="border-t border-border" />
+              <div className="space-y-2">
+                <h3 className="text-xs font-medium text-text-muted">زبان ترجمه</h3>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setLanguage(null)} className={pillClass(language === null)}>همه</button>
+                  {languages.map((option) => (
+                    <button key={option.code} type="button" onClick={() => setLanguage(option.code)} className={pillClass(language === option.code)}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }} className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-surface px-4 pt-3">
@@ -170,7 +230,7 @@ export function FilterDrawer({
           <button
             type="button"
             onClick={() => {
-              onApply({ type, genreIds, status });
+              onApply({ type, genreIds, status, access, lang: language });
               onClose();
             }}
             className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground"

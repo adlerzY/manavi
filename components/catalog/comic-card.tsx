@@ -10,6 +10,7 @@ interface ComicCardProps {
   completed?: boolean;
   priority?: boolean;
   readGrey?: boolean;
+  rating?: number | null;
 }
 
 export function ComicCard({
@@ -21,6 +22,7 @@ export function ComicCard({
   completed = false,
   priority = false,
   readGrey = false,
+  rating = null,
 }: ComicCardProps) {
   return (
     <Link href={`/app/comic/${slug}`} className="group block">
@@ -39,10 +41,15 @@ export function ComicCard({
           style={{ backgroundImage: `linear-gradient(to top, ${dominantColor ?? "#000000"}, transparent)` }}
         />
         {completed && (
-          <span className="absolute right-1.5 top-1.5 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] text-primary-foreground">
+          <span className="absolute right-1.5 top-1.5 rounded-full bg-primary/90 px-2 py-0.5 text-xs text-primary-foreground">
             پایان‌یافته
           </span>
         )}
+        {rating ? (
+          <span className="absolute left-1.5 top-1.5 rounded-full bg-black/70 px-2 py-0.5 text-xs text-white backdrop-blur-sm">
+            ★ {rating.toLocaleString("fa-IR", { maximumFractionDigits: 1 })}
+          </span>
+        ) : null}
         <div className="absolute inset-x-0 bottom-0 p-3">
           <p className="truncate text-sm font-medium text-white drop-shadow-sm">{title}</p>
           {latestChapter !== null && <p className="text-xs text-white/80 drop-shadow-sm">فصل {latestChapter}</p>}

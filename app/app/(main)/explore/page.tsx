@@ -8,7 +8,9 @@ import { TopSearches } from "@/components/catalog/top-searches";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
 import { getAllCategories } from "@/lib/categories";
 import { getAllGenres, getPopularGenres } from "@/lib/genres";
-import { resolveExploreWhere } from "@/lib/explore";
+import { resolveExploreWhere, fetchExploreComics, parseExploreSort, type ExploreAccess } from "@/lib/explore";
+import { languageLabel } from "@/lib/languages";
+import { averageScore } from "@/lib/rating";
 import { recordSearchTerm, getTopSearchTerms } from "@/app/actions/search";
 import { after } from "next/server";
 
@@ -19,52 +21,60 @@ const POPULAR_GENRE_LIMIT = 8;
 const PAGE_SIZE = 24;
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; type?: string; genres?: string; status?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    type?: string;
+    genres?: string;
+    status?: string;
+    page?: string;
+    sort?: string;
+    access?: string;
+    lang?: string;
+  }>;
 }
 
 export default async function ExplorePage({ searchParams }: PageProps) {
-  const { q, type, genres: genresParam, status: statusParam, page: pageParam } = await searchParams;
+  const {
+    q,
+    type,
+    genres: genresParam,
+    status: statusParam,
+    page: pageParam,
+    sort: sortParam,
+    access: accessParam,
+    lang: langParam,
+  } = await searchParams;
 
   const genreIds = genresParam ? genresParam.split(",").filter(Boolean) : [];
   const status = statusParam && VALID_STATUSES.includes(statusParam as ComicStatus) ? (statusParam as ComicStatus) : undefined;
+  const access: ExploreAccess | undefined = accessParam === "FREE" || accessParam === "COIN" ? accessParam : undefined;
+  const language = langParam && /^[a-z]{2,5}$/.test(langParam) ? langParam : undefined;
+  const sort = parseExploreSort(sortParam);
   const page = Math.max(1, Number(pageParam) || 1);
 
-  const showingResults = Boolean(q?.trim() || type || genreIds.length > 0 || status);
+  const showingResults = Boolean(q?.trim() || type || genreIds.length > 0 || status || access || language || sortParam);
 
   if (q?.trim()) {
     after(() => recordSearchTerm(q.trim()));
   }
 
   const allowedRatings = await getAllowedAgeRatings();
-  const exploreWhere = showingResults ? await resolveExploreWhere({ q, categorySlug: type, genreIds, status }) : null;
+  const exploreWhere = showingResults
+    ? await resolveExploreWhere({ q, categorySlug: type, genreIds, status, access, language })
+    : null;
 
-  const [categories, allGenres, popularGenres, topSearches, comics, total] = await Promise.all([
+  const [categories, allGenres, languageRows, popularGenres, topSearches, comics, total] = await Promise.all([
     getAllCategories(),
     getAllGenres(),
+    prisma.edition.findMany({
+      where: { status: "ACTIVE" },
+      distinct: ["language"],
+      select: { language: true },
+      orderBy: { language: "asc" },
+    }),
     showingResults ? Promise.resolve([]) : getPopularGenres(allowedRatings, POPULAR_GENRE_LIMIT),
     showingResults ? Promise.resolve([]) : getTopSearchTerms(10),
-    exploreWhere
-      ? prisma.comic.findMany({
-          where: exploreWhere,
-          orderBy: { createdAt: "desc" },
-          skip: (page - 1) * PAGE_SIZE,
-          take: PAGE_SIZE,
-          select: {
-            id: true,
-            title: true,
-            slug: true,
-            coverImage: true,
-            dominantColor: true,
-            status: true,
-            chapters: {
-              where: { publishedAt: { not: null } },
-              orderBy: { chapterNumber: "desc" },
-              take: 1,
-              select: { chapterNumber: true },
-            },
-          },
-        })
-      : Promise.resolve([]),
+    exploreWhere ? fetchExploreComics(exploreWhere, sort, page, PAGE_SIZE) : Promise.resolve([]),
     exploreWhere ? prisma.comic.count({ where: exploreWhere }) : Promise.resolve(0),
   ]);
 
@@ -76,6 +86,9 @@ export default async function ExplorePage({ searchParams }: PageProps) {
     if (type) qp.set("type", type);
     if (genreIds.length > 0) qp.set("genres", genreIds.join(","));
     if (status) qp.set("status", status);
+    if (access) qp.set("access", access);
+    if (language) qp.set("lang", language);
+    if (sortParam) qp.set("sort", sort);
     if (nextPage > 1) qp.set("page", String(nextPage));
     const qs = qp.toString();
     return `/app/explore${qs ? `?${qs}` : ""}`;
@@ -83,11 +96,12 @@ export default async function ExplorePage({ searchParams }: PageProps) {
 
   const categoryFilterOptions = categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
   const genreFilterOptions = allGenres.map((g) => ({ id: g.id, name: g.name }));
+  const languageFilterOptions = languageRows.map((row) => ({ code: row.language, label: languageLabel(row.language) }));
 
   return (
     <main className="min-h-screen bg-background px-4 py-8">
       <div className="mx-auto max-w-4xl">
-        <ExploreSearchClient categories={categoryFilterOptions} genres={genreFilterOptions} />
+        <ExploreSearchClient categories={categoryFilterOptions} genres={genreFilterOptions} languages={languageFilterOptions} />
 
         {!showingResults && (
           <div className="mt-6 space-y-8">
@@ -126,6 +140,7 @@ export default async function ExplorePage({ searchParams }: PageProps) {
                   dominantColor={comic.dominantColor}
                   latestChapter={comic.chapters[0]?.chapterNumber ?? null}
                   completed={comic.status === "COMPLETED"}
+                  rating={comic.ratingCount > 0 ? averageScore(comic.ratingTotal, comic.ratingCount) : null}
                   priority={index < 4}
                 />
               ))}
@@ -140,7 +155,7 @@ export default async function ExplorePage({ searchParams }: PageProps) {
               <div className="mt-6 flex items-center justify-between text-xs text-text-muted">
                 <Link
                   href={buildPageHref(page - 1)}
-                  className={`rounded-md border border-border px-3 py-1.5 ${
+                  className={`rounded-md border border-border px-3 py-2 ${
                     page <= 1 ? "pointer-events-none opacity-30" : "hover:border-primary"
                   }`}
                 >
@@ -151,7 +166,7 @@ export default async function ExplorePage({ searchParams }: PageProps) {
                 </span>
                 <Link
                   href={buildPageHref(page + 1)}
-                  className={`rounded-md border border-border px-3 py-1.5 ${
+                  className={`rounded-md border border-border px-3 py-2 ${
                     page >= totalPages ? "pointer-events-none opacity-30" : "hover:border-primary"
                   }`}
                 >
