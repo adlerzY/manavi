@@ -173,7 +173,7 @@ export function VerticalReader({
             e.stopPropagation();
             setAutoScroll((prev) => !prev);
           }}
-          className="rounded-full bg-black/70 p-2 text-white"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-white"
         >
           {autoScroll ? <PauseCircle size={24} /> : <PlayCircle size={24} />}
         </button>
@@ -181,7 +181,7 @@ export function VerticalReader({
           <select
             value={speedIndex}
             onChange={(e) => setSpeedIndex(Number(e.target.value))}
-            className="rounded-md bg-black/80 px-1 py-1 text-xs text-white"
+            className="h-10 rounded-md bg-black/80 px-2 text-sm text-white"
           >
             {SCROLL_SPEEDS.map((speed, index) => (
               <option key={speed} value={index} className="bg-neutral-900 text-white">

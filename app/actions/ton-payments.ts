@@ -97,7 +97,7 @@ export async function createTonCoinPayment(packageId: string, payerWalletAddress
   const user = await getSessionUser();
   if (!user) return { success: false, error: "برای خرید باید وارد شوید" };
   if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
-  if (!isTonConfigured()) return { success: false, error: "پرداخت هنوز پیکربندی نشده است" };
+  if (!isTonConfigured()) return { success: false, error: "پرداخت موقتاً در دسترس نیست" };
 
   const allowed = await checkRateLimit(`usdt-coins:${user.id}`, 5, { failClosed: true });
   if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است، کمی صبر کنید" };
@@ -133,7 +133,7 @@ export async function createTonCustomCoinPayment(coins: number, payerWalletAddre
   const user = await getSessionUser();
   if (!user) return { success: false, error: "برای خرید باید وارد شوید" };
   if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
-  if (!isTonConfigured()) return { success: false, error: "پرداخت هنوز پیکربندی نشده است" };
+  if (!isTonConfigured()) return { success: false, error: "پرداخت موقتاً در دسترس نیست" };
 
   const coinCost = await getChapterUnlockCoinCost();
   if (!Number.isInteger(coins) || coins < coinCost || coins > MAX_CUSTOM_COINS) {
@@ -177,7 +177,7 @@ export async function createTonDonationPayment(input: {
   const user = await getSessionUser();
   if (!user) return { success: false, error: "برای حمایت مالی باید وارد شوید" };
   if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
-  if (!isTonConfigured()) return { success: false, error: "پرداخت هنوز پیکربندی نشده است" };
+  if (!isTonConfigured()) return { success: false, error: "پرداخت موقتاً در دسترس نیست" };
   if (input.receiverId === user.id) return { success: false, error: "نمی‌توانید به خودتان حمایت مالی کنید" };
   if (!Number.isFinite(input.amountUsdt) || input.amountUsdt < MIN_DONATION_USDT || input.amountUsdt > MAX_DONATION_USDT) {
     return { success: false, error: `مبلغ حمایت باید بین ${MIN_DONATION_USDT} تا ${MAX_DONATION_USDT} USDT باشد` };

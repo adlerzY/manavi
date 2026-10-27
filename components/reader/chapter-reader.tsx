@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { ReadingMode } from "@prisma/client";
 import type { ReadingDirection } from "@/lib/reading";
 import { updateReadHistory } from "@/app/actions/read-history";
@@ -15,6 +15,7 @@ import { ReadingModeToggle } from "./reading-mode-toggle";
 import { EndOfChapter } from "./end-of-chapter";
 import { WatermarkOverlay } from "./watermark-overlay";
 import { DevToolsGuard } from "./dev-tools-guard";
+import { ReaderGuide } from "./reader-guide";
 import { BackButton } from "@/components/navigation/back-button";
 import { getStoredReadingModeOverride, setStoredReadingModeOverride } from "@/lib/reading";
 import type { StaffCreditItem } from "./chapter-staff-credits";
@@ -100,8 +101,13 @@ export function ChapterReader({
   const [effectiveMode, setEffectiveMode] = useState<ReadingMode>(readingMode);
   const [horizontalPage, setHorizontalPage] = useState(initialPage);
   const [verticalCurrentPage, setVerticalCurrentPage] = useState(initialPage);
+  const [endOpen, setEndOpen] = useState(false);
   const lastScrollYRef = useRef(0);
   const nextChapterPrefetchedRef = useRef(false);
+
+  useEffect(() => {
+    setEndOpen(false);
+  }, [chapterId]);
 
   useEffect(() => {
     const stored = getStoredReadingModeOverride(comicId);
@@ -159,6 +165,7 @@ export function ChapterReader({
 
   function handleModeChange(mode: ReadingMode) {
     setEffectiveMode(mode);
+    setEndOpen(false);
     setStoredReadingModeOverride(comicId, mode);
   }
 
@@ -176,21 +183,22 @@ export function ChapterReader({
   }, [renderMode, horizontalPage, persistProgress]);
 
   const onRequestPrevChapter = () => prevChapterId && router.push(`/app/read/${prevChapterId}`);
-  const onRequestNextChapter = () => nextChapterId && router.push(`/app/read/${nextChapterId}`);
+  const onRequestEnd = useCallback(() => setEndOpen(true), []);
 
   return (
     <div className="relative min-h-screen bg-black overscroll-none">
       <WatermarkOverlay label={watermarkLabel} />
       <DevToolsGuard />
+      <ReaderGuide />
 
       <div
         style={{ top: "var(--tg-content-safe-area-top, 0px)" }}
-        className={`fixed inset-x-0 z-40 flex items-center justify-between bg-black/80 px-2 py-3 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "-translate-y-full"}`}
+        className={`fixed inset-x-0 z-40 flex items-center justify-between bg-black/80 px-2 py-2 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "-translate-y-full"}`}
       >
         <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="reader" />
         <div className="text-center">
           <p className="text-sm font-medium text-white">{comicTitle}</p>
-          <p className="text-xs text-white/60">چپتر {chapterNumber}</p>
+          <p className="text-xs text-white/60">چپتر {chapterNumber.toLocaleString("fa-IR")}</p>
         </div>
         <ReadingModeToggle mode={effectiveMode} onChange={handleModeChange} />
       </div>
@@ -215,9 +223,9 @@ export function ChapterReader({
           direction={direction}
           onPageChange={setHorizontalPage}
           onRequestPrevChapter={onRequestPrevChapter}
-          onRequestNextChapter={onRequestNextChapter}
+          onRequestNextChapter={onRequestEnd}
           hasPrevChapter={Boolean(prevChapterId)}
-          hasNextChapter={Boolean(nextChapterId)}
+          hasNextChapter
           onToggleControls={toggleControls}
         />
       )}
@@ -229,9 +237,9 @@ export function ChapterReader({
           direction={direction}
           onPageChange={setHorizontalPage}
           onRequestPrevChapter={onRequestPrevChapter}
-          onRequestNextChapter={onRequestNextChapter}
+          onRequestNextChapter={onRequestEnd}
           hasPrevChapter={Boolean(prevChapterId)}
-          hasNextChapter={Boolean(nextChapterId)}
+          hasNextChapter
           onToggleControls={toggleControls}
         />
       )}
@@ -249,23 +257,57 @@ export function ChapterReader({
         />
       )}
 
+      {renderMode !== "VERTICAL" && endOpen && (
+        <div
+          style={{ paddingTop: "var(--tg-content-safe-area-top, 0px)" }}
+          className="fixed inset-0 z-50 overflow-y-auto bg-black"
+        >
+          <div className="flex justify-start px-2 py-3">
+            <button
+              type="button"
+              onClick={() => setEndOpen(false)}
+              aria-label="بازگشت به خواندن"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <EndOfChapter
+            chapterId={chapterId}
+            comicSlug={comicSlug}
+            nextChapterId={nextChapterId}
+            reactionSummary={reactionSummary}
+            initialUserReaction={initialUserReaction}
+            isAuthenticated={isAuthenticated}
+            showAd={showAd}
+            staffCredits={staffCredits}
+          />
+        </div>
+      )}
+
       <div
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))" }}
         className={`fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-black/80 px-4 py-3 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "translate-y-full"}`}
       >
         {prevChapterId ? (
-          <Link href={`/app/read/${prevChapterId}`} className="rounded-md bg-white/10 p-2 text-white"><ChevronRight size={20} /></Link>
-        ) : <div className="w-9" />}
+          <Link href={`/app/read/${prevChapterId}`} aria-label="چپتر قبلی" className="flex h-11 w-11 items-center justify-center rounded-md bg-white/10 text-white">
+            <ChevronRight size={20} />
+          </Link>
+        ) : <div className="w-11" />}
 
-        <select value={chapterId} onChange={(e) => router.push(`/app/read/${e.target.value}`)} className="flex-1 rounded-md bg-white/10 px-2 py-2 text-sm text-white">
+        <select value={chapterId} onChange={(e) => router.push(`/app/read/${e.target.value}`)} className="h-11 flex-1 rounded-md bg-white/10 px-3 text-sm text-white">
           {chapterOptions.map((option) => (
-            <option key={option.id} value={option.id} className="bg-neutral-900 text-white">چپتر {option.chapterNumber}{option.title ? ` — ${option.title}` : ""}</option>
+            <option key={option.id} value={option.id} className="bg-neutral-900 text-white">
+              چپتر {option.chapterNumber.toLocaleString("fa-IR")}{option.title ? ` — ${option.title}` : ""}
+            </option>
           ))}
         </select>
 
         {nextChapterId ? (
-          <Link href={`/app/read/${nextChapterId}`} className="rounded-md bg-white/10 p-2 text-white"><ChevronLeft size={20} /></Link>
-        ) : <div className="w-9" />}
+          <Link href={`/app/read/${nextChapterId}`} aria-label="چپتر بعدی" className="flex h-11 w-11 items-center justify-center rounded-md bg-white/10 text-white">
+            <ChevronLeft size={20} />
+          </Link>
+        ) : <div className="w-11" />}
       </div>
     </div>
   );

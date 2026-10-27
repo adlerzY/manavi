@@ -59,6 +59,7 @@ export function CustomCoinPurchase({ authenticated, coinCost, coinPriceUsdt, tom
         disabled={!authenticated || !valid}
         createPayment={(walletAddress) => createTonCustomCoinPayment(coins, walletAddress)}
         onPaid={() => (redirectTo ? router.push(redirectTo) : router.refresh())}
+        successMessage="پرداخت تایید شد — سکه به حساب شما اضافه شد"
       />
       {!authenticated && <p className="text-center text-xs text-text-muted">برای خرید باید از داخل تلگرام وارد شوید.</p>}
     </div>

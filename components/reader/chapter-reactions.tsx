@@ -52,12 +52,13 @@ export function ChapterReactions({
             key={emoji}
             onClick={() => handleClick(emoji)}
             disabled={!isAuthenticated || isPending}
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors disabled:opacity-50 ${
+            aria-pressed={active}
+            className={`flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-base transition-colors disabled:opacity-50 ${
               active ? "border-primary bg-primary/10 text-primary" : "border-border bg-surface text-text-main"
             }`}
           >
             <span>{emoji}</span>
-            {count > 0 && <span className="text-xs text-text-muted">{count}</span>}
+            {count > 0 && <span className="text-sm text-text-muted">{count.toLocaleString("fa-IR")}</span>}
           </button>
         );
       })}

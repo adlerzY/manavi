@@ -41,6 +41,9 @@ export function CoinBalanceHeader({ coinsBalance, authenticated }: CoinBalanceHe
               <Link href="/app/shop" onClick={() => setOpen(false)} className="block rounded-md bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground">
                 شارژ سکه
               </Link>
+              <Link href="/app/wallet" onClick={() => setOpen(false)} className="block rounded-md border border-border px-4 py-3 text-center text-sm text-text-main">
+                تاریخچه تراکنش‌ها
+              </Link>
             </div>
           </div>
         </div>

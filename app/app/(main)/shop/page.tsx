@@ -13,6 +13,8 @@ interface PageProps {
 
 export default async function ShopPage({ searchParams }: PageProps) {
   const { redirect } = await searchParams;
+  const safeRedirect = redirect && redirect.startsWith("/app/") ? redirect : undefined;
+
   const [user, coinPackages, coinCost, coinPriceUsdt, tomanPerUsdt] = await Promise.all([
     getSessionUser(),
     getActiveCoinPackages(),
@@ -31,20 +33,25 @@ export default async function ShopPage({ searchParams }: PageProps) {
             <p className="mt-1 text-sm text-text-muted">
               موجودی سکه شما: {(user?.coinsBalance ?? 0).toLocaleString("fa-IR")}
             </p>
-            <Link href="/buy-with-ton" className="mt-2 inline-block text-xs text-primary underline">
-              آموزش خرید
-            </Link>
+            <div className="mt-2 flex flex-wrap items-center gap-4">
+              <Link href="/app/wallet" className="text-sm text-primary underline">
+                تاریخچه تراکنش‌ها
+              </Link>
+              <Link href="/buy-with-ton" className="text-sm text-primary underline">
+                آموزش خرید
+              </Link>
+            </div>
           </div>
 
           <div className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm leading-7 text-text-muted">
             سکه تنها ارز داخل ماناویه؛ باهاش می‌تونی <span className="text-text-main">چپترهای سکه‌ای رو باز کنی</span> و{" "}
             <span className="text-text-main">مستقیم از مترجم‌ها و طراح‌ها حمایت مالی (دونیت) کنی</span>. هر چپتر سکه‌ای دقیقاً{" "}
-            <span className="font-medium text-primary">{coinCost.toLocaleString("fa-IR")} سکه</span> هزینه داره — این قیمت روی همه‌ی چپترهای پولی مناوی یکسانه.
+            <span className="font-medium text-primary">{coinCost.toLocaleString("fa-IR")} سکه</span> هزینه داره — این قیمت روی همه‌ی چپترهای پولی ماناوی یکسانه.
           </div>
 
           {!tonConfigured && (
             <div className="rounded-md border border-accent/40 bg-accent/5 px-4 py-3 text-sm text-accent">
-              پرداخت با کیف پول تون هنوز در تنظیمات محیطی پیکربندی نشده — خرید موقتاً غیرفعال است.
+              پرداخت موقتاً در دسترس نیست. کمی بعد دوباره تلاش کنید.
             </div>
           )}
 
@@ -54,7 +61,7 @@ export default async function ShopPage({ searchParams }: PageProps) {
               packages={coinPackages}
               authenticated={Boolean(user)}
               tonConfigured={tonConfigured}
-              redirectTo={redirect}
+              redirectTo={safeRedirect}
               coinCost={coinCost}
               tomanPerUsdt={tomanPerUsdt}
             />
@@ -68,7 +75,7 @@ export default async function ShopPage({ searchParams }: PageProps) {
                 coinCost={coinCost}
                 coinPriceUsdt={coinPriceUsdt}
                 tomanPerUsdt={tomanPerUsdt}
-                redirectTo={redirect}
+                redirectTo={safeRedirect}
               />
             </section>
           )}

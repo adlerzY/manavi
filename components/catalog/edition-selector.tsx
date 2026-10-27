@@ -13,6 +13,15 @@ interface EditionSelectorProps {
   selectedId: string;
 }
 
+function Meta({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-text-muted">{label}</dt>
+      <dd className="mt-0.5 text-sm text-text-main">{value}</dd>
+    </div>
+  );
+}
+
 export function EditionSelector({ slug, editions, selectedId }: EditionSelectorProps) {
   const selected = editions.find((edition) => edition.id === selectedId) ?? editions[0];
   if (!selected) return null;
@@ -23,14 +32,16 @@ export function EditionSelector({ slug, editions, selectedId }: EditionSelectorP
     .sort((a, b) => adjustedScore(b.ratingTotal, b.ratingCount) - adjustedScore(a.ratingTotal, a.ratingCount));
 
   return (
-    <div className="space-y-3 rounded-md border border-border bg-surface p-3">
+    <section className="space-y-3 rounded-md border border-border bg-surface p-3">
+      <h2 className="text-sm font-medium text-text-main">انتخاب نسخه و مترجم</h2>
+
       {languages.length > 1 && (
         <div className="flex flex-wrap gap-2">
           {languages.map((language) => (
             <Link
               key={language}
               href={`/app/comic/${slug}?lang=${language}`}
-              className={`rounded-full px-3 py-1 text-xs ${
+              className={`rounded-full px-4 py-2 text-xs ${
                 language === selected.language ? "bg-primary text-primary-foreground" : "bg-background text-text-muted"
               }`}
             >
@@ -47,7 +58,8 @@ export function EditionSelector({ slug, editions, selectedId }: EditionSelectorP
             <Link
               key={edition.id}
               href={`/app/comic/${slug}?edition=${edition.id}`}
-              className={`block rounded-md border p-3 ${
+              aria-current={active ? "true" : undefined}
+              className={`block space-y-3 rounded-md border p-3 ${
                 active ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/60"
               }`}
             >
@@ -56,24 +68,38 @@ export function EditionSelector({ slug, editions, selectedId }: EditionSelectorP
                   {edition.title ?? edition.publisherName}
                   {edition.title && <span className="mr-1 text-xs text-text-muted">— {edition.publisherName}</span>}
                 </p>
-                {edition.status === "ARCHIVED" && (
-                  <span className="rounded-full bg-border px-2 py-0.5 text-[10px] text-text-muted">آرشیو</span>
-                )}
+                <div className="flex flex-shrink-0 items-center gap-1.5">
+                  {active && <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">انتخاب‌شده</span>}
+                  {edition.status === "ARCHIVED" && (
+                    <span className="rounded-full bg-border px-2.5 py-1 text-xs text-text-muted">آرشیو</span>
+                  )}
+                </div>
               </div>
-              <p className="mt-1 text-xs text-text-muted">
-                {edition.ratingCount > 0
-                  ? `★ ${averageScore(edition.ratingTotal, edition.ratingCount).toLocaleString("fa-IR", { maximumFractionDigits: 1 })} (${edition.ratingCount.toLocaleString("fa-IR")} رأی)`
-                  : "هنوز امتیازی ثبت نشده"}
-                {" · "}
-                {edition.chapterCount.toLocaleString("fa-IR")} چپتر
-                {" · "}
-                هر چپتر سکه‌ای {edition.price.toLocaleString("fa-IR")} سکه
-                {edition.latestPublishedAt && ` · آخرین انتشار ${edition.latestPublishedAt.toLocaleDateString("fa-IR")}`}
+
+              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Meta label="زبان ترجمه" value={languageLabel(edition.language)} />
+                <Meta
+                  label="کیفیت ترجمه"
+                  value={
+                    edition.ratingCount > 0
+                      ? `★ ${averageScore(edition.ratingTotal, edition.ratingCount).toLocaleString("fa-IR", { maximumFractionDigits: 1 })} (${edition.ratingCount.toLocaleString("fa-IR")} رأی)`
+                      : "بدون امتیاز"
+                  }
+                />
+                <Meta label="چپتر منتشرشده" value={edition.chapterCount.toLocaleString("fa-IR")} />
+                <Meta
+                  label="آخرین به‌روزرسانی"
+                  value={edition.latestPublishedAt ? edition.latestPublishedAt.toLocaleDateString("fa-IR") : "—"}
+                />
+              </dl>
+
+              <p className="text-xs text-text-muted">
+                هزینه باز کردن هر چپتر سکه‌ای: <span className="text-accent">{edition.price.toLocaleString("fa-IR")} سکه</span>
               </p>
             </Link>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
