@@ -4,7 +4,7 @@ export interface ChapterAccessInfo {
   id: string;
   chapterNumber: number;
   title: string | null;
-  publishedAt: Date | null;
+  publishedAt: string | null;
   manuallyLocked: boolean;
   locked: boolean;
   accessType: ChapterAccessType;

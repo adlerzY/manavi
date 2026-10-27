@@ -5,7 +5,7 @@ export interface ChapterListItem {
   id: string;
   chapterNumber: number;
   title: string | null;
-  publishedAt: Date | null;
+  publishedAt: string  | null;
   isCoin: boolean;
   owned: boolean;
   isRead: boolean;
@@ -44,7 +44,9 @@ export function ChapterList({ chapters, price }: ChapterListProps) {
               {chapter.title ? ` — ${chapter.title}` : ""}
             </p>
             {chapter.publishedAt && (
-              <p className="mt-0.5 text-xs text-text-muted">{chapter.publishedAt.toLocaleDateString("fa-IR")}</p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                {new Date(chapter.publishedAt).toLocaleDateString("fa-IR")}
+              </p>
             )}
           </div>
 

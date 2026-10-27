@@ -51,7 +51,7 @@ async function fetchChapterAccessList(editionId: string): Promise<ChapterAccessI
       id: chapter.id,
       chapterNumber: chapter.chapterNumber,
       title: chapter.title,
-      publishedAt: chapter.publishedAt,
+      publishedAt: chapter.publishedAt?.toISOString() ?? null,
       manuallyLocked: chapter.isLocked,
       locked: !isFree,
       accessType: chapter.accessType,
