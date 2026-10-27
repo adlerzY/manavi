@@ -136,8 +136,7 @@ export default async function ReadChapterPage({ params }: PageProps) {
 
   const showAd = chapter.accessType === "FREE";
 
-  const entry = accessList.find((c) => c.id === chapterId);
-  const locked = entry?.locked ?? false;
+  const locked = chapter.accessType === "COIN";
 
   if (locked) {
     const hasAccess = await userHasChapterAccess(user?.id ?? null, chapterId, user?.role);

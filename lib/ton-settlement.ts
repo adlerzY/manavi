@@ -71,7 +71,10 @@ async function applySettlementSideEffects(
   if (transaction.type === "COIN_PURCHASE") {
     let paidCoins = 0;
     let bonusCoins = 0;
-    if (transaction.coinPackageId) {
+    if (transaction.packageCoins != null) {
+      paidCoins = transaction.packageCoins;
+      bonusCoins = transaction.packageBonusCoins ?? 0;
+    } else if (transaction.coinPackageId) {
       const pack = await tx.coinPackage.findUnique({ where: { id: transaction.coinPackageId } });
       if (pack) {
         paidCoins = pack.coins;
@@ -157,7 +160,7 @@ export async function settlePendingTonTransaction(transaction: Transaction): Pro
 
   let transactions;
   try {
-    transactions = await fetchAccountTransactions(toOwnerAddress);
+    transactions = await fetchAccountTransactions(toOwnerAddress, Math.floor(transaction.createdAt.getTime() / 1000) - 60);
   } catch (err) {
     if (err instanceof TonVerificationError) return "PENDING";
     throw err;
@@ -207,7 +210,8 @@ export async function settlePendingTonTransactions(
 
     let chainTransactions;
     try {
-      chainTransactions = await fetchAccountTransactions(toOwnerAddress);
+      const oldest = Math.min(...group.map((t) => t.createdAt.getTime()));
+      chainTransactions = await fetchAccountTransactions(toOwnerAddress, Math.floor(oldest / 1000) - 60);
     } catch {
       continue;
     }

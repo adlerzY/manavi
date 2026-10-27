@@ -18,13 +18,17 @@ function getLimiter(limit: number): Ratelimit {
   return limiter;
 }
 
-export async function checkRateLimit(key: string, limit: number): Promise<boolean> {
+export async function checkRateLimit(
+  key: string,
+  limit: number,
+  options?: { failClosed?: boolean }
+): Promise<boolean> {
   if (!isRedisConfigured) return true;
 
   try {
     const { success } = await getLimiter(limit).limit(key);
     return success;
   } catch {
-    return true;
+    return !options?.failClosed;
   }
 }

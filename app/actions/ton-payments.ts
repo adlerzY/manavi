@@ -41,6 +41,8 @@ async function createPendingTransaction(input: {
   message?: string;
   coinPackageId?: string;
   customCoins?: number;
+  packageCoins?: number;
+  packageBonusCoins?: number;
   payoutPublisherId?: string;
 }) {
   const transaction = await prisma.transaction.create({
@@ -54,6 +56,8 @@ async function createPendingTransaction(input: {
       message: input.message,
       coinPackageId: input.coinPackageId,
       customCoins: input.customCoins,
+      packageCoins: input.packageCoins,
+      packageBonusCoins: input.packageBonusCoins,
       payoutPublisherId: input.payoutPublisherId,
     },
   });
@@ -95,7 +99,7 @@ export async function createTonCoinPayment(packageId: string, payerWalletAddress
   if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
   if (!isTonConfigured()) return { success: false, error: "پرداخت هنوز پیکربندی نشده است" };
 
-  const allowed = await checkRateLimit(`usdt-coins:${user.id}`, 5);
+  const allowed = await checkRateLimit(`usdt-coins:${user.id}`, 5, { failClosed: true });
   if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است، کمی صبر کنید" };
 
   const pack = await findActiveCoinPackage(packageId);
@@ -108,6 +112,8 @@ export async function createTonCoinPayment(packageId: string, payerWalletAddress
       amountUsdt: Number(pack.priceUsdt),
       payerId: user.id,
       coinPackageId: pack.id,
+      packageCoins: pack.coins,
+      packageBonusCoins: pack.bonusCoins,
     });
     const data = buildPaymentPayload({
       jettonWalletAddress,
@@ -134,7 +140,7 @@ export async function createTonCustomCoinPayment(coins: number, payerWalletAddre
     return { success: false, error: `تعداد سکه باید حداقل ${coinCost.toLocaleString("fa-IR")} و حداکثر ${MAX_CUSTOM_COINS.toLocaleString("fa-IR")} باشد` };
   }
 
-  const allowed = await checkRateLimit(`usdt-coins-custom:${user.id}`, 5);
+  const allowed = await checkRateLimit(`usdt-coins-custom:${user.id}`, 5, { failClosed: true });
   if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است، کمی صبر کنید" };
 
   const coinPriceUsdt = await getCoinPriceUsdt();
@@ -177,7 +183,7 @@ export async function createTonDonationPayment(input: {
     return { success: false, error: `مبلغ حمایت باید بین ${MIN_DONATION_USDT} تا ${MAX_DONATION_USDT} USDT باشد` };
   }
 
-  const allowed = await checkRateLimit(`usdt-donate:${user.id}`, 5);
+  const allowed = await checkRateLimit(`usdt-donate:${user.id}`, 5, { failClosed: true });
   if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است، کمی صبر کنید" };
 
   const receiver = await prisma.user.findFirst({

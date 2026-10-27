@@ -14,18 +14,7 @@ import {
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import type { Role } from "@prisma/client";
 
-const ROLE_OPTIONS: { value: Role; label: string }[] = [
-  { value: "USER", label: "کاربر عادی" },
-  { value: "VIP", label: "کاربر ویژه" },
-  { value: "STAFF", label: "عضو تیم" },
-  { value: "PUBLISHER", label: "ناشر" },
-  { value: "ADMIN", label: "مدیر" },
-];
-
-interface Notice {
-  type: "error" | "info";
-  text: string;
-}
+const ROLES: Role[] = ["USER", "VIP", "STAFF", "PUBLISHER", "ADMIN"];
 
 export function UserManagementTable({ initialUsers, initialTotal }: { initialUsers: UserSearchResult[]; initialTotal: number }) {
   const [users, setUsers] = useState(initialUsers);
@@ -39,7 +28,6 @@ export function UserManagementTable({ initialUsers, initialTotal }: { initialUse
   const [coinAmount, setCoinAmount] = useState("");
   const [coinNote, setCoinNote] = useState("");
   const [banReason, setBanReason] = useState("");
-  const [notice, setNotice] = useState<Notice | null>(null);
 
   function runSearch(nextPage = 1) {
     startTransition(async () => {
@@ -51,15 +39,13 @@ export function UserManagementTable({ initialUsers, initialTotal }: { initialUse
   }
 
   function handleRoleChange(userId: string, role: Role) {
-    setNotice(null);
+    if (role === "ADMIN" || role === "PUBLISHER") {
+      const label = role === "ADMIN" ? "ادمین" : "ناشر";
+      if (!window.confirm(`این کاربر به نقش «${label}» ارتقا پیدا می‌کند و به بخش‌های حساس دسترسی می‌گیرد. مطمئنی؟`)) return;
+    }
     startTransition(async () => {
       const result = await setUserRole(userId, role);
-      if (!result.success) {
-        setNotice({ type: "error", text: result.error ?? "خطا در تغییر نقش" });
-        return;
-      }
-      if (result.data?.note) setNotice({ type: "info", text: result.data.note });
-      runSearch(page);
+      if (result.success) runSearch(page);
     });
   }
 
@@ -115,8 +101,8 @@ export function UserManagementTable({ initialUsers, initialTotal }: { initialUse
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جستجوی نام یا یوزرنیم" className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main outline-none focus:border-primary" />
         <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as Role | "")} className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main">
           <option value="">همه نقش‌ها</option>
-          {ROLE_OPTIONS.map((r) => (
-            <option key={r.value} value={r.value}>{r.label}</option>
+          {ROLES.map((r) => (
+            <option key={r} value={r}>{r}</option>
           ))}
         </select>
         <label className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main">
@@ -128,16 +114,6 @@ export function UserManagementTable({ initialUsers, initialTotal }: { initialUse
         </button>
       </div>
 
-      {notice && (
-        <p
-          className={`rounded-md border px-3 py-2 text-xs leading-6 ${
-            notice.type === "error" ? "border-red-400 bg-red-500/10 text-red-400" : "border-primary/40 bg-primary/5 text-primary"
-          }`}
-        >
-          {notice.text}
-        </p>
-      )}
-
       <div className="divide-y divide-border rounded-md border border-border">
         {users.map((u) => (
           <div key={u.id} className="space-y-2 px-4 py-3">
@@ -148,8 +124,8 @@ export function UserManagementTable({ initialUsers, initialTotal }: { initialUse
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select value={u.role} onChange={(e) => handleRoleChange(u.id, e.target.value as Role)} disabled={isPending} className="rounded-md border border-border bg-background px-2 py-1 text-xs text-text-main">
-                  {ROLE_OPTIONS.map((r) => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
                 {u.isBanned ? (

@@ -15,8 +15,8 @@ const USDT_DECIMALS = 6;
 const JETTON_TRANSFER_OPCODE = 0x0f8a7ea5;
 const JETTON_TRANSFER_NOTIFICATION_OPCODE = 0x7362d09c;
 
-export const JETTON_TRANSFER_GAS_NANOTON = 60_000_000n; 
-export const JETTON_FORWARD_NANOTON = 20_000_000n; 
+export const JETTON_TRANSFER_GAS_NANOTON = 60_000_000n;
+export const JETTON_FORWARD_NANOTON = 20_000_000n;
 
 export function isTonConfigured(): boolean {
   return Boolean(PLATFORM_TON_ADDRESS);
@@ -102,9 +102,9 @@ export function buildJettonTransferPayload(input: BuildJettonTransferInput): str
     .storeCoins(input.jettonAmountUnits)
     .storeAddress(Address.parse(input.toOwnerAddress))
     .storeAddress(Address.parse(input.responseAddress))
-    .storeBit(false) 
+    .storeBit(false)
     .storeCoins(JETTON_FORWARD_NANOTON)
-    .storeBit(true) 
+    .storeBit(true)
     .storeRef(commentCell)
     .endCell();
 
@@ -112,6 +112,7 @@ export function buildJettonTransferPayload(input: BuildJettonTransferInput): str
 }
 export interface TonApiTransaction {
   hash: string;
+  lt?: number;
   utime: number;
   in_msg?: {
     source?: { address: string };
@@ -127,28 +128,48 @@ interface TonApiTransactionsResponse {
 }
 
 const TX_FETCH_CACHE_TTL_MS = 4000;
+const TX_PAGE_SIZE = 100;
+const TX_MAX_PAGES = 5;
 const txFetchCache = new Map<string, { promise: Promise<TonApiTransaction[]>; expiresAt: number }>();
 
-export async function fetchAccountTransactions(address: string): Promise<TonApiTransaction[]> {
+async function fetchTransactionsPage(address: string, beforeLt?: number): Promise<TonApiTransaction[]> {
+  const query = new URLSearchParams({ limit: String(TX_PAGE_SIZE) });
+  if (beforeLt) query.set("before_lt", String(beforeLt));
+  const url = `${TONAPI_BASE}/v2/blockchain/accounts/${address}/transactions?${query.toString()}`;
+  const res = await fetch(url, {
+    headers: TONAPI_KEY ? { Authorization: `Bearer ${TONAPI_KEY}` } : undefined,
+    cache: "no-store",
+  });
+  if (!res.ok) throw new TonVerificationError(`TonAPI request failed (${res.status})`);
+  const body = (await res.json()) as TonApiTransactionsResponse;
+  return body.transactions ?? [];
+}
+
+export async function fetchAccountTransactions(address: string, sinceUnixTime?: number): Promise<TonApiTransaction[]> {
   const now = Date.now();
-  const cached = txFetchCache.get(address);
+  const cacheKey = `${address}:${sinceUnixTime ?? 0}`;
+  const cached = txFetchCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
     return cached.promise;
   }
 
   const promise = (async () => {
-    const url = `${TONAPI_BASE}/v2/blockchain/accounts/${address}/transactions?limit=50`;
-    const res = await fetch(url, {
-      headers: TONAPI_KEY ? { Authorization: `Bearer ${TONAPI_KEY}` } : undefined,
-      cache: "no-store",
-    });
-    if (!res.ok) throw new TonVerificationError(`TonAPI request failed (${res.status})`);
-    const body = (await res.json()) as TonApiTransactionsResponse;
-    return body.transactions ?? [];
+    const collected: TonApiTransaction[] = [];
+    let beforeLt: number | undefined;
+    for (let page = 0; page < TX_MAX_PAGES; page += 1) {
+      const batch = await fetchTransactionsPage(address, beforeLt);
+      collected.push(...batch);
+      if (batch.length < TX_PAGE_SIZE) break;
+      const last = batch[batch.length - 1];
+      if (!last.lt) break;
+      if (sinceUnixTime && last.utime < sinceUnixTime) break;
+      beforeLt = last.lt;
+    }
+    return collected;
   })();
 
-  txFetchCache.set(address, { promise, expiresAt: now + TX_FETCH_CACHE_TTL_MS });
-  promise.catch(() => txFetchCache.delete(address));
+  txFetchCache.set(cacheKey, { promise, expiresAt: now + TX_FETCH_CACHE_TTL_MS });
+  promise.catch(() => txFetchCache.delete(cacheKey));
 
   return promise;
 }
@@ -173,10 +194,10 @@ function extractJettonNotification(tx: TonApiTransaction): { jettonAmountUnits: 
     if (msg.raw_body) {
       const cell = Cell.fromBoc(Buffer.from(msg.raw_body, "base64"))[0];
       const slice = cell.beginParse();
-      slice.loadUint(32); // op
-      slice.loadUint(64); // query_id
+      slice.loadUint(32);
+      slice.loadUint(64);
       const amount = slice.loadCoins();
-      slice.loadAddress(); // sender
+      slice.loadAddress();
       const hasForward = slice.loadBit();
       let comment = "";
       if (hasForward) {
@@ -219,6 +240,6 @@ export async function findIncomingJettonPayment(input: {
   minAmountUnits: bigint;
   afterUnixTime: number;
 }): Promise<{ hash: string } | null> {
-  const transactions = await fetchAccountTransactions(input.toOwnerAddress);
+  const transactions = await fetchAccountTransactions(input.toOwnerAddress, input.afterUnixTime);
   return matchIncomingJettonPayment(transactions, input);
 }

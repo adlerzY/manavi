@@ -455,6 +455,8 @@ model Transaction {
   coinPackageId String?
   coinPackage   CoinPackage? @relation(fields: [coinPackageId], references: [id], onDelete: SetNull)
   customCoins   Int?
+  packageCoins      Int?
+  packageBonusCoins Int?
 
   payoutPublisherId String?
   payoutPublisher   Publisher? @relation("PublisherPayoutTransactions", fields: [payoutPublisherId], references: [id])

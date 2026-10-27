@@ -24,6 +24,8 @@ export function TonPayButton({ label, disabled, className, createPayment, onPaid
   const [error, setError] = useState<string | null>(null);
   const cancelledRef = useRef(false);
   const paidCalledRef = useRef(false);
+  const pendingTransactionIdRef = useRef<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -32,6 +34,8 @@ export function TonPayButton({ label, disabled, className, createPayment, onPaid
   }, []);
 
   async function pollVerification(transactionId: string) {
+    pendingTransactionIdRef.current = transactionId;
+    setTimedOut(false);
     for (let attempt = 0; attempt < VERIFY_MAX_ATTEMPTS; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, VERIFY_POLL_INTERVAL_MS));
       if (cancelledRef.current) return;
@@ -45,6 +49,7 @@ export function TonPayButton({ label, disabled, className, createPayment, onPaid
         return;
       }
       if (result.data?.status === "PAID") {
+        pendingTransactionIdRef.current = null;
         setStatus("done");
         if (!paidCalledRef.current) {
           paidCalledRef.current = true;
@@ -53,6 +58,7 @@ export function TonPayButton({ label, disabled, className, createPayment, onPaid
         return;
       }
       if (result.data?.status === "FAILED") {
+        pendingTransactionIdRef.current = null;
         setStatus("error");
         setError("تراکنش ناموفق بود");
         return;
@@ -60,8 +66,17 @@ export function TonPayButton({ label, disabled, className, createPayment, onPaid
     }
     if (!cancelledRef.current) {
       setStatus("error");
-      setError("تایید تراکنش زمان زیادی طول کشید — اگر مبلغ کسر شده، چند دقیقه دیگر صفحه را رفرش کنید");
+      setTimedOut(true);
+      setError("تایید تراکنش زمان زیادی طول کشید — اگر مبلغ از کیف پولت کسر شده، دکمه‌ی «بررسی دوباره» را بزن");
     }
+  }
+
+  async function handleRecheck() {
+    const transactionId = pendingTransactionIdRef.current;
+    if (!transactionId) return;
+    setError(null);
+    setStatus("verifying");
+    await pollVerification(transactionId);
   }
 
   async function handleClick() {
@@ -119,6 +134,14 @@ export function TonPayButton({ label, disabled, className, createPayment, onPaid
       </button>
       {status === "done" && <p className="text-center text-xs text-primary">پرداخت با موفقیت تایید شد</p>}
       {error && <p className="text-center text-xs text-red-400">{error}</p>}
+      {timedOut && status === "error" && (
+        <button
+          onClick={handleRecheck}
+          className="w-full rounded-md border border-primary px-4 py-2 text-sm font-medium text-primary"
+        >
+          بررسی دوباره
+        </button>
+      )}
     </div>
   );
 }

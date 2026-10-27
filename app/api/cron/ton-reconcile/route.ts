@@ -6,7 +6,7 @@ import { notifyAdmin } from "@/lib/admin-alert";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 const RECONCILE_MIN_AGE_MS = 15_000;
-const RECONCILE_MAX_AGE_MS = 25 * 60 * 60 * 1000;
+const RECONCILE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   if (process.env.NODE_ENV === "production" && !CRON_SECRET) {
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: { createdAt: "asc" },
-      take: 50,
+      take: 100,
     });
 
     const result = await settlePendingTonTransactions(pending);
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     if (staleResult.failed > 0) {
       await notifyAdmin(
         `${staleResult.failed} تراکنش منقضی شد`,
-        "بیش از ۲۵ ساعت در انتظار مونده بودن و FAILED شدن — احتمالاً پرداخت کاربر ناتمام مونده.",
+        "بیش از ۴۸ ساعت در انتظار مونده بودن و FAILED شدن — احتمالاً پرداخت کاربر ناتمام مونده.",
         "warning"
       );
     }

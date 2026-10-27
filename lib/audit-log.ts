@@ -75,8 +75,26 @@ export async function searchAuditLog(params: {
   return { logs: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })), total };
 }
 
+const PROTECTED_AUDIT_ACTION_PREFIXES = [
+  "user.roleChange",
+  "user.coinGrant",
+  "user.coinRevoke",
+  "user.ban",
+  "user.unban",
+  "user.delete",
+  "settlement.",
+  "license.",
+  "platformSettings.",
+  "publisher.",
+];
+
 export async function cleanupOldAuditLogs(days: number): Promise<number> {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const result = await prisma.auditLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  const result = await prisma.auditLog.deleteMany({
+    where: {
+      createdAt: { lt: cutoff },
+      NOT: PROTECTED_AUDIT_ACTION_PREFIXES.map((prefix) => ({ action: { startsWith: prefix } })),
+    },
+  });
   return result.count;
 }
