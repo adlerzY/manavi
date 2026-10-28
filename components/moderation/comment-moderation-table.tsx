@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import type { CommentStatus } from "@prisma/client";
 
 export interface ModerationCommentRow {
@@ -24,7 +24,8 @@ interface ActionResult {
 interface CommentModerationTableProps {
   initialComments: ModerationCommentRow[];
   initialTotal: number;
-  listAction: (params: { status?: CommentStatus; page?: number }) => Promise<{ comments: ModerationCommentRow[]; total: number }>;
+  initialStatus?: CommentStatus;
+  listAction: (params: { status?: CommentStatus; q?: string; page?: number }) => Promise<{ comments: ModerationCommentRow[]; total: number }>;
   setStatusAction: (commentId: string, status: CommentStatus) => Promise<ActionResult>;
   updateContentAction: (commentId: string, content: string) => Promise<ActionResult>;
   deleteAction: (commentId: string) => Promise<ActionResult>;
@@ -36,6 +37,8 @@ const STATUS_LABELS: Record<CommentStatus, string> = {
   REJECTED: "مخفی‌شده",
 };
 
+const PAGE_SIZE = 25;
+
 function authorName(user: { firstName: string; lastName: string | null; username: string | null }) {
   return user.username ? `@${user.username}` : `${user.firstName}${user.lastName ? ` ${user.lastName}` : ""}`;
 }
@@ -43,6 +46,7 @@ function authorName(user: { firstName: string; lastName: string | null; username
 export function CommentModerationTable({
   initialComments,
   initialTotal,
+  initialStatus,
   listAction,
   setStatusAction,
   updateContentAction,
@@ -50,20 +54,36 @@ export function CommentModerationTable({
 }: CommentModerationTableProps) {
   const [comments, setComments] = useState(initialComments);
   const [total, setTotal] = useState(initialTotal);
-  const [statusFilter, setStatusFilter] = useState<CommentStatus | "">("");
+  const [statusFilter, setStatusFilter] = useState<CommentStatus | "">(initialStatus ?? "");
+  const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
   const [page, setPage] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  function runSearch(nextPage = 1, status = statusFilter) {
+  function runSearch(nextPage = 1, status: CommentStatus | "" = statusFilter, q: string = appliedQuery) {
     startTransition(async () => {
-      const result = await listAction({ status: status || undefined, page: nextPage });
+      const result = await listAction({ status: status || undefined, q: q || undefined, page: nextPage });
       setComments(result.comments);
       setTotal(result.total);
       setPage(nextPage);
     });
+  }
+
+  function handleSearch(e: FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    setAppliedQuery(q);
+    runSearch(1, statusFilter, q);
+  }
+
+  function handleReset() {
+    setQuery("");
+    setAppliedQuery("");
+    setStatusFilter("");
+    runSearch(1, "", "");
   }
 
   function handleStatus(commentId: string, status: CommentStatus) {
@@ -105,7 +125,14 @@ export function CommentModerationTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <form onSubmit={handleSearch} className="flex flex-wrap items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="جستجوی متن نظر یا نویسنده"
+          maxLength={100}
+          className="min-h-11 min-w-[200px] flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main outline-none focus:border-primary"
+        />
         <select
           value={statusFilter}
           onChange={(e) => {
@@ -113,17 +140,25 @@ export function CommentModerationTable({
             setStatusFilter(value);
             runSearch(1, value);
           }}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main"
+          className="min-h-11 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main"
         >
           <option value="">همه وضعیت‌ها</option>
           <option value="APPROVED">تاییدشده</option>
           <option value="PENDING">در انتظار بررسی</option>
           <option value="REJECTED">مخفی‌شده</option>
         </select>
+        <button type="submit" disabled={isPending} className="min-h-11 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
+          جستجو
+        </button>
+        {(appliedQuery || query || statusFilter) && (
+          <button type="button" onClick={handleReset} disabled={isPending} className="min-h-11 rounded-md border border-border px-4 py-2 text-sm text-text-muted disabled:opacity-50">
+            پاک کردن
+          </button>
+        )}
         {error && <span className="text-xs text-red-400">{error}</span>}
-      </div>
+      </form>
 
-      <div className="divide-y divide-border rounded-md border border-border">
+      <div className={`divide-y divide-border rounded-md border border-border transition-opacity ${isPending ? "opacity-60" : ""}`}>
         {comments.map((comment) => (
           <div key={comment.id} className="space-y-2 px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -203,8 +238,8 @@ export function CommentModerationTable({
       <div className="flex items-center justify-between text-xs text-text-muted">
         <span>{total.toLocaleString("fa-IR")} نظر</span>
         <div className="flex gap-2">
-          <button onClick={() => runSearch(page - 1)} disabled={page <= 1 || isPending} className="disabled:opacity-30">قبلی</button>
-          <button onClick={() => runSearch(page + 1)} disabled={page * 25 >= total || isPending} className="disabled:opacity-30">بعدی</button>
+          <button onClick={() => runSearch(page - 1)} disabled={page <= 1 || isPending} className="min-h-11 px-3 disabled:opacity-30">قبلی</button>
+          <button onClick={() => runSearch(page + 1)} disabled={page * PAGE_SIZE >= total || isPending} className="min-h-11 px-3 disabled:opacity-30">بعدی</button>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 "use server";
 
 import { requireAdmin } from "@/lib/auth";
-import { searchAuditLog, cleanupOldAuditLogs, type AuditLogRow } from "@/lib/audit-log";
+import { searchAuditLog, cleanupOldAuditLogs, type AuditLogRow, type SearchAuditLogParams } from "@/lib/audit-log";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -9,11 +9,7 @@ interface ActionResult<T = undefined> {
   data?: T;
 }
 
-export async function searchAuditLogAction(params: {
-  action?: string;
-  targetType?: string;
-  page?: number;
-}): Promise<{ logs: AuditLogRow[]; total: number }> {
+export async function searchAuditLogAction(params: SearchAuditLogParams): Promise<{ logs: AuditLogRow[]; total: number }> {
   await requireAdmin();
   return searchAuditLog(params);
 }

@@ -29,9 +29,12 @@ export function UserManagementTable({ initialUsers, initialTotal }: { initialUse
   const [coinNote, setCoinNote] = useState("");
   const [banReason, setBanReason] = useState("");
 
-  function runSearch(nextPage = 1) {
+  function runSearch(nextPage = 1, overrides?: { q: string; role: Role | ""; banned: boolean }) {
+    const q = overrides ? overrides.q : query;
+    const role = overrides ? overrides.role : roleFilter;
+    const banned = overrides ? overrides.banned : bannedOnly;
     startTransition(async () => {
-      const result = await searchUsers({ q: query || undefined, role: roleFilter || undefined, banned: bannedOnly || undefined, page: nextPage });
+      const result = await searchUsers({ q: q.trim() || undefined, role: role || undefined, banned: banned || undefined, page: nextPage });
       setUsers(result.users);
       setTotal(result.total);
       setPage(nextPage);
@@ -94,25 +97,42 @@ export function UserManagementTable({ initialUsers, initialTotal }: { initialUse
       }
     });
   }
+    function handleReset() {
+    setQuery("");
+    setRoleFilter("");
+    setBannedOnly(false);
+    runSearch(1, { q: "", role: "", banned: false });
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جستجوی نام یا یوزرنیم" className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main outline-none focus:border-primary" />
-        <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as Role | "")} className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          runSearch(1);
+        }}
+        className="flex flex-wrap gap-2"
+      >
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جستجوی نام یا یوزرنیم" className="min-h-11 min-w-[200px] flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main outline-none focus:border-primary" />
+        <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as Role | "")} className="min-h-11 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main">
           <option value="">همه نقش‌ها</option>
           {ROLES.map((r) => (
             <option key={r} value={r}>{r}</option>
           ))}
         </select>
-        <label className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main">
+        <label className="flex min-h-11 items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-main">
           <input type="checkbox" checked={bannedOnly} onChange={(e) => setBannedOnly(e.target.checked)} />
           فقط مسدودشده‌ها
         </label>
-        <button onClick={() => runSearch(1)} disabled={isPending} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
+        <button type="submit" disabled={isPending} className="min-h-11 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
           جستجو
         </button>
-      </div>
+        {(query || roleFilter || bannedOnly) && (
+          <button type="button" onClick={handleReset} disabled={isPending} className="min-h-11 rounded-md border border-border px-4 py-2 text-sm text-text-muted disabled:opacity-50">
+            پاک کردن
+          </button>
+        )}
+      </form>
 
       <div className="divide-y divide-border rounded-md border border-border">
         {users.map((u) => (

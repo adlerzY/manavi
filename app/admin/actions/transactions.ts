@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
+import { tehranDateRange } from "@/lib/date-range";
 import { cleanupOldFailedTransactions as cleanupOldFailedTransactionsLib } from "@/lib/transaction-cleanup";
-import type { TransactionType, TransactionStatus } from "@prisma/client";
+import type { Prisma, TransactionType, TransactionStatus } from "@prisma/client";
 
 export interface TransactionRow {
   id: string;
@@ -24,17 +25,38 @@ interface ActionResult<T = undefined> {
   data?: T;
 }
 
+function userMatch(q: string): Prisma.UserWhereInput {
+  return {
+    OR: [
+      { firstName: { contains: q, mode: "insensitive" } },
+      { lastName: { contains: q, mode: "insensitive" } },
+      { username: { contains: q, mode: "insensitive" } },
+    ],
+  };
+}
+
 export async function searchTransactions(query: {
   type?: TransactionType;
   status?: TransactionStatus;
+  q?: string;
+  from?: string;
+  to?: string;
   page?: number;
   pageSize?: number;
 }): Promise<{ transactions: TransactionRow[]; total: number }> {
   await requireAdmin();
 
-  const page = query.page ?? 1;
-  const pageSize = query.pageSize ?? 25;
-  const where = { type: query.type, status: query.status };
+  const page = Math.max(1, query.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 25));
+  const q = query.q?.trim().slice(0, 100);
+  const range = tehranDateRange(query.from, query.to);
+
+  const where: Prisma.TransactionWhereInput = {
+    type: query.type,
+    status: query.status,
+    ...(range ? { createdAt: range } : {}),
+    ...(q ? { OR: [{ payer: userMatch(q) }, { receiver: userMatch(q) }] } : {}),
+  };
 
   const [rows, total] = await Promise.all([
     prisma.transaction.findMany({

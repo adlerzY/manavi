@@ -40,6 +40,7 @@ export interface SidebarNavItem {
   label: string;
   icon: keyof typeof ICONS;
   group?: string;
+  badge?: number;
 }
 
 interface SidebarNavProps {
@@ -50,6 +51,10 @@ interface SidebarNavProps {
 const FOOTER_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "بازگشت به سایت", icon: Globe },
 ];
+
+function formatBadge(value: number): string {
+  return value > 99 ? "۹۹+" : value.toLocaleString("fa-IR");
+}
 
 function ToggleIcon({ open }: { open: boolean }) {
   return (
@@ -78,6 +83,7 @@ export function SidebarNav({ items, title }: SidebarNavProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const expanded = pinned || hovered || mobileOpen;
+  const totalBadge = items.reduce((sum, item) => sum + (item.badge ?? 0), 0);
 
   function isActive(href: string) {
     return href === items[0].href ? pathname === href : pathname.startsWith(href);
@@ -92,10 +98,11 @@ export function SidebarNav({ items, title }: SidebarNavProps) {
         <div className="flex h-14 items-center gap-2 px-3">
           <button
             onClick={() => setMobileOpen(true)}
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md text-text-main active:bg-background"
-            aria-label="باز کردن منو"
+            className="relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md text-text-main active:bg-background"
+            aria-label={totalBadge > 0 ? `باز کردن منو، ${totalBadge.toLocaleString("fa-IR")} مورد نیازمند اقدام` : "باز کردن منو"}
           >
             <Menu size={22} />
+            {totalBadge > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-accent" />}
           </button>
           <span className="min-w-0 truncate text-sm font-medium text-text-main">{title}</span>
           <Link
@@ -153,6 +160,7 @@ export function SidebarNav({ items, title }: SidebarNavProps) {
             const active = isActive(item.href);
             const Icon = ICONS[item.icon];
             const startsGroup = Boolean(item.group) && item.group !== items[index - 1]?.group;
+            const badge = item.badge ?? 0;
             return (
               <div key={item.href}>
                 {startsGroup && (
@@ -167,14 +175,25 @@ export function SidebarNav({ items, title }: SidebarNavProps) {
                 <Link
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
+                  aria-label={badge > 0 ? `${item.label}، ${badge.toLocaleString("fa-IR")} مورد` : undefined}
                   className={`flex items-center gap-3 rounded-md px-3 py-3 text-sm transition-colors sm:py-2.5 ${
                     active ? "bg-primary/10 text-primary" : "text-text-main hover:bg-background"
                   }`}
                 >
-                  {Icon && <Icon size={19} strokeWidth={active ? 2.4 : 1.8} className="flex-shrink-0" />}
+                  {Icon && (
+                    <span className="relative flex-shrink-0">
+                      <Icon size={19} strokeWidth={active ? 2.4 : 1.8} />
+                      {badge > 0 && !expanded && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent" />}
+                    </span>
+                  )}
                   <span className={`overflow-hidden whitespace-nowrap transition-opacity duration-200 ${expanded ? "opacity-100" : "opacity-0"}`}>
                     {item.label}
                   </span>
+                  {badge > 0 && expanded && (
+                    <span className="ms-auto flex-shrink-0 rounded-full bg-accent px-2 py-0.5 text-[11px] leading-4 text-accent-foreground">
+                      {formatBadge(badge)}
+                    </span>
+                  )}
                 </Link>
               </div>
             );

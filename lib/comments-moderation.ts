@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import type { CommentStatus } from "@prisma/client";
+import type { CommentStatus, Prisma } from "@prisma/client";
 
 export interface ModeratedCommentRow {
   id: string;
@@ -18,6 +18,7 @@ export interface SearchCommentsParams {
   publisherId?: string;
   comicId?: string;
   status?: CommentStatus;
+  q?: string;
   page?: number;
   pageSize?: number;
 }
@@ -27,13 +28,30 @@ export async function searchComments(
 ): Promise<{ comments: ModeratedCommentRow[]; total: number }> {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 25));
+  const q = params.q?.trim().slice(0, 100);
 
-  const where = {
+  const where: Prisma.CommentWhereInput = {
     status: params.status,
     chapter: {
       comicId: params.comicId,
       ...(params.publisherId ? { edition: { publisherId: params.publisherId } } : {}),
     },
+    ...(q
+      ? {
+          OR: [
+            { content: { contains: q, mode: "insensitive" } },
+            {
+              user: {
+                OR: [
+                  { firstName: { contains: q, mode: "insensitive" } },
+                  { lastName: { contains: q, mode: "insensitive" } },
+                  { username: { contains: q, mode: "insensitive" } },
+                ],
+              },
+            },
+          ],
+        }
+      : {}),
   };
 
   const [rows, total] = await Promise.all([
