@@ -4,10 +4,10 @@ import { ChapterAccessType } from "@prisma/client";
 import { LICENSE_STATUS_LABELS_FA } from "./license";
 import { getPrimaryEditionId } from "./editions";
 import { deleteObjects, listObjectSizes, parsePrivatePageKey, privatePagesPrefix } from "./s3";
-import { MAX_PAGE_SIZE_BYTES } from "./page-limits";
+import { MAX_CHAPTER_PAGES, MAX_PAGE_SIZE_BYTES } from "./page-limits";
 import { ENTITY_ID_PATTERN } from "./asset-kinds";
 
-export const MAX_CHAPTER_PAGES = 500;
+export { MAX_CHAPTER_PAGES };
 
 export interface IngestChapterInput {
   comicId: string;
@@ -42,17 +42,19 @@ function checkPageKeys(comicId: string, editionId: string, expectedChapterId: st
   const chapterId = expectedChapterId ?? first.chapterId;
   if (!ENTITY_ID_PATTERN.test(chapterId)) return { ok: false, error: INVALID_KEYS_ERROR };
 
-  for (let i = 0; i < pageKeys.length; i += 1) {
-    const parsed = parsePrivatePageKey(pageKeys[i]);
+  const seen = new Set<string>();
+  for (const key of pageKeys) {
+    const parsed = parsePrivatePageKey(key);
     if (
       !parsed ||
       parsed.comicId !== comicId ||
       parsed.editionId !== editionId ||
       parsed.chapterId !== chapterId ||
-      parsed.index !== i
+      seen.has(key)
     ) {
       return { ok: false, error: INVALID_KEYS_ERROR };
     }
+    seen.add(key);
   }
   return { ok: true, chapterId };
 }

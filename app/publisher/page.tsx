@@ -1,5 +1,5 @@
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
-import { RoyaltyDashboard } from "@/components/publisher/royalty-dashboard";
+import { PublisherDashboard } from "@/components/publisher/publisher-dashboard";
 import { StaffOverview } from "@/components/publisher/staff-overview";
 
 export default async function PublisherDashboardPage() {
@@ -9,7 +9,15 @@ export default async function PublisherDashboardPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-text-main">داشبورد ناشر</h1>
-      {context && !context.isOwner ? <StaffOverview firstName={user?.firstName ?? ""} /> : <RoyaltyDashboard />}
+      {!context ? (
+        <div className="rounded-md border border-border bg-surface p-6 text-sm text-text-muted">
+          حساب شما به هیچ ناشری متصل نیست.
+        </div>
+      ) : context.isOwner ? (
+        <PublisherDashboard publisherId={context.publisherId} />
+      ) : (
+        <StaffOverview firstName={user?.firstName ?? ""} />
+      )}
     </div>
   );
 }

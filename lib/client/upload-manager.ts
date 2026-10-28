@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { requestPageUploadUrls } from "@/app/admin/actions/upload-urls";
+import { MAX_CHAPTER_PAGES } from "@/lib/page-limits";
 
 export { MAX_PAGE_SIZE_BYTES } from "@/lib/page-limits";
 
@@ -22,6 +23,7 @@ export interface UploadItem {
   progress: number;
   key: string | null;
   error: string | null;
+  previewUrl: string;
 }
 
 interface QueueState {
@@ -324,7 +326,6 @@ function putWithProgress(
     xhr.send(blob);
   });
 }
-
 export function useChapterUploadQueue() {
   const [state, setState] = useState<QueueState>({
     items: [],
@@ -334,6 +335,17 @@ export function useChapterUploadQueue() {
   const uploadIdRef = useRef<string | null>(null);
   const comicIdRef = useRef<string | null>(null);
   const runIdRef = useRef(0);
+  const nextIndexRef = useRef(0);
+  const removedRef = useRef<Set<number>>(new Set());
+  const previewUrlsRef = useRef<Map<number, string>>(new Map());
+
+  useEffect(() => {
+    const urls = previewUrlsRef.current;
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      urls.clear();
+    };
+  }, []);
 
   const isCurrent = useCallback((runId: number) => runIdRef.current === runId, []);
 
@@ -354,6 +366,10 @@ export function useChapterUploadQueue() {
     runIdRef.current += 1;
     uploadIdRef.current = null;
     comicIdRef.current = null;
+    nextIndexRef.current = 0;
+    removedRef.current.clear();
+    previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    previewUrlsRef.current.clear();
     setState({ items: [], isRunning: false, isComplete: false });
   }, []);
 
@@ -368,7 +384,7 @@ export function useChapterUploadQueue() {
       let target = firstTarget;
 
       for (let attempt = 1; attempt <= MAX_RETRIES_PER_ITEM; attempt += 1) {
-        if (!isCurrent(runId)) return;
+        if (!isCurrent(runId) || removedRef.current.has(item.index)) return;
 
         if (!target) {
           try {
@@ -455,6 +471,7 @@ export function useChapterUploadQueue() {
           if (!isCurrent(runId)) return;
           const item = queue.shift();
           if (!item) return;
+          if (removedRef.current.has(item.index)) continue;
           await uploadItem(runId, comicId, uploadId, item, targets.get(item.index));
         }
       };
@@ -466,32 +483,60 @@ export function useChapterUploadQueue() {
     [isCurrent, uploadItem]
   );
 
-  const start = useCallback(
-    async (comicId: string, files: { name: string; contentType: string; blob: Blob }[]) => {
-      const runId = ++runIdRef.current;
-      const uploadId = crypto.randomUUID();
-      uploadIdRef.current = uploadId;
+  const addFiles = useCallback(
+    async (
+      comicId: string,
+      files: { name: string; contentType: string; blob: Blob }[]
+    ): Promise<string | null> => {
+      if (files.length === 0) return null;
+
+      if (comicIdRef.current && comicIdRef.current !== comicId) {
+        return "عنوان را بعد از شروع آپلود نمی‌توان تغییر داد";
+      }
+      if (state.items.length + files.length > MAX_CHAPTER_PAGES) {
+        return `چپتر نمی‌تواند بیش از ${MAX_CHAPTER_PAGES.toLocaleString("fa-IR")} صفحه داشته باشد`;
+      }
+      if (nextIndexRef.current + files.length > MAX_CHAPTER_PAGES) {
+        return "تعداد دفعات افزودن و حذف صفحات از حد مجاز گذشته — فرم را از نو شروع کنید";
+      }
+
+      if (!uploadIdRef.current) uploadIdRef.current = crypto.randomUUID();
       comicIdRef.current = comicId;
+      const uploadId = uploadIdRef.current;
+      const runId = ++runIdRef.current;
 
-      const initialItems: UploadItem[] = files.map((file, index) => ({
-        index,
-        name: file.name,
-        contentType: file.contentType,
-        blob: file.blob,
-        status: "pending",
-        progress: 0,
-        key: null,
-        error: null,
+      const startIndex = nextIndexRef.current;
+      nextIndexRef.current = startIndex + files.length;
+
+      const added: UploadItem[] = files.map((file, offset): UploadItem => {
+        const index = startIndex + offset;
+        const previewUrl = URL.createObjectURL(file.blob);
+        previewUrlsRef.current.set(index, previewUrl);
+        return {
+          index,
+          name: file.name,
+          contentType: file.contentType,
+          blob: file.blob,
+          status: "pending",
+          progress: 0,
+          key: null,
+          error: null,
+          previewUrl,
+        };
+      });
+
+      setState((prev) => ({
+        items: [...prev.items, ...added],
+        isRunning: true,
+        isComplete: false,
       }));
-
-      setState({ items: initialItems, isRunning: true, isComplete: false });
 
       let urlResult: Awaited<ReturnType<typeof requestPageUploadUrls>>;
       try {
         urlResult = await requestPageUploadUrls({
           comicId,
           uploadId,
-          files: initialItems.map((item) => ({
+          files: added.map((item) => ({
             index: item.index,
             contentType: item.contentType,
           })),
@@ -503,20 +548,19 @@ export function useChapterUploadQueue() {
         };
       }
 
-      if (!isCurrent(runId)) return;
+      if (!isCurrent(runId)) return null;
 
       if (!urlResult.success || !urlResult.data) {
         const message = urlResult.error ?? "خطا در آماده‌سازی آپلود";
+        const addedIndexes = new Set(added.map((item) => item.index));
         setState((prev) => ({
           ...prev,
           isRunning: false,
-          items: prev.items.map((item) => ({
-            ...item,
-            status: "error",
-            error: message,
-          })),
+          items: prev.items.map((item) =>
+            addedIndexes.has(item.index) ? { ...item, status: "error", error: message } : item
+          ),
         }));
-        return;
+        return null;
       }
 
       const targets = new Map(
@@ -526,17 +570,47 @@ export function useChapterUploadQueue() {
         ])
       );
 
-      await runPool(runId, initialItems, targets, comicId, uploadId);
+      await runPool(runId, added, targets, comicId, uploadId);
 
-      if (!isCurrent(runId)) return;
+      if (!isCurrent(runId)) return null;
       setState((prev) => ({
         ...prev,
         isRunning: false,
-        isComplete: prev.items.every((item) => item.status === "done"),
+        isComplete: prev.items.length > 0 && prev.items.every((item) => item.status === "done"),
       }));
+      return null;
     },
-    [isCurrent, runPool]
+    [state.items.length, isCurrent, runPool]
   );
+
+  const removeItem = useCallback((index: number) => {
+    removedRef.current.add(index);
+    const url = previewUrlsRef.current.get(index);
+    if (url) {
+      URL.revokeObjectURL(url);
+      previewUrlsRef.current.delete(index);
+    }
+    setState((prev) => {
+      const items = prev.items.filter((item) => item.index !== index);
+      return {
+        ...prev,
+        items,
+        isComplete: !prev.isRunning && items.length > 0 && items.every((item) => item.status === "done"),
+      };
+    });
+  }, []);
+
+  const moveItem = useCallback((from: number, to: number) => {
+    setState((prev) => {
+      if (from === to || from < 0 || to < 0 || from >= prev.items.length || to >= prev.items.length) {
+        return prev;
+      }
+      const items = [...prev.items];
+      const [moved] = items.splice(from, 1);
+      items.splice(to, 0, moved);
+      return { ...prev, items };
+    });
+  }, []);
 
   const retryFailed = useCallback(async () => {
     const comicId = comicIdRef.current;
@@ -555,23 +629,33 @@ export function useChapterUploadQueue() {
     setState((prev) => ({
       ...prev,
       isRunning: false,
-      isComplete: prev.items.every((item) => item.status === "done"),
+      isComplete: prev.items.length > 0 && prev.items.every((item) => item.status === "done"),
     }));
   }, [state.items, runPool, isCurrent]);
 
   const orderedKeys = useCallback((): string[] | null => {
     if (state.items.length === 0) return null;
-    const sorted = [...state.items].sort((a, b) => a.index - b.index);
-    if (!sorted.every((item) => item.status === "done" && item.key)) return null;
-    return sorted.map((item) => item.key as string);
+    if (!state.items.every((item) => item.status === "done" && item.key)) return null;
+    return state.items.map((item) => item.key as string);
   }, [state.items]);
+
+  const overallProgress =
+    state.items.length === 0
+      ? 0
+      : Math.round(
+          state.items.reduce((sum, item) => sum + (item.status === "done" ? 100 : item.progress), 0) /
+            state.items.length
+        );
 
   return {
     items: state.items,
     isRunning: state.isRunning,
     isComplete: state.isComplete,
-    start,
+    overallProgress,
+    addFiles,
     retryFailed,
+    removeItem,
+    moveItem,
     reset,
     orderedKeys,
   };
