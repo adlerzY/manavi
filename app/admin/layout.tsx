@@ -7,21 +7,18 @@ import { TelegramPanelViewport } from "@/components/dashboard/telegram-panel-vie
 
 const NAV: SidebarNavItem[] = [
   { href: "/admin", label: "داشبورد", icon: "LayoutDashboard" },
-  { href: "/admin/publishers", label: "ناشران", icon: "Building2" },
-  { href: "/admin/licenses", label: "لایسنس‌ها", icon: "FileSignature" },
-  { href: "/admin/comics", label: "عناوین", icon: "BookOpen" },
-  { href: "/admin/chapter-approvals", label: "تایید چپترها", icon: "CheckCircle2" },
-  { href: "/admin/categories", label: "دسته‌بندی‌های اصلی", icon: "Layers" },
-  { href: "/admin/genres", label: "ژانرها", icon: "Tags" },
-  { href: "/admin/comments", label: "نظرات", icon: "MessageSquare" },
-  { href: "/admin/users", label: "کاربران", icon: "Users" },
-  { href: "/admin/coin-packages", label: "پکیج‌های سکه", icon: "Coins" },
-  { href: "/admin/transactions", label: "تراکنش‌ها", icon: "Receipt" },
-  { href: "/admin/analytics", label: "آمار", icon: "BarChart3" },
-  { href: "/admin/payouts", label: "تسویه‌حساب ناشران", icon: "Wallet" },
-  { href: "/admin/notices", label: "اعلان‌ها", icon: "Megaphone" },
-  { href: "/admin/logs", label: "لاگ سیستم", icon: "ScrollText" },
-  { href: "/admin/settings", label: "تنظیمات سراسری", icon: "LayoutDashboard" },
+  { href: "/admin/comics", label: "عناوین", icon: "BookOpen", group: "محتوا" },
+  { href: "/admin/chapter-approvals", label: "تایید محتوا", icon: "CheckCircle2", group: "محتوا" },
+  { href: "/admin/categories", label: "دسته‌بندی‌ها", icon: "Layers", group: "محتوا" },
+  { href: "/admin/comments", label: "نظرات", icon: "MessageSquare", group: "محتوا" },
+  { href: "/admin/publishers", label: "ناشران و لایسنس‌ها", icon: "Building2", group: "کسب‌وکار" },
+  { href: "/admin/users", label: "کاربران", icon: "Users", group: "کسب‌وکار" },
+  { href: "/admin/transactions", label: "تراکنش‌ها", icon: "Receipt", group: "مالی" },
+  { href: "/admin/payouts", label: "تسویه‌حساب ناشران", icon: "Wallet", group: "مالی" },
+  { href: "/admin/analytics", label: "آمار", icon: "BarChart3", group: "مالی" },
+  { href: "/admin/settings", label: "تنظیمات و سکه", icon: "Settings", group: "سیستم" },
+  { href: "/admin/notices", label: "اعلان‌ها", icon: "Megaphone", group: "سیستم" },
+  { href: "/admin/logs", label: "لاگ سیستم", icon: "ScrollText", group: "سیستم" },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {

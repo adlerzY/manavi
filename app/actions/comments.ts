@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/moderation";
@@ -57,8 +56,6 @@ export async function createComment(input: CreateCommentInput): Promise<CreateCo
     data: { chapterId: input.chapterId, userId: user.id, content, isSpoiler: Boolean(input.isSpoiler) },
     select: { id: true, content: true, isSpoiler: true, createdAt: true, user: { select: { firstName: true, lastName: true, username: true } } },
   });
-
-  revalidatePath(`/app/read/${input.chapterId}`);
 
   return { success: true, comment: { ...comment, createdAt: comment.createdAt.toISOString() } };
 }

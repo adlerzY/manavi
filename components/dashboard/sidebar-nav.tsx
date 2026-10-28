@@ -22,6 +22,7 @@ import {
   Coins,
   CheckCircle2,
   ScrollText,
+  Settings,
   Home,
   User,
   Menu,
@@ -31,13 +32,14 @@ import type { LucideIcon } from "lucide-react";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard, Building2, FileSignature, BookOpen, Users, Receipt,
-  BarChart3, Wallet, Megaphone, Tags, Layers, UserCircle, MessageSquare, Gem, Coins, CheckCircle2, ScrollText,
+  BarChart3, Wallet, Megaphone, Tags, Layers, UserCircle, MessageSquare, Gem, Coins, CheckCircle2, ScrollText, Settings,
 };
 
 export interface SidebarNavItem {
   href: string;
   label: string;
   icon: keyof typeof ICONS;
+  group?: string;
 }
 
 interface SidebarNavProps {
@@ -46,8 +48,6 @@ interface SidebarNavProps {
 }
 
 const FOOTER_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/app", label: "صفحه اصلی اپ", icon: Home },
-  { href: "/app/profile", label: "پروفایل من", icon: User },
   { href: "/", label: "بازگشت به سایت", icon: Globe },
 ];
 
@@ -148,24 +148,35 @@ export function SidebarNav({ items, title }: SidebarNavProps) {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-2.5">
-          {items.map((item) => {
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden p-2.5">
+          {items.map((item, index) => {
             const active = isActive(item.href);
             const Icon = ICONS[item.icon];
+            const startsGroup = Boolean(item.group) && item.group !== items[index - 1]?.group;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 rounded-md px-3 py-3 text-sm transition-colors sm:py-2.5 ${
-                  active ? "bg-primary/10 text-primary" : "text-text-main hover:bg-background"
-                }`}
-              >
-                {Icon && <Icon size={19} strokeWidth={active ? 2.4 : 1.8} className="flex-shrink-0" />}
-                <span className={`overflow-hidden whitespace-nowrap transition-opacity duration-200 ${expanded ? "opacity-100" : "opacity-0"}`}>
-                  {item.label}
-                </span>
-              </Link>
+              <div key={item.href}>
+                {startsGroup && (
+                  <p
+                    className={`overflow-hidden whitespace-nowrap px-3 pb-1 text-[11px] text-text-muted transition-opacity duration-200 ${
+                      index === 0 ? "pt-0" : "pt-4"
+                    } ${expanded ? "opacity-100" : "opacity-0"}`}
+                  >
+                    {item.group}
+                  </p>
+                )}
+                <Link
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-3 rounded-md px-3 py-3 text-sm transition-colors sm:py-2.5 ${
+                    active ? "bg-primary/10 text-primary" : "text-text-main hover:bg-background"
+                  }`}
+                >
+                  {Icon && <Icon size={19} strokeWidth={active ? 2.4 : 1.8} className="flex-shrink-0" />}
+                  <span className={`overflow-hidden whitespace-nowrap transition-opacity duration-200 ${expanded ? "opacity-100" : "opacity-0"}`}>
+                    {item.label}
+                  </span>
+                </Link>
+              </div>
             );
           })}
         </nav>

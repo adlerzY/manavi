@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isValidReactionEmoji } from "@/lib/gamification";
@@ -43,8 +42,6 @@ export async function toggleChapterReaction(chapterId: string, emoji: string): P
   }
 
   const grouped = await prisma.chapterReaction.groupBy({ by: ["emoji"], where: { chapterId }, _count: { _all: true } });
-
-  revalidatePath(`/app/read/${chapterId}`);
 
   return { success: true, summary: grouped.map((g) => ({ emoji: g.emoji, count: g._count._all })), userReaction };
 }

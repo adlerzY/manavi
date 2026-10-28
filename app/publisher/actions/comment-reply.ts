@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { safeError } from "@/lib/errors";
@@ -91,7 +90,6 @@ export async function replyToComment(commentId: string, content: string): Promis
       );
     }
 
-    revalidatePath(`/app/read/${parent.chapterId}`);
     return { success: true };
   } catch (err) {
     return safeError(err);

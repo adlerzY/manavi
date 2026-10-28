@@ -41,6 +41,8 @@ export function EditionSelector({ slug, editions, selectedId }: EditionSelectorP
             <Link
               key={language}
               href={`/app/comic/${slug}?lang=${language}`}
+              replace
+              scroll={false}
               className={`rounded-full px-4 py-2 text-xs ${
                 language === selected.language ? "bg-primary text-primary-foreground" : "bg-background text-text-muted"
               }`}
@@ -58,6 +60,8 @@ export function EditionSelector({ slug, editions, selectedId }: EditionSelectorP
             <Link
               key={edition.id}
               href={`/app/comic/${slug}?edition=${edition.id}`}
+              replace
+              scroll={false}
               aria-current={active ? "true" : undefined}
               className={`block space-y-3 rounded-md border p-3 ${
                 active ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/60"

@@ -63,11 +63,11 @@ export default async function AppHomePage() {
         <UserHeaderSection />
       </Suspense>
 
+      <HeroCarousel comics={heroComics} />
+
       <Suspense fallback={null}>
         <ContinueReadingSection allowedRatings={allowedRatings} />
       </Suspense>
-
-      <HeroCarousel comics={heroComics} />
 
       <NewestPopularSection initialNewest={newest} initialPopular={popular} genres={genres.map((g) => ({ id: g.id, name: g.name }))} />
 

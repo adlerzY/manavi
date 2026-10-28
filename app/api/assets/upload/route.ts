@@ -29,7 +29,7 @@ function fail(status: number, error: string) {
 
 function isSameOrigin(req: NextRequest): boolean {
   const origin = req.headers.get("origin");
-  if (!origin) return true; // هدر سفارشی X-Manavi-Upload جداگانه الزامی است
+  if (!origin) return true;
   try {
     const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
     return Boolean(host) && new URL(origin).host === host;
@@ -49,9 +49,8 @@ function isBlobLike(value: unknown): value is Blob {
 
 async function canUpload(kind: AssetKind, ownerId: string, user: SessionUser): Promise<boolean> {
   if (user.role === "ADMIN") return true;
-  if (kind === "category-image") return false;
+  if (kind === "category-image" || kind === "genre-image") return false;
 
-  // اثر موجود: دسترسی مدیریت همان ناشر لازم است.
   const comic = await prisma.comic.findUnique({
     where: { id: ownerId },
     select: { license: { select: { publisherId: true } } },
@@ -65,7 +64,6 @@ async function canUpload(kind: AssetKind, ownerId: string, user: SessionUser): P
     }
   }
 
-  // اثر هنوز ساخته نشده (draftId): همان شرط ساخت اثر.
   const context = await getPublisherContext(user);
   return Boolean(context?.canManageComics);
 }
@@ -141,12 +139,11 @@ export async function POST(req: NextRequest) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
-if (
-  err instanceof BlobStorageNotConfiguredError ||
-  err instanceof PublicBlobMisconfiguredError
-) {
-  console.error("[asset-upload] storage config error:", err.message);
-  return fail(503, err.message);
-}
+    if (err instanceof BlobStorageNotConfiguredError || err instanceof PublicBlobMisconfiguredError) {
+      console.error("[asset-upload] storage config error:", err.message);
+      return fail(503, err.message);
+    }
+    console.error("[asset-upload] storage write failed", err);
+    return fail(502, "ذخیره‌ی تصویر ناموفق بود — دوباره تلاش کنید");
   }
 }

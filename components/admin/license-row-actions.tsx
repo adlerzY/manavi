@@ -1,10 +1,11 @@
-// components/admin/license-row-actions.tsx
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { activateLicense, terminateLicense } from "@/app/admin/actions/catalog-actions";
 
 export function LicenseRowActions({ licenseId, status }: { licenseId: string; status: string }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -12,7 +13,8 @@ export function LicenseRowActions({ licenseId, status }: { licenseId: string; st
     setError(null);
     startTransition(async () => {
       const result = await activateLicense(licenseId);
-      if (!result.success) setError(result.error ?? "خطا");
+      if (result.success) router.refresh();
+      else setError(result.error ?? "خطا");
     });
   }
 
@@ -21,7 +23,8 @@ export function LicenseRowActions({ licenseId, status }: { licenseId: string; st
     if (!confirm("لغو این لایسنس غیرقابل بازگشت است. ادامه می‌دهید؟")) return;
     startTransition(async () => {
       const result = await terminateLicense(licenseId);
-      if (!result.success) setError(result.error ?? "خطا");
+      if (result.success) router.refresh();
+      else setError(result.error ?? "خطا");
     });
   }
 

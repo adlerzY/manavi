@@ -2,15 +2,18 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, getSessionUser, getPublisherContext } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
-import { GENRE_IMAGE_OPTIONS } from "@/lib/genre-images";
+import { isAllowedImageUrl } from "@/lib/image-url";
+import { ENTITY_ID_PATTERN } from "@/lib/asset-kinds";
 
 interface ActionResult<T = undefined> {
   success: boolean;
   error?: string;
   data?: T;
 }
+
+const INVALID_IMAGE_ERROR = "آدرس تصویر معتبر نیست — از آپلودگر تصویر استفاده کنید";
 
 function slugify(value: string): string {
   return value
@@ -20,33 +23,41 @@ function slugify(value: string): string {
     .replace(/\s+/g, "-");
 }
 
-export async function createGenre(input: { name: string; imageUrl?: string }): Promise<ActionResult<{ id: string }>> {
+function refreshGenreViews() {
+  revalidateTag("genres", "max");
+  revalidatePath("/admin/categories");
+  revalidatePath("/admin/comics");
+  revalidatePath("/app/explore");
+}
+
+export async function createGenre(input: { id?: string; name: string; imageUrl?: string }): Promise<ActionResult<{ id: string }>> {
   try {
-    const user = await getSessionUser();
-    if (user?.isBanned) {
-      return { success: false, error: "دسترسی غیرمجاز" };
-    }
-    if (user?.role !== "ADMIN") {
-      const context = await getPublisherContext(user);
-      if (!context?.canManageComics) return { success: false, error: "دسترسی غیرمجاز" };
-    }
+    await requireAdmin();
 
     const name = input.name.trim();
     if (!name) {
-      return { success: false, error: "نام دسته‌بندی الزامی است" };
+      return { success: false, error: "نام ژانر الزامی است" };
     }
-    if (input.imageUrl && !GENRE_IMAGE_OPTIONS.some((option) => option.value === input.imageUrl)) {
-      return { success: false, error: "تصویر انتخاب‌شده معتبر نیست" };
+
+    const imageUrl = input.imageUrl?.trim() || null;
+    if (imageUrl && !isAllowedImageUrl(imageUrl)) {
+      return { success: false, error: INVALID_IMAGE_ERROR };
+    }
+
+    const draftId = input.id?.trim() || undefined;
+    if (draftId) {
+      if (!ENTITY_ID_PATTERN.test(draftId)) {
+        return { success: false, error: "شناسه‌ی فرم نامعتبر است — صفحه را رفرش کنید" };
+      }
+      const taken = await prisma.genre.findUnique({ where: { id: draftId }, select: { id: true } });
+      if (taken) return { success: false, error: "این فرم قبلاً ثبت شده است — صفحه را رفرش کنید" };
     }
 
     const genre = await prisma.genre.create({
-      data: { name, slug: slugify(name), imageUrl: input.imageUrl || null },
+      data: { ...(draftId ? { id: draftId } : {}), name, slug: slugify(name), imageUrl },
     });
 
-    revalidateTag("genres", "max");
-    revalidatePath("/admin/genres");
-    revalidatePath("/admin/comics");
-    revalidatePath("/app/explore");
+    refreshGenreViews();
     return { success: true, data: { id: genre.id } };
   } catch (err) {
     if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
@@ -60,15 +71,13 @@ export async function updateGenreImage(genreId: string, imageUrl: string): Promi
   try {
     await requireAdmin();
 
-    if (!GENRE_IMAGE_OPTIONS.some((option) => option.value === imageUrl)) {
-      return { success: false, error: "تصویر انتخاب‌شده معتبر نیست" };
+    if (!isAllowedImageUrl(imageUrl)) {
+      return { success: false, error: INVALID_IMAGE_ERROR };
     }
 
     await prisma.genre.update({ where: { id: genreId }, data: { imageUrl } });
 
-    revalidateTag("genres", "max");
-    revalidatePath("/admin/genres");
-    revalidatePath("/app/explore");
+    refreshGenreViews();
     return { success: true };
   } catch (err) {
     return safeError(err);
@@ -81,13 +90,19 @@ export async function deleteGenre(genreId: string): Promise<ActionResult> {
 
     const inUse = await prisma.comicGenre.count({ where: { genreId } });
     if (inUse > 0) {
-      return { success: false, error: "این دسته‌بندی به عناوینی متصل است و قابل حذف نیست" };
+      return { success: false, error: "این ژانر به عناوینی متصل است و قابل حذف نیست" };
     }
 
     await prisma.genre.delete({ where: { id: genreId } });
 
-    revalidateTag("genres", "max");
-    revalidatePath("/admin/genres");
+    try {
+      const { deletePublicPrefix } = await import("@/lib/blob");
+      await deletePublicPrefix(`public/genres/${genreId}`);
+    } catch (cleanupErr) {
+      console.error("[genre-actions] asset cleanup failed", cleanupErr);
+    }
+
+    refreshGenreViews();
     return { success: true };
   } catch (err) {
     return safeError(err);

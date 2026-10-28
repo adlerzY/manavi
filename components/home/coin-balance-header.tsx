@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Bell } from "lucide-react";
@@ -11,12 +11,50 @@ interface CoinBalanceHeaderProps {
   unreadNotifications?: number;
 }
 
+const ALWAYS_VISIBLE_Y = 48;
+const SCROLL_THRESHOLD_PX = 10;
+
 export function CoinBalanceHeader({ coinsBalance, authenticated, unreadNotifications = 0 }: CoinBalanceHeaderProps) {
   const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const anchorYRef = useRef(0);
+
+  useEffect(() => {
+    anchorYRef.current = window.scrollY;
+    let frame: number | null = null;
+
+    function handleScroll() {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        const y = window.scrollY;
+        if (y <= ALWAYS_VISIBLE_Y) {
+          setHidden(false);
+          anchorYRef.current = y;
+          return;
+        }
+        const delta = y - anchorYRef.current;
+        if (Math.abs(delta) >= SCROLL_THRESHOLD_PX) {
+          setHidden(delta > 0);
+          anchorYRef.current = y;
+        }
+      });
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, []);
 
   return (
     <>
-      <header className="sticky top-[var(--tg-content-safe-area-top,0px)] z-30 flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-md">
+      <header
+        className={`sticky top-[var(--tg-content-safe-area-top,0px)] z-30 flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-2.5 backdrop-blur-md transition-transform duration-200 ${
+          hidden ? "-translate-y-full" : "translate-y-0"
+        }`}
+      >
         <div className="flex items-center gap-2">
           <Image src="/favicon.svg" alt="ماناوی" width={28} height={28} priority className="rounded-md" />
           <span className="text-sm font-semibold text-text-main">ماناوی</span>

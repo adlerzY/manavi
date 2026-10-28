@@ -1,75 +1,90 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { ImagePlus } from "lucide-react";
 import { createGenre } from "@/app/admin/actions/genre-actions";
-import { GENRE_IMAGE_OPTIONS } from "@/lib/genre-images";
+import { uploadAssetFile } from "@/lib/client/asset-upload";
 
-export function CreateGenreForm({ onCreated }: { onCreated?: () => void }) {
+export function CreateGenreForm() {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [draftId, setDraftId] = useState(() => crypto.randomUUID());
   const [name, setName] = useState("");
-  const [imageUrl, setImageUrl] = useState(GENRE_IMAGE_OPTIONS[0]?.value ?? "");
-  const [status, setStatus] = useState<"idle" | "saving" | "error" | "done">("idle");
+  const [imageUrl, setImageUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(file: File) {
+    setError(null);
+    setUploading(true);
+    const result = await uploadAssetFile("genre-image", draftId, file);
+    setUploading(false);
+    if (result.success && result.url) setImageUrl(result.url);
+    else setError(result.error ?? "خطا در آپلود تصویر");
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setStatus("saving");
-    setError(null);
+    if (!name.trim() || saving || uploading) return;
 
-    const result = await createGenre({ name, imageUrl });
+    setSaving(true);
+    setError(null);
+    const result = await createGenre({ id: draftId, name, imageUrl: imageUrl || undefined });
+    setSaving(false);
 
     if (result.success) {
-      setStatus("done");
       setName("");
-      setTimeout(() => onCreated?.(), 1000);
+      setImageUrl("");
+      setDraftId(crypto.randomUUID());
+      router.refresh();
     } else {
-      setStatus("error");
-      setError(result.error ?? "یه مشکلی پیش اومد");
+      setError(result.error ?? "خطایی رخ داد");
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-md border border-border bg-surface p-6">
-      <h2 className="text-lg font-medium text-text-main">افزودن دسته‌بندی</h2>
-
-      <div className="space-y-1">
-        <label className="text-sm text-text-muted" htmlFor="genre-name">نام دسته‌بندی</label>
+    <form onSubmit={handleSubmit} className="space-y-2">
+      <div className="flex items-center gap-2">
         <input
-          id="genre-name"
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFile(file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          aria-label="انتخاب تصویر ژانر"
+          className="relative flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-surface text-text-muted disabled:opacity-50"
+        >
+          {imageUrl ? <Image src={imageUrl} alt="" fill sizes="44px" unoptimized className="object-cover" /> : <ImagePlus size={18} />}
+        </button>
+        <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          required
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-main outline-none focus:border-primary"
+          placeholder="نام ژانر جدید"
+          maxLength={60}
+          className="min-h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-3 text-sm text-text-main outline-none focus:border-primary"
         />
+        <button
+          type="submit"
+          disabled={saving || uploading || !name.trim()}
+          className="min-h-11 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {saving ? "…" : "افزودن"}
+        </button>
       </div>
-
-      <div className="space-y-2">
-        <span className="text-sm text-text-muted">تصویر (از پوشه public/genres)</span>
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-          {GENRE_IMAGE_OPTIONS.map((option) => (
-            <button
-              type="button"
-              key={option.value}
-              onClick={() => setImageUrl(option.value)}
-              className={`flex flex-col items-center gap-1 rounded-md border p-2 text-center ${
-                imageUrl === option.value ? "border-primary bg-primary/10" : "border-border bg-background"
-              }`}
-            >
-              <div className="relative aspect-square w-full overflow-hidden rounded bg-surface">
-                <Image src={option.value} alt={option.label} fill sizes="80px" className="object-cover" />
-              </div>
-              <span className="text-[10px] text-text-muted">{option.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {status === "error" && <p className="text-sm text-red-400">{error}</p>}
-      {status === "done" && <p className="text-sm text-primary">دسته‌بندی اضافه شد.</p>}
-
-      <button type="submit" disabled={status === "saving"} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
-        {status === "saving" ? "در حال ذخیره…" : "ثبت دسته‌بندی"}
-      </button>
+      {uploading && <p className="text-xs text-text-muted">در حال آپلود تصویر…</p>}
+      {error && <p className="text-xs text-red-400">{error}</p>}
     </form>
   );
 }
