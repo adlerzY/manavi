@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Library, Wallet } from "lucide-react";
+import { Bell, Library, Wallet } from "lucide-react";
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
@@ -12,6 +12,7 @@ import { getReferralLink } from "@/lib/site-config";
 import { parseCustomLinks } from "@/lib/profile-links";
 import { getReferralRewardCoins } from "@/lib/platform-settings";
 import { ROLE_LABELS, canUploadAvatar, hasEarningsAccess } from "@/lib/roles";
+import { getUnreadNotificationCount } from "@/lib/notifications";
 
 export default async function ProfilePage() {
   const user = await getSessionUser();
@@ -23,12 +24,13 @@ export default async function ProfilePage() {
     );
   }
 
-  const [bookmarkCount, readingCount, referralRewardCoins, publisherContext, showEarnings] = await Promise.all([
+  const [bookmarkCount, readingCount, referralRewardCoins, publisherContext, showEarnings, unreadCount] = await Promise.all([
     prisma.bookmark.count({ where: { userId: user.id } }),
     prisma.readHistory.count({ where: { userId: user.id } }),
     getReferralRewardCoins(),
     getPublisherContext(user),
     hasEarningsAccess(user),
+    getUnreadNotificationCount(user.id),
   ]);
 
   const showAdminPanel = user.role === "ADMIN" && !user.isBanned;
@@ -77,6 +79,12 @@ export default async function ProfilePage() {
 
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-text-main">حساب من</h2>
+          <ProfileMenuLink
+            href="/app/notifications"
+            icon={<Bell size={20} />}
+            title="اعلان‌ها"
+            subtitle={unreadCount > 0 ? `${unreadCount.toLocaleString("fa-IR")} اعلان خوانده‌نشده` : "همه‌ی اعلان‌ها خوانده شده‌اند"}
+          />
           <ProfileMenuLink
             href="/app/library"
             icon={<Library size={20} />}

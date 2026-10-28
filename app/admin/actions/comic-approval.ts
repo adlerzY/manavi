@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit-log";
+import { createNotifications } from "@/lib/notifications";
 import { safeError } from "@/lib/errors";
 
 interface ActionResult<T = undefined> { success: boolean; error?: string; data?: T }
@@ -41,10 +42,26 @@ export async function approveComic(comicId: string): Promise<ActionResult> {
     const comic = await prisma.comic.update({
       where: { id: comicId },
       data: { approvalStatus: "APPROVED", rejectionNote: null },
-      select: { slug: true },
+      select: { slug: true, title: true, createdById: true },
     });
 
     after(() => logAuditEvent({ actorId: admin.id, actorRole: admin.role, action: "comic.approve", targetType: "Comic", targetId: comicId }));
+
+    const creatorId = comic.createdById;
+    if (creatorId && creatorId !== admin.id) {
+      after(() =>
+        createNotifications([
+          {
+            userId: creatorId,
+            type: "COMIC_APPROVED",
+            title: "عنوان شما تایید و منتشر شد",
+            body: comic.title,
+            href: `/app/comic/${comic.slug}`,
+            dedupeKey: `comic-approved:${comicId}:${Date.now()}`,
+          },
+        ])
+      );
+    }
 
     revalidateTag("home-feed", "max");
     revalidatePath("/app");
@@ -66,10 +83,26 @@ export async function rejectComic(comicId: string, note: string): Promise<Action
     const comic = await prisma.comic.update({
       where: { id: comicId },
       data: { approvalStatus: "NEEDS_CHANGES", rejectionNote: trimmed },
-      select: { slug: true },
+      select: { slug: true, title: true, createdById: true },
     });
 
     after(() => logAuditEvent({ actorId: admin.id, actorRole: admin.role, action: "comic.reject", targetType: "Comic", targetId: comicId, metadata: { note: trimmed } }));
+
+    const creatorId = comic.createdById;
+    if (creatorId && creatorId !== admin.id) {
+      after(() =>
+        createNotifications([
+          {
+            userId: creatorId,
+            type: "COMIC_REJECTED",
+            title: "عنوان شما نیاز به اصلاح دارد",
+            body: `${comic.title} — ${trimmed}`,
+            href: `/publisher/comics/${comicId}`,
+            dedupeKey: `comic-rejected:${comicId}:${Date.now()}`,
+          },
+        ])
+      );
+    }
 
     revalidateTag("home-feed", "max");
     revalidatePath("/app");

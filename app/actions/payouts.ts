@@ -7,6 +7,8 @@ import { checkRateLimit } from "@/lib/moderation";
 import { safeError } from "@/lib/errors";
 import { SettlementError, applyPayoutResponse } from "@/lib/settlement";
 import { microToUsdt } from "@/lib/units";
+import { after } from "next/server";
+import { notifyAdmins } from "@/lib/notifications";
 import type { BeneficiaryType, PayoutConfirmationStatus, SettlementLineStatus } from "@prisma/client";
 
 interface ActionResult<T = undefined> {
@@ -162,6 +164,16 @@ export async function respondToPayout(
     }
 
     await applyPayoutResponse({ payoutId, recipientId: user.id, status, note: cleanNote });
+        if (status === "DISPUTED") {
+      after(() =>
+        notifyAdmins({
+          type: "SYSTEM",
+          title: "مغایرت در یک پرداخت ثبت شد",
+          body: cleanNote,
+          href: "/admin/payouts",
+        }).catch(() => {})
+      );
+    }
 
     revalidatePath("/app/earnings");
     revalidatePath("/publisher/earnings");

@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit-log";
 import { notifyNewChapter } from "@/lib/telegram-bot";
 import { invalidateChapterAccessList } from "@/lib/chapters";
+import { createNotifications, notifyChapterPublishedInApp } from "@/lib/notifications";
 import { safeError } from "@/lib/errors";
 
 interface ActionResult<T = undefined> {
@@ -60,6 +61,7 @@ export async function approveChapter(chapterId: string): Promise<ActionResult> {
         id: true,
         chapterNumber: true,
         status: true,
+        uploadedById: true,
         comic: { select: { id: true, slug: true, title: true } },
       },
     });
@@ -95,6 +97,32 @@ export async function approveChapter(chapterId: string): Promise<ActionResult> {
     revalidatePath("/admin/chapter-approvals");
     invalidateChapterAccessList(chapter.comic.id);
 
+    after(() =>
+      notifyChapterPublishedInApp({
+        chapterId,
+        comicId: chapter.comic.id,
+        comicTitle: chapter.comic.title,
+        comicSlug: chapter.comic.slug,
+        chapterNumber: chapter.chapterNumber,
+      }).catch(() => {})
+    );
+
+    const uploaderId = chapter.uploadedById;
+    if (uploaderId && uploaderId !== admin.id) {
+      after(() =>
+        createNotifications([
+          {
+            userId: uploaderId,
+            type: "CHAPTER_APPROVED",
+            title: "چپتر شما تایید و منتشر شد",
+            body: `${chapter.comic.title} — چپتر ${chapter.chapterNumber.toLocaleString("fa-IR")}`,
+            href: `/app/read/${chapterId}`,
+            dedupeKey: `chapter-approved:${chapterId}`,
+          },
+        ])
+      );
+    }
+
     const bookmarks = await prisma.bookmark.findMany({
       where: { comicId: chapter.comic.id, notifyOnNewChapter: true },
       select: { user: { select: { telegramId: true } } },
@@ -125,7 +153,14 @@ export async function rejectChapter(chapterId: string): Promise<ActionResult> {
 
     const chapter = await prisma.chapter.findUnique({
       where: { id: chapterId },
-      select: { id: true, status: true, comicId: true },
+      select: {
+        id: true,
+        status: true,
+        comicId: true,
+        chapterNumber: true,
+        uploadedById: true,
+        comic: { select: { title: true } },
+      },
     });
     if (!chapter) return { success: false, error: "چپتر یافت نشد" };
     if (chapter.status !== "PENDING_APPROVAL") {
@@ -146,6 +181,22 @@ export async function rejectChapter(chapterId: string): Promise<ActionResult> {
         targetId: chapterId,
       })
     );
+
+    const uploaderId = chapter.uploadedById;
+    if (uploaderId && uploaderId !== admin.id) {
+      after(() =>
+        createNotifications([
+          {
+            userId: uploaderId,
+            type: "CHAPTER_REJECTED",
+            title: "چپتر شما تایید نشد و به پیش‌نویس برگشت",
+            body: `${chapter.comic.title} — چپتر ${chapter.chapterNumber.toLocaleString("fa-IR")}`,
+            href: `/publisher/comics/${chapter.comicId}`,
+            dedupeKey: `chapter-rejected:${chapterId}:${Date.now()}`,
+          },
+        ])
+      );
+    }
 
     revalidatePath(`/admin/comics/${chapter.comicId}`);
     revalidatePath("/admin/chapter-approvals");

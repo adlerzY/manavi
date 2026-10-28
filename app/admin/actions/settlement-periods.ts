@@ -8,6 +8,7 @@ import { safeError } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/audit-log";
 import { isSafeUrl } from "@/lib/profile-links";
 import { usdtToMicro } from "@/lib/units";
+import { notifyPayoutRecorded } from "@/lib/notifications";
 import {
   SettlementError,
   createSettlementPeriodWithLines,
@@ -301,6 +302,9 @@ export async function recordSettlementPayout(input: {
           targetId: input.lineId,
           metadata: { payoutId: result.payoutId, amountMicro: amountMicro.toString(), reference: input.reference?.trim() || null },
         })
+      );
+      after(() =>
+        notifyPayoutRecorded({ lineId: input.lineId, amountMicro, payoutId: result.payoutId }).catch(() => {})
       );
     }
     revalidatePath("/admin/payouts");

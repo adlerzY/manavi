@@ -58,6 +58,7 @@ model User {
   contentReports      ContentReport[]
   editionRequests     EditionRequest[]
   payoutConfirmations PayoutConfirmation[]
+  notifications       Notification[]
 
   @@index([role])
   @@index([referredById])
@@ -1026,4 +1027,32 @@ model PayoutConfirmation {
 
   payout    Payout @relation(fields: [payoutId], references: [id])
   recipient User   @relation(fields: [recipientId], references: [id])
+}
+enum NotificationType {
+  NEW_CHAPTER
+  COMMENT_REPLY
+  PAYOUT_PAID
+  COMIC_APPROVED
+  COMIC_REJECTED
+  CHAPTER_APPROVED
+  CHAPTER_REJECTED
+  SYSTEM
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String?
+  href      String?
+  dedupeKey String?          @unique
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }

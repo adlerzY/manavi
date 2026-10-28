@@ -322,6 +322,7 @@ export async function deleteUserAccount(userId: string, confirmValue: string): P
       prisma.comicStaff.deleteMany({ where: { userId } }),
       prisma.chapterStaff.deleteMany({ where: { userId } }),
       prisma.editionRequest.deleteMany({ where: { userId } }),
+      prisma.notification.deleteMany({ where: { userId } }),
     ]);
 
     await invalidateSessionUserCache(userId);

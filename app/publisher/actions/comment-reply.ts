@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { safeError } from "@/lib/errors";
 import { getSessionUser } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/moderation";
+import { createNotifications } from "@/lib/notifications";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -28,9 +30,16 @@ export async function replyToComment(commentId: string, content: string): Promis
     const parent = await prisma.comment.findUnique({
       where: { id: commentId },
       select: {
+        userId: true,
         chapterId: true,
         parentId: true,
-        chapter: { select: { edition: { select: { publisherId: true } } } },
+        chapter: {
+          select: {
+            chapterNumber: true,
+            comic: { select: { title: true } },
+            edition: { select: { publisherId: true } },
+          },
+        },
       },
     });
     if (!parent) return { success: false, error: "نظر یافت نشد" };
@@ -53,7 +62,7 @@ export async function replyToComment(commentId: string, content: string): Promis
     if (!trimmed) return { success: false, error: "متن پاسخ خالی است" };
     if (trimmed.length > 2000) return { success: false, error: "متن پاسخ بیش از حد طولانی است" };
 
-    await prisma.comment.create({
+    const reply = await prisma.comment.create({
       data: {
         chapterId: parent.chapterId,
         userId: user.id,
@@ -61,7 +70,26 @@ export async function replyToComment(commentId: string, content: string): Promis
         parentId: parent.parentId ?? commentId,
         isStaffReply: true,
       },
+      select: { id: true },
     });
+
+    if (parent.userId !== user.id) {
+      const recipientId = parent.userId;
+      const chapterId = parent.chapterId;
+      const label = `${parent.chapter.comic.title} — چپتر ${parent.chapter.chapterNumber.toLocaleString("fa-IR")}`;
+      after(() =>
+        createNotifications([
+          {
+            userId: recipientId,
+            type: "COMMENT_REPLY",
+            title: "تیم به نظر شما پاسخ داد",
+            body: `${label}: ${trimmed.slice(0, 120)}`,
+            href: `/app/read/${chapterId}`,
+            dedupeKey: `comment-reply:${reply.id}`,
+          },
+        ])
+      );
+    }
 
     revalidatePath(`/app/read/${parent.chapterId}`);
     return { success: true };

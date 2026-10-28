@@ -5,6 +5,7 @@ import { prisma } from "./prisma";
 import { notifyNewChapter } from "./telegram-bot";
 import { invalidateChapterAccessList } from "./chapters";
 import { redis, isRedisConfigured } from "./redis";
+import { notifyChapterPublishedInApp } from "./notifications";
 
 const THROTTLE_KEY = "scheduled-publish:lock";
 const THROTTLE_SECONDS = 90;
@@ -71,6 +72,14 @@ export async function executeScheduledPublish(): Promise<ScheduledPublishResult>
       }
       revalidatePath(`/app/comic/${chapter.comic.slug}`);
       revalidatePath(`/app/read/${chapter.id}`);
+            await notifyChapterPublishedInApp({
+        chapterId: chapter.id,
+        comicId: chapter.comic.id,
+        comicTitle: chapter.comic.title,
+        comicSlug: chapter.comic.slug,
+        chapterNumber: chapter.chapterNumber,
+      }).catch(() => {});
+      
     }
 
     comicIds.forEach((comicId) => invalidateChapterAccessList(comicId));

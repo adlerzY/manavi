@@ -3,13 +3,15 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { Bell } from "lucide-react";
 
 interface CoinBalanceHeaderProps {
   coinsBalance: number;
   authenticated: boolean;
+  unreadNotifications?: number;
 }
 
-export function CoinBalanceHeader({ coinsBalance, authenticated }: CoinBalanceHeaderProps) {
+export function CoinBalanceHeader({ coinsBalance, authenticated, unreadNotifications = 0 }: CoinBalanceHeaderProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -20,13 +22,38 @@ export function CoinBalanceHeader({ coinsBalance, authenticated }: CoinBalanceHe
           <span className="text-sm font-semibold text-text-main">ماناوی</span>
         </div>
 
-        <button onClick={() => authenticated && setOpen(true)} disabled={!authenticated} className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-text-main disabled:opacity-60">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-          </span>
-          🪙 {coinsBalance.toLocaleString("fa-IR")}
-        </button>
+        <div className="flex items-center gap-2">
+          {authenticated && (
+            <Link
+              href="/app/notifications"
+              aria-label={
+                unreadNotifications > 0
+                  ? `اعلان‌ها، ${unreadNotifications.toLocaleString("fa-IR")} خوانده‌نشده`
+                  : "اعلان‌ها"
+              }
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-text-main"
+            >
+              <Bell size={18} />
+              {unreadNotifications > 0 && (
+                <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[11px] leading-4 text-accent-foreground">
+                  {unreadNotifications > 99 ? "۹۹+" : unreadNotifications.toLocaleString("fa-IR")}
+                </span>
+              )}
+            </Link>
+          )}
+
+          <button
+            onClick={() => authenticated && setOpen(true)}
+            disabled={!authenticated}
+            className="flex min-h-10 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-text-main disabled:opacity-60"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+            </span>
+            🪙 {coinsBalance.toLocaleString("fa-IR")}
+          </button>
+        </div>
       </header>
 
       {open && (

@@ -7,6 +7,7 @@ import { getUploaderVerification, requireUploadAccess } from "@/lib/auth";
 import { assertLicenseActive, LicenseInactiveError } from "@/lib/license";
 import { notifyNewChapter } from "@/lib/telegram-bot";
 import { invalidateChapterAccessList } from "@/lib/chapters";
+import { notifyChapterPublishedInApp } from "@/lib/notifications";
 import { safeError } from "@/lib/errors";
 
 interface PublishChapterResult {
@@ -74,6 +75,15 @@ export async function publishChapter(chapterId: string): Promise<PublishChapterR
     revalidatePath("/app");
     revalidatePath("/app/explore");
     invalidateChapterAccessList(chapter.comic.id);
+        after(() =>
+      notifyChapterPublishedInApp({
+        chapterId,
+        comicId: chapter.comic.id,
+        comicTitle: chapter.comic.title,
+        comicSlug: chapter.comic.slug,
+        chapterNumber: chapter.chapterNumber,
+      }).catch(() => {})
+    );
 
     const bookmarks = await prisma.bookmark.findMany({
       where: { comicId: chapter.comic.id, notifyOnNewChapter: true },
