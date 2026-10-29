@@ -10,6 +10,7 @@ export const AUDIT_GROUPS: { value: string; label: string }[] = [
   { value: "publisherStaff", label: "تیم ناشر" },
   { value: "comicStaff", label: "دست‌اندرکاران اثر" },
   { value: "settlement", label: "تسویه‌حساب" },
+  { value: "report", label: "گزارش‌ها" },
 ];
 
 export function auditGroupLabel(action: string): string | null {

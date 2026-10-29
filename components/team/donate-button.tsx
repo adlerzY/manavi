@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { TonConnectButton } from "@tonconnect/ui-react";
-import { TonPayButton } from "@/components/payments/ton-pay-button";
-import { createTonDonationPayment } from "@/app/actions/ton-payments";
-import { DONATION_PRESETS_USDT, MIN_DONATION_USDT, MAX_DONATION_USDT } from "@/lib/billing";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { donateWithCoins, getDonationBalance } from "@/app/actions/donations";
+import { DONATION_PRESETS_COINS, MAX_DONATION_COINS, MIN_DONATION_COINS } from "@/lib/billing";
 
 interface DonateButtonProps {
   receiverId: string;
@@ -12,63 +12,130 @@ interface DonateButtonProps {
 }
 
 export function DonateButton({ receiverId, authenticated }: DonateButtonProps) {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [preset, setPreset] = useState<number>(DONATION_PRESETS_USDT[0]);
+  const [preset, setPreset] = useState<number>(DONATION_PRESETS_COINS[1]);
   const [customAmount, setCustomAmount] = useState("");
   const [message, setMessage] = useState("");
+  const [anonymous, setAnonymous] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [status, setStatus] = useState<"idle" | "sending" | "error" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const keyRef = useRef<string | null>(null);
 
-  const effectiveAmount = customAmount ? Number(customAmount) : preset;
-  const validAmount =
-    Number.isFinite(effectiveAmount) &&
-    effectiveAmount >= MIN_DONATION_USDT &&
-    effectiveAmount <= MAX_DONATION_USDT;
+  const coins = customAmount ? Number(customAmount) : preset;
+  const valid = Number.isInteger(coins) && coins >= MIN_DONATION_COINS && coins <= MAX_DONATION_COINS;
+  const insufficient = balance !== null && valid && coins > balance;
+
+  useEffect(() => {
+    if (!open || !authenticated) return;
+    let cancelled = false;
+    getDonationBalance()
+      .then((value) => {
+        if (!cancelled) setBalance(value);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, authenticated]);
+
+  async function handleSubmit() {
+    if (!valid || insufficient || status === "sending") return;
+    setStatus("sending");
+    setError(null);
+    keyRef.current ??= crypto.randomUUID();
+
+    try {
+      const result = await donateWithCoins({
+        receiverId,
+        coins,
+        message: message || undefined,
+        isAnonymous: anonymous,
+        idempotencyKey: keyRef.current,
+      });
+      if (result.success) {
+        keyRef.current = null;
+        setBalance(result.data?.balance ?? null);
+        setMessage("");
+        setCustomAmount("");
+        setStatus("done");
+        return;
+      }
+      keyRef.current = null;
+      setStatus("error");
+      setError(result.error ?? "ثبت حمایت ناموفق بود");
+    } catch {
+      setStatus("error");
+      setError("ارتباط با سرور برقرار نشد — دوباره تلاش کنید");
+    }
+  }
+
+  function handleClose() {
+    setOpen(false);
+    setStatus("idle");
+    setError(null);
+  }
 
   if (!open) {
     return (
       <button
         onClick={() => setOpen(true)}
         disabled={!authenticated}
-        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+        className="min-h-11 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
       >
-        حمایت مالی
+        حمایت مالی با سکه
       </button>
+    );
+  }
+
+  if (status === "done") {
+    return (
+      <div className="w-full max-w-sm space-y-3 rounded-md border border-primary/40 bg-primary/5 p-4 text-center">
+        <p className="text-sm text-primary">حمایت شما ثبت شد. ممنون که کنارشونید 🙏</p>
+        {balance !== null && (
+          <p className="text-xs text-text-muted">موجودی فعلی: 🪙 {balance.toLocaleString("fa-IR")}</p>
+        )}
+        <button type="button" onClick={handleClose} className="min-h-11 w-full rounded-md border border-border px-4 py-2 text-sm text-text-main">
+          بستن
+        </button>
+      </div>
     );
   }
 
   return (
     <div className="w-full max-w-sm space-y-3 rounded-md border border-border bg-surface p-4">
-      <div className="flex justify-center">
-        <TonConnectButton />
+      <div className="flex items-center justify-between text-xs text-text-muted">
+        <span>موجودی شما</span>
+        <span className="text-text-main">{balance === null ? "…" : `🪙 ${balance.toLocaleString("fa-IR")}`}</span>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {DONATION_PRESETS_USDT.map((p) => (
+        {DONATION_PRESETS_COINS.map((value) => (
           <button
-            key={p}
+            key={value}
             type="button"
             onClick={() => {
-              setPreset(p);
+              setPreset(value);
               setCustomAmount("");
             }}
-            className={`rounded-md border px-3 py-1.5 text-xs ${
-              !customAmount && preset === p
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border text-text-muted"
+            className={`min-h-10 rounded-md border px-3 py-1.5 text-xs ${
+              !customAmount && preset === value ? "border-primary bg-primary/10 text-primary" : "border-border text-text-muted"
             }`}
           >
-            {p} USDT
+            {value.toLocaleString("fa-IR")} سکه
           </button>
         ))}
       </div>
 
       <input
         type="number"
-        step="any"
-        min={MIN_DONATION_USDT}
-        max={MAX_DONATION_USDT}
+        step={1}
+        min={MIN_DONATION_COINS}
+        max={MAX_DONATION_COINS}
         value={customAmount}
         onChange={(e) => setCustomAmount(e.target.value)}
-        placeholder={`مبلغ دلخواه (${MIN_DONATION_USDT} تا ${MAX_DONATION_USDT} USDT)`}
+        placeholder={`مقدار دلخواه (${MIN_DONATION_COINS.toLocaleString("fa-IR")} تا ${MAX_DONATION_COINS.toLocaleString("fa-IR")} سکه)`}
         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-main outline-none focus:border-primary"
       />
 
@@ -80,26 +147,38 @@ export function DonateButton({ receiverId, authenticated }: DonateButtonProps) {
         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-main outline-none focus:border-primary"
       />
 
-      {!validAmount && (
+      <label className="flex items-center gap-2 text-xs text-text-muted">
+        <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
+        نمایش به‌صورت ناشناس
+      </label>
+
+      {!valid && (
         <p className="text-xs text-red-400">
-          مبلغ باید بین {MIN_DONATION_USDT} تا {MAX_DONATION_USDT} USDT باشد
+          مقدار باید عدد صحیح بین {MIN_DONATION_COINS.toLocaleString("fa-IR")} تا {MAX_DONATION_COINS.toLocaleString("fa-IR")} باشد
         </p>
       )}
 
-      <TonPayButton
-        label={`حمایت با ${effectiveAmount || 0} USDT`}
-        disabled={!authenticated || !validAmount}
-        createPayment={(walletAddress) =>
-          createTonDonationPayment({
-            receiverId,
-            amountUsdt: effectiveAmount,
-            message: message || undefined,
-            payerWalletAddress: walletAddress,
-          })
-        }
-      />
+      {insufficient && (
+        <Link
+          href={`/app/shop?redirect=${encodeURIComponent(pathname)}`}
+          className="block rounded-md border border-primary px-3 py-2 text-center text-xs text-primary"
+        >
+          موجودی کافی نیست — خرید سکه
+        </Link>
+      )}
 
-      <button type="button" onClick={() => setOpen(false)} className="w-full text-center text-xs text-text-muted">
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={!authenticated || !valid || insufficient || status === "sending"}
+        className="min-h-11 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+      >
+        {status === "sending" ? "در حال ثبت…" : `ارسال ${valid ? coins.toLocaleString("fa-IR") : ""} سکه`}
+      </button>
+
+      <button type="button" onClick={handleClose} className="w-full text-center text-xs text-text-muted">
         انصراف
       </button>
     </div>

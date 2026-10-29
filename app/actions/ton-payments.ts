@@ -17,7 +17,7 @@ import {
 import { settlePendingTonTransaction } from "@/lib/ton-settlement";
 import { findActiveCoinPackage } from "@/lib/coin-packages";
 import { getChapterUnlockCoinCost, getCoinPriceUsdt } from "@/lib/platform-settings";
-import { MIN_DONATION_USDT, MAX_DONATION_USDT, MAX_CUSTOM_COINS } from "@/lib/billing";
+import { MAX_CUSTOM_COINS } from "@/lib/billing";
 import { safeError } from "@/lib/errors";
 
 interface ActionResult<T = undefined> {
@@ -159,57 +159,6 @@ export async function createTonCustomCoinPayment(coins: number, payerWalletAddre
       payerWalletAddress,
       destinationOwnerAddress: getPlatformTonAddress(),
       amountUsdt,
-      comment,
-      transactionId: transaction.id,
-    });
-    return { success: true, data };
-  } catch (err) {
-    return handlePaymentError(err);
-  }
-}
-
-export async function createTonDonationPayment(input: {
-  receiverId: string;
-  amountUsdt: number;
-  message?: string;
-  payerWalletAddress: string;
-}): Promise<ActionResult<TonPaymentRequest>> {
-  const user = await getSessionUser();
-  if (!user) return { success: false, error: "برای حمایت مالی باید وارد شوید" };
-  if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
-  if (!isTonConfigured()) return { success: false, error: "پرداخت موقتاً در دسترس نیست" };
-  if (input.receiverId === user.id) return { success: false, error: "نمی‌توانید به خودتان حمایت مالی کنید" };
-  if (!Number.isFinite(input.amountUsdt) || input.amountUsdt < MIN_DONATION_USDT || input.amountUsdt > MAX_DONATION_USDT) {
-    return { success: false, error: `مبلغ حمایت باید بین ${MIN_DONATION_USDT} تا ${MAX_DONATION_USDT} USDT باشد` };
-  }
-
-  const allowed = await checkRateLimit(`usdt-donate:${user.id}`, 5, { failClosed: true });
-  if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است، کمی صبر کنید" };
-
-  const receiver = await prisma.user.findFirst({
-    where: {
-      id: input.receiverId,
-      OR: [{ staffRoles: { some: {} } }, { chapterStaffRoles: { some: {} } }, { publisherProfile: { isNot: null } }],
-    },
-    select: { cryptoWalletAddress: true },
-  });
-  if (!receiver) return { success: false, error: "این کاربر واجد شرایط دریافت حمایت مالی نیست" };
-  if (!receiver.cryptoWalletAddress) return { success: false, error: "این کاربر آدرس کیف پول تون ثبت نکرده است" };
-
-  try {
-    const jettonWalletAddress = await getJettonWalletAddress(input.payerWalletAddress);
-    const { transaction, comment } = await createPendingTransaction({
-      type: "DONATION",
-      amountUsdt: input.amountUsdt,
-      payerId: user.id,
-      receiverId: input.receiverId,
-      message: input.message?.trim().slice(0, 300),
-    });
-    const data = buildPaymentPayload({
-      jettonWalletAddress,
-      payerWalletAddress: input.payerWalletAddress,
-      destinationOwnerAddress: receiver.cryptoWalletAddress,
-      amountUsdt: input.amountUsdt,
       comment,
       transactionId: transaction.id,
     });

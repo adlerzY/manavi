@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "./prisma";
 import { bumpViewCounts } from "./view-counter";
+import { maybeEvaluateAchievements } from "./achievement-engine";
 
 export async function recordChapterView(chapterId: string, comicId: string): Promise<void> {
   await bumpViewCounts(chapterId, comicId);
@@ -17,4 +18,5 @@ export async function recordChapterVisit(chapterId: string, comicId: string, use
         })
       : Promise.resolve(),
   ]);
+  if (userId) await maybeEvaluateAchievements(userId);
 }

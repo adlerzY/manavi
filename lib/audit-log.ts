@@ -11,6 +11,7 @@ export type AuditAction =
   | "genre.create"
   | "publisher.create" | "publisher.verify" | "publisher.linkOwner" | "publisher.unlinkOwner"
   | "staff.verify"
+  | "report.resolve"
   | "license.create" | "license.activate" | "license.terminate"
   | "user.ban" | "user.unban" | "user.roleChange"
   | "user.coinGrant" | "user.coinRevoke" | "user.delete"

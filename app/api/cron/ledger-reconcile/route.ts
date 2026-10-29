@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { findWalletMismatches, findAllocationDiscrepancies } from "@/lib/ledger";
+import { findWalletMismatches, findAllocationDiscrepancies, findDonationDiscrepancies } from "@/lib/ledger";
 import { notifyAdmin } from "@/lib/admin-alert";
 
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -17,9 +17,10 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [walletMismatches, allocationDiscrepancies, unledgeredPurchases] = await Promise.all([
+    const [walletMismatches, allocationDiscrepancies, donationDiscrepancies, unledgeredPurchases] = await Promise.all([
       findWalletMismatches(50),
       findAllocationDiscrepancies(50),
+      findDonationDiscrepancies(50),
       prisma.$queryRaw<{ id: string }[]>`
         SELECT t."id" FROM "Transaction" t
         WHERE t."type" = 'COIN_PURCHASE' AND t."status" = 'PAID' AND t."currency" = 'USDT'
@@ -35,6 +36,9 @@ export async function GET(req: NextRequest) {
     if (allocationDiscrepancies.length > 0) {
       problems.push(`فروش با تخصیص درآمد ناقص یا مازاد: ${allocationDiscrepancies.length} ردیف (نمونه: ${allocationDiscrepancies.slice(0, 3).join(", ")})`);
     }
+    if (donationDiscrepancies.length > 0) {
+      problems.push(`دونیت با ثبت مالی ناقص: ${donationDiscrepancies.length} مورد (نمونه: ${donationDiscrepancies.slice(0, 3).join(", ")})`);
+    }
     if (unledgeredPurchases.length > 0) {
       problems.push(`خرید سکه‌ی تأییدشده بدون ثبت در دفتر کل: ${unledgeredPurchases.length} تراکنش (نمونه: ${unledgeredPurchases.slice(0, 3).map((t) => t.id).join(", ")})`);
     }
@@ -46,7 +50,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       walletMismatches: walletMismatches.length,
-      allocationDiscrepancies: allocationDiscrepancies.length,
+      allocationDiscrepancies: allocationDiscentanciesLength = allocationDiscrepancies.length,
+      donationDiscrepancies: donationDiscrepancies.length,
       unledgeredPurchases: unledgeredPurchases.length,
     });
   } catch (err) {

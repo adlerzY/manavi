@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
 import { getSignedImageUrls } from "@/lib/s3";
@@ -26,6 +27,7 @@ import { averageScore, requiredReadChapters } from "@/lib/rating";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
 import { STAFF_ROLE_LABELS } from "@/lib/staff-roles";
 import { COMIC_STATUS_LABELS } from "@/lib/labels";
+import { getSimilarComics, recordComicView } from "@/lib/recommendations";
 
 export const revalidate = 300;
 
@@ -55,6 +57,7 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
       rejectionNote: true,
       ratingCount: true,
       ratingTotal: true,
+      categoryId: true,
       category: { select: { name: true } },
       genres: { include: { genre: true } },
       staff: {
@@ -84,6 +87,10 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
 
   if (comic.approvalStatus !== "APPROVED" && !isPrivileged && !isTeamMember) {
     notFound();
+  }
+
+  if (user) {
+    after(() => recordComicView(user.id, comic.id).catch(() => {}));
   }
 
   const selected = pickEdition(editions, editionParam, langParam);
@@ -116,28 +123,13 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
     user
       ? prisma.bookmark.findUnique({ where: { userId_comicId: { userId: user.id, comicId: comic.id } } }).then(Boolean)
       : Promise.resolve(false),
-    comic.genres.length > 0
-      ? prisma.comic.findMany({
-          where: {
-            id: { not: comic.id },
-            ageRating: { in: allowedRatings },
-            approvalStatus: "APPROVED",
-            genres: { some: { genreId: { in: comic.genres.map((g) => g.genreId) } } },
-          },
-          orderBy: { viewCount: "desc" },
-          take: 12,
-          select: {
-            id: true,
-            title: true,
-            slug: true,
-            coverImage: true,
-            dominantColor: true,
-            ratingCount: true,
-            ratingTotal: true,
-            chapters: { where: { publishedAt: { not: null } }, orderBy: { chapterNumber: "desc" }, take: 1, select: { chapterNumber: true } },
-          },
-        })
-      : Promise.resolve([]),
+    getSimilarComics({
+      comicId: comic.id,
+      categoryId: comic.categoryId,
+      genreIds: comic.genres.map((g) => g.genreId),
+      allowedRatings,
+      limit: 12,
+    }),
     firstChapter && licenseActive && canPreviewAdultContent
       ? prisma.chapter
           .findUnique({ where: { id: firstChapter.id }, select: { pages: true } })
@@ -375,7 +367,7 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
                     title={c.title}
                     coverImage={c.coverImage}
                     dominantColor={c.dominantColor}
-                    latestChapter={c.chapters[0]?.chapterNumber ?? null}
+                    latestChapter={c.latestChapter}
                     rating={c.ratingCount > 0 ? averageScore(c.ratingTotal, c.ratingCount) : null}
                   />
                 ))}

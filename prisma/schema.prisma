@@ -30,6 +30,7 @@ model User {
   donationLink        String?
   cryptoWalletLabel   String?
   cryptoWalletAddress String?
+  activeTitle         String?
   customLinks         Json?
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
@@ -59,6 +60,10 @@ model User {
   editionRequests     EditionRequest[]
   payoutConfirmations PayoutConfirmation[]
   notifications       Notification[]
+  leaderboardHidden     Boolean           @default(false)
+  achievements          UserAchievement[]
+  coinDonationsGiven    Donation[]        @relation("DonationDonor")
+  coinDonationsReceived Donation[]        @relation("DonationReceiver")
 
   @@index([role])
   @@index([referredById])
@@ -859,7 +864,8 @@ model SaleLine {
 
 model RevenueAllocation {
   id               String          @id @default(uuid())
-  saleLineId       String
+  saleLineId       String?
+  donationId       String?
   beneficiaryType  BeneficiaryType
   beneficiaryId    String?
   role             StaffRole?
@@ -872,12 +878,48 @@ model RevenueAllocation {
   settlementLineId String?
   createdAt        DateTime        @default(now())
 
-  saleLine       SaleLine        @relation(fields: [saleLineId], references: [id])
+  saleLine       SaleLine?       @relation(fields: [saleLineId], references: [id])
+  donation       Donation?       @relation(fields: [donationId], references: [id])
   settlementLine SettlementLine? @relation(fields: [settlementLineId], references: [id])
 
   @@index([saleLineId])
+  @@index([donationId])
   @@index([beneficiaryType, beneficiaryId, settlementLineId])
   @@index([createdAt])
+}
+
+model Donation {
+  id                String   @id @default(uuid())
+  donorId           String
+  receiverId        String
+  coins             Int
+  platformUnits     Int      @default(0)
+  receiverUnits     Int
+  receiverUsdtMicro Int
+  coinPriceUsdt     Decimal  @db.Decimal(20, 6)
+  message           String?
+  isAnonymous       Boolean  @default(false)
+  idempotencyKey    String   @unique
+  createdAt         DateTime @default(now())
+
+  donor       User                @relation("DonationDonor", fields: [donorId], references: [id])
+  receiver    User                @relation("DonationReceiver", fields: [receiverId], references: [id])
+  allocations RevenueAllocation[]
+
+  @@index([donorId, createdAt])
+  @@index([receiverId, createdAt])
+  @@index([createdAt])
+}
+
+model UserAchievement {
+  userId    String
+  key       String
+  awardedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+  @@index([key])
 }
 
 model LedgerEntry {

@@ -18,6 +18,7 @@ import { ContinueReadingSection } from "@/components/home/continue-reading-secti
 import { HeroCarousel } from "@/components/home/hero-carousel";
 import { NewestPopularSection } from "@/components/home/newest-popular-section";
 import { RecommendedSectionAsync } from "@/components/home/recommended-section-async";
+import { BecauseYouReadAsync } from "@/components/home/because-you-read-section";
 import { MostBookmarkedSection } from "@/components/home/most-bookmarked-section";
 import { CompletedSeriesSection } from "@/components/home/completed-series-section";
 import { LatestCommentsSection } from "@/components/home/latest-comments-section";
@@ -73,6 +74,10 @@ export default async function AppHomePage() {
 
       <Suspense fallback={null}>
         <RecommendedSectionAsync allowedRatings={allowedRatings} />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <BecauseYouReadAsync allowedRatings={allowedRatings} />
       </Suspense>
 
       {homepageCategories.map((category, i) => (

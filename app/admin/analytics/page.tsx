@@ -25,6 +25,7 @@ export default async function AdminAnalyticsPage() {
           <p className="mt-1 text-xs text-text-muted">
             مجموع دونیت{coinStats.donationTotalToman !== null && ` (≈ ${coinStats.donationTotalToman.toLocaleString("fa-IR")} تومان)`}
           </p>
+          <p className="mt-1 text-xs text-text-muted">+ {coinStats.donationTotalCoins.toLocaleString("fa-IR")} سکه (دونیت با سکه)</p>
         </div>
       </div>
 

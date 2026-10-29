@@ -4,11 +4,13 @@ import { useState, type FormEvent } from "react";
 import { createComment } from "@/app/actions/comments";
 import { replyToComment } from "@/app/publisher/actions/comment-reply";
 import { useTelegramAuth } from "@/components/providers/telegram-auth-provider";
+import { titleLabel } from "@/lib/achievements";
 
 interface CommentAuthor {
   firstName: string;
   lastName: string | null;
   username: string | null;
+  activeTitle?: string | null;
 }
 
 interface ReplyData {
@@ -22,6 +24,12 @@ interface ReplyData {
 
 interface CommentData extends ReplyData {
   replies: ReplyData[];
+}
+
+function AuthorTitle({ value }: { value?: string | null }) {
+  const label = titleLabel(value);
+  if (!label) return null;
+  return <span className="mr-1.5 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] text-accent">{label}</span>;
 }
 
 function authorName(user: CommentAuthor) {
@@ -61,7 +69,7 @@ function ReplyForm({ commentId, onReplied }: { commentId: string; onReplied: (re
         isSpoiler: false,
         isStaffReply: true,
         createdAt: new Date().toISOString(),
-        user: { firstName: user?.firstName ?? "تیم", lastName: user?.lastName ?? null, username: user?.username ?? null },
+        user: { firstName: user?.firstName ?? "تیم", lastName: user?.lastName ?? null, username: user?.username ?? null, activeTitle: user?.activeTitle ?? null },
       });
       setContent("");
     } else {
@@ -102,7 +110,7 @@ export function CommentSection({ chapterId, initialComments, canReply }: { chapt
       isStaffReply: false,
       createdAt: new Date().toISOString(),
       replies: [],
-      user: { firstName: user?.firstName ?? "شما", lastName: user?.lastName ?? null, username: user?.username ?? null },
+      user: { firstName: user?.firstName ?? "شما", lastName: user?.lastName ?? null, username: user?.username ?? null, activeTitle: user?.activeTitle ?? null },
     };
 
     setComments((prev) => [optimisticComment, ...prev]);
@@ -152,7 +160,10 @@ export function CommentSection({ chapterId, initialComments, canReply }: { chapt
         {comments.map((comment) => (
           <div key={comment.id} className="rounded-md border border-border bg-surface p-3">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs font-medium text-text-main">{authorName(comment.user)}</span>
+              <span className="flex items-center text-xs font-medium text-text-main">
+                {authorName(comment.user)}
+                <AuthorTitle value={comment.user.activeTitle} />
+              </span>
               <span className="text-xs text-text-muted">{new Date(comment.createdAt).toLocaleDateString("fa-IR")}</span>
             </div>
             <SpoilerText content={comment.content} isSpoiler={comment.isSpoiler} />
@@ -163,6 +174,7 @@ export function CommentSection({ chapterId, initialComments, canReply }: { chapt
                   <div key={reply.id}>
                     <div className="mb-1 flex items-center gap-2">
                       <span className="text-xs font-medium text-primary">{authorName(reply.user)}</span>
+                      <AuthorTitle value={reply.user.activeTitle} />
                       {reply.isStaffReply && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">تیم</span>}
                     </div>
                     <SpoilerText content={reply.content} isSpoiler={reply.isSpoiler} />

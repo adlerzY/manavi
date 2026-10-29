@@ -118,3 +118,17 @@ export async function findAllocationDiscrepancies(limit = 100): Promise<string[]
     LIMIT ${limit}`;
   return rows.map((row) => row.id);
 }
+export async function findDonationDiscrepancies(limit = 100): Promise<string[]> {
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT d."id"
+    FROM "Donation" d
+    LEFT JOIN "RevenueAllocation" ra ON ra."donationId" = d."id"
+    GROUP BY d."id", d."coins"
+    HAVING COALESCE(SUM(ra."allocatedUnits"), 0) <> d."coins" * ${UNITS_PER_COIN}::int
+      OR NOT EXISTS (
+        SELECT 1 FROM "LedgerEntry" l
+        WHERE l."sourceType" = 'DONATION' AND l."sourceId" = d."id" AND l."account" = 'USER_COIN_WALLET'
+      )
+    LIMIT ${limit}`;
+  return rows.map((row) => row.id);
+}

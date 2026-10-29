@@ -28,6 +28,7 @@ const SOURCE_TITLES: Record<string, string> = {
   ADMIN_GRANT: "اعطای سکه توسط پشتیبانی",
   ADMIN_REVOKE: "کسر سکه توسط پشتیبانی",
   OPENING_BALANCE: "موجودی اولیه",
+  DONATION: "حمایت مالی (دونیت)",
 };
 
 export async function getWallet(userId: string, page: number): Promise<WalletOverview> {
@@ -69,8 +70,9 @@ export async function getWallet(userId: string, page: number): Promise<WalletOve
   const transactionIds = rows
     .filter((row) => row.sourceType === "COIN_PURCHASE" || row.sourceType === "COIN_BONUS")
     .map((row) => row.sourceId);
+  const donationIds = rows.filter((row) => row.sourceType === "DONATION").map((row) => row.sourceId);
 
-  const [sales, transactions] = await Promise.all([
+  const [sales, transactions, donations] = await Promise.all([
     saleIds.length > 0
       ? prisma.sale.findMany({
           where: { id: { in: saleIds } },
@@ -88,10 +90,17 @@ export async function getWallet(userId: string, page: number): Promise<WalletOve
           select: { id: true, amount: true },
         })
       : Promise.resolve([]),
+    donationIds.length > 0
+      ? prisma.donation.findMany({
+          where: { id: { in: donationIds } },
+          select: { id: true, receiver: { select: { firstName: true, username: true } } },
+        })
+      : Promise.resolve([]),
   ]);
 
   const saleById = new Map(sales.map((sale) => [sale.id, sale]));
   const transactionById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
+  const donationById = new Map(donations.map((donation) => [donation.id, donation]));
 
   const entries: WalletEntry[] = rows.map((row) => {
     const units = Number(row.amountUnits) / UNITS_PER_COIN;
@@ -111,6 +120,9 @@ export async function getWallet(userId: string, page: number): Promise<WalletOve
     } else if (row.sourceType === "COIN_PURCHASE") {
       const transaction = transactionById.get(row.sourceId);
       if (transaction) detail = `پرداخت ${Number(transaction.amount).toLocaleString("fa-IR", { maximumFractionDigits: 6 })} USDT`;
+    } else if (row.sourceType === "DONATION") {
+      const donation = donationById.get(row.sourceId);
+      if (donation) detail = `به ${donation.receiver.username ? `@${donation.receiver.username}` : donation.receiver.firstName}`;
     } else if (row.sourceType === "ADMIN_GRANT" || row.sourceType === "ADMIN_REVOKE") {
       detail = row.note;
     }

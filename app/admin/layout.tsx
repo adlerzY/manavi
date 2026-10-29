@@ -17,9 +17,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const nav: SidebarNavItem[] = [
     { href: "/admin", label: "داشبورد", icon: "LayoutDashboard" },
     { href: "/admin/comics", label: "عناوین و چپترها", icon: "BookOpen", group: "مدیریت محتوا" },
-    { href: "/admin/chapter-approvals", label: "تایید محتوا", icon: "CheckCircle2", group: "مدیریت محتوا", badge: counts.approvals },
+    { href: "/admin/moderation", label: "نظارت و گزارش‌ها", icon: "CheckCircle2", group: "مدیریت محتوا", badge: counts.moderation },
     { href: "/admin/categories", label: "دسته‌بندی و ژانر", icon: "Layers", group: "مدیریت محتوا" },
-    { href: "/admin/comments", label: "نظرات", icon: "MessageSquare", group: "مدیریت محتوا", badge: counts.pendingComments },
     { href: "/admin/users", label: "کاربران", icon: "Users", group: "کاربران و ناشران" },
     { href: "/admin/publishers", label: "ناشران و لایسنس‌ها", icon: "Building2", group: "کاربران و ناشران" },
     { href: "/admin/transactions", label: "تراکنش‌ها", icon: "Receipt", group: "مالی و گزارش‌ها" },

@@ -50,7 +50,6 @@ export async function getTopChapters(limit = 10): Promise<TopChapterStat[]> {
     viewCount: c.viewCount,
   }));
 }
-
 export interface CoinStats {
   totalRevenueUsdt: number;
   totalRevenueToman: number | null;
@@ -58,19 +57,21 @@ export interface CoinStats {
   purchaseCount: number;
   donationTotalUsdt: number;
   donationTotalToman: number | null;
+  donationTotalCoins: number;
 }
 
 export async function getCoinStats(): Promise<CoinStats> {
   await requireAdmin();
-  const [purchases, spends, donations, tomanPerUsdt] = await Promise.all([
+  const [purchases, spends, legacyDonations, coinDonations, tomanPerUsdt] = await Promise.all([
     prisma.transaction.aggregate({ where: { type: "COIN_PURCHASE", status: "PAID" }, _sum: { amount: true }, _count: { _all: true } }),
     prisma.transaction.aggregate({ where: { type: "CHAPTER_UNLOCK", status: "PAID" }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { type: "DONATION", status: "PAID" }, _sum: { amount: true } }),
+    prisma.transaction.aggregate({ where: { type: "DONATION", status: "PAID", currency: "USDT" }, _sum: { amount: true } }),
+    prisma.donation.aggregate({ _sum: { coins: true } }),
     getTomanPerUsdt(),
   ]);
 
   const totalRevenueUsdt = Number(purchases._sum.amount ?? 0);
-  const donationTotalUsdt = Number(donations._sum.amount ?? 0);
+  const donationTotalUsdt = Number(legacyDonations._sum.amount ?? 0);
 
   return {
     totalRevenueUsdt,
@@ -79,5 +80,6 @@ export async function getCoinStats(): Promise<CoinStats> {
     purchaseCount: purchases._count._all,
     donationTotalUsdt,
     donationTotalToman: tomanPerUsdt > 0 ? Math.round(donationTotalUsdt * tomanPerUsdt) : null,
+    donationTotalCoins: coinDonations._sum.coins ?? 0,
   };
 }

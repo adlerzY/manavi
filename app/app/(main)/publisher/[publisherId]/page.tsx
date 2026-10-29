@@ -7,7 +7,6 @@ import { BackButton } from "@/components/navigation/back-button";
 import { WalletAndLinks } from "@/components/support/wallet-and-links";
 import { SafeAvatar } from "@/components/ui/safe-avatar";
 import { SafeCoverImage } from "@/components/ui/safe-cover-image";
-import { TonConnectProvider } from "@/components/providers/ton-connect-provider";
 import { parseCustomLinks } from "@/lib/profile-links";
 
 interface PageProps {
@@ -58,7 +57,7 @@ export default async function PublisherPublicProfilePage({ params }: PageProps) 
   const avatarSrc = publisher.avatarUrl ?? publisher.contractUser?.telegramPhotoUrl ?? null;
 
   return (
-    <TonConnectProvider>
+    <>
       <main className="min-h-screen bg-background px-4 py-10">
         <div className="mx-auto max-w-3xl">
           <div className="mb-4">
@@ -129,6 +128,6 @@ export default async function PublisherPublicProfilePage({ params }: PageProps) 
           </div>
         </div>
       </main>
-    </TonConnectProvider>
+    </>
   );
 }

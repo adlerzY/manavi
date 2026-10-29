@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/moderation";
+import { after } from "next/server";
+import { maybeEvaluateAchievements } from "@/lib/achievement-engine";
 
 interface CreateCommentInput {
   chapterId: string;
@@ -56,6 +58,7 @@ export async function createComment(input: CreateCommentInput): Promise<CreateCo
     data: { chapterId: input.chapterId, userId: user.id, content, isSpoiler: Boolean(input.isSpoiler) },
     select: { id: true, content: true, isSpoiler: true, createdAt: true, user: { select: { firstName: true, lastName: true, username: true } } },
   });
+after(() => maybeEvaluateAchievements(user.id).catch(() => {}));
 
   return { success: true, comment: { ...comment, createdAt: comment.createdAt.toISOString() } };
 }

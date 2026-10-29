@@ -15,7 +15,6 @@ import { AgeVerificationGate } from "@/components/reader/age-verification-gate";
 import { CommentSection } from "@/components/comments/comment-section";
 import { getChapterReactionSummary } from "@/app/actions/reactions";
 import { categoryDirectionToReaderDirection } from "@/lib/reading";
-import { TonConnectProvider } from "@/components/providers/ton-connect-provider";
 import type { StaffCreditItem } from "@/components/reader/chapter-staff-credits";
 
 interface PageProps {
@@ -194,7 +193,7 @@ export default async function ReadChapterPage({ params }: PageProps) {
         isSpoiler: true,
         isStaffReply: true,
         createdAt: true,
-        user: { select: { firstName: true, lastName: true, username: true } },
+        user: { select: { firstName: true, lastName: true, username: true, activeTitle: true } },
         replies: {
           where: { status: "APPROVED" },
           orderBy: { createdAt: "asc" },
@@ -204,7 +203,7 @@ export default async function ReadChapterPage({ params }: PageProps) {
             isSpoiler: true,
             isStaffReply: true,
             createdAt: true,
-            user: { select: { firstName: true, lastName: true, username: true } },
+            user: { select: { firstName: true, lastName: true, username: true, activeTitle: true } },
           },
         },
       },
@@ -213,7 +212,7 @@ export default async function ReadChapterPage({ params }: PageProps) {
       where: { chapterId },
       select: {
         roleTitle: true,
-        user: { select: { id: true, firstName: true, username: true, cryptoWalletAddress: true } },
+        user: { select: { id: true, firstName: true, username: true } },
       },
     }),
   ]);
@@ -226,11 +225,10 @@ export default async function ReadChapterPage({ params }: PageProps) {
     firstName: s.user.firstName,
     username: s.user.username,
     roleTitle: s.roleTitle,
-    hasWallet: Boolean(s.user.cryptoWalletAddress),
   }));
 
   return (
-    <TonConnectProvider>
+    <>
       <ChapterReader
         chapterId={chapter.id}
         comicId={chapter.comic.id}
@@ -263,6 +261,6 @@ export default async function ReadChapterPage({ params }: PageProps) {
           canReply={canReply}
         />
       </div>
-    </TonConnectProvider>
+    </>
   );
 }

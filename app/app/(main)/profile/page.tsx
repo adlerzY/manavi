@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, Library, Wallet } from "lucide-react";
+import { Bell, Library, Wallet, Trophy, Award } from "lucide-react";
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
@@ -13,6 +13,8 @@ import { parseCustomLinks } from "@/lib/profile-links";
 import { getReferralRewardCoins } from "@/lib/platform-settings";
 import { ROLE_LABELS, canUploadAvatar, hasEarningsAccess } from "@/lib/roles";
 import { getUnreadNotificationCount } from "@/lib/notifications";
+import { LeaderboardVisibilityToggle } from "@/components/profile/leaderboard-visibility-toggle";
+import { titleLabel } from "@/lib/achievements";
 
 export default async function ProfilePage() {
   const user = await getSessionUser();
@@ -48,11 +50,18 @@ export default async function ProfilePage() {
               {user.firstName} {user.lastName ?? ""}
             </h1>
             {user.username && <p className="text-sm text-text-muted">@{user.username}</p>}
-            {user.role !== "USER" && (
-              <span className="mt-1 inline-block rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                {ROLE_LABELS[user.role]}
-              </span>
-            )}
+            <div className="flex flex-wrap gap-1">
+              {user.role !== "USER" && (
+                <span className="mt-1 inline-block rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                  {ROLE_LABELS[user.role]}
+                </span>
+              )}
+              {titleLabel(user.activeTitle) && (
+                <span className="mr-1 mt-1 inline-block rounded-full bg-accent/10 px-2.5 py-1 text-xs text-accent">
+                  {titleLabel(user.activeTitle)}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -97,11 +106,24 @@ export default async function ProfilePage() {
             title="کیف پول"
             subtitle={`موجودی: ${user.coinsBalance.toLocaleString("fa-IR")} سکه · تاریخچه تراکنش‌ها`}
           />
+          <ProfileMenuLink
+            href="/app/leaderboard"
+            icon={<Trophy size={20} />}
+            title="رتبه‌بندی"
+            subtitle="فعال‌ترین‌ها، حامیان و حمایت‌شده‌ترین‌ها"
+          />
+          <ProfileMenuLink
+            href="/app/achievements"
+            icon={<Award size={20} />}
+            title="دستاوردها و تگ‌ها"
+            subtitle="با فعالیت در ماناوی نشان و تگ بگیرید"
+          />
         </section>
 
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-text-main">تنظیمات</h2>
           <AgeVerificationToggle current={user.isAgeVerified} />
+          <LeaderboardVisibilityToggle current={user.leaderboardHidden} />
           <CollapsibleSection triggerLabel="ویرایش پروفایل">
             <EditProfileForm
               canUploadAvatar={avatarUploadAllowed}

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/moderation";
 import { safeError } from "@/lib/errors";
+import { after } from "next/server";
+import { notifyAdmins } from "@/lib/notifications";
 import type { ReportCategory, ReportTargetType } from "@prisma/client";
 
 interface ActionResult<T = undefined> {
@@ -71,7 +73,7 @@ export async function submitReport(input: {
     });
     if (open) return { success: true };
 
-    await prisma.contentReport.create({
+    const created = await prisma.contentReport.create({
       data: {
         reporterId: user.id,
         targetType: input.targetType,
@@ -79,7 +81,19 @@ export async function submitReport(input: {
         category: input.category,
         details: input.details?.trim().slice(0, 1000) || null,
       },
+      select: { id: true },
     });
+
+    after(() =>
+      notifyAdmins({
+        type: "SYSTEM",
+        title: "گزارش جدید از کاربران",
+        body: input.details?.trim().slice(0, 120) || null,
+        href: "/admin/moderation?tab=reports",
+        dedupeKey: `report-new:${created.id}`,
+      }).catch(() => {})
+    );
+
     return { success: true };
   } catch (err) {
     return safeError(err);

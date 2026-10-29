@@ -47,6 +47,9 @@ export default async function AdminDashboard() {
   if (nav.pendingComments > 0) {
     actions.push({ key: "comments", label: `${fa(nav.pendingComments)} نظر در انتظار بررسی`, href: "/admin/comments?status=PENDING", tone: "warning" });
   }
+  if (nav.openReports > 0) {
+    actions.push({ key: "reports", label: `${fa(nav.openReports)} گزارش کاربران بررسی‌نشده`, href: "/admin/moderation?tab=reports", tone: "warning" });
+  }
   if (extras.expiringLicenses > 0) {
     actions.push({ key: "expiring", label: `${fa(extras.expiringLicenses)} لایسنس تا ۳۰ روز آینده منقضی می‌شود`, href: "/admin/publishers?tab=licenses", tone: "warning" });
   }
