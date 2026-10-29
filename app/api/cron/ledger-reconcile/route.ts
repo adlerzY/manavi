@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       walletMismatches: walletMismatches.length,
-      allocationDiscrepancies: allocationDiscentanciesLength = allocationDiscrepancies.length,
+      allocationDiscrepancies: allocationDiscrepancies.length,
       donationDiscrepancies: donationDiscrepancies.length,
       unledgeredPurchases: unledgeredPurchases.length,
     });

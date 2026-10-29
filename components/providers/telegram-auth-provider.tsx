@@ -15,6 +15,7 @@ interface AuthUser {
   lastName: string | null;
   username: string | null;
   role: string;
+  activeTitle: string | null;
 }
 
 interface TelegramAuthState {

@@ -77,13 +77,21 @@ async function createUserWithReferral(input: {
   throw new Error("Failed to allocate a unique referral code");
 }
 
-function publicUserPayload(user: { id: string; firstName: string; lastName: string | null; username: string | null; role: Role }) {
+function publicUserPayload(user: {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  username: string | null;
+  role: Role;
+  activeTitle: string | null;
+}) {
   return {
     id: user.id,
     firstName: user.firstName,
     lastName: user.lastName,
     username: user.username,
     role: user.role,
+    activeTitle: user.activeTitle,
   };
 }
 
