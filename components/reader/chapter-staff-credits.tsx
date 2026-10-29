@@ -1,48 +1,45 @@
-"use server";
+"use client";
 
-import { prisma } from "@/lib/prisma";
-import { getSessionUser, getPublisherContext } from "@/lib/auth";
-import { getReceivedDonationsUsdt } from "@/lib/donations";
+import Link from "next/link";
+import type { StaffRole } from "@prisma/client";
+import { DonateButton } from "@/components/team/donate-button";
+import { STAFF_ROLE_LABELS } from "@/lib/staff-roles";
 
-export interface PublisherOverviewStats {
-  publishedChapters: number;
-  pendingChapters: number;
-  totalDonationsUsdt: number;
+export interface StaffCreditItem {
+  userId: string;
+  firstName: string;
+  username: string | null;
+  roleTitle: StaffRole;
 }
 
-export async function getPublisherOverviewStats(): Promise<PublisherOverviewStats | null> {
-  const user = await getSessionUser();
-  const context = await getPublisherContext(user);
-  if (!user || !context) return null;
+export function ChapterStaffCredits({
+  staff,
+  isAuthenticated,
+}: {
+  staff: StaffCreditItem[];
+  isAuthenticated: boolean;
+}) {
+  if (staff.length === 0) return null;
 
-  const [publishedChapters, pendingChapters, totalDonationsUsdt] = await Promise.all([
-    prisma.chapter.count({
-      where: { status: "PUBLISHED", comic: { license: { publisherId: context.publisherId } } },
-    }),
-    prisma.chapter.count({
-      where: { status: "PENDING_APPROVAL", comic: { license: { publisherId: context.publisherId } } },
-    }),
-    getReceivedDonationsUsdt(user.id),
-  ]);
-
-  return { publishedChapters, pendingChapters, totalDonationsUsdt };
-}
-
-export interface StaffOverviewStats {
-  uploadedChapters: number;
-  pendingChapters: number;
-  totalDonationsUsdt: number;
-}
-
-export async function getStaffOverviewStats(): Promise<StaffOverviewStats | null> {
-  const user = await getSessionUser();
-  if (!user) return null;
-
-  const [uploadedChapters, pendingChapters, totalDonationsUsdt] = await Promise.all([
-    prisma.chapter.count({ where: { uploadedById: user.id, status: "PUBLISHED" } }),
-    prisma.chapter.count({ where: { uploadedById: user.id, status: "PENDING_APPROVAL" } }),
-    getReceivedDonationsUsdt(user.id),
-  ]);
-
-  return { uploadedChapters, pendingChapters, totalDonationsUsdt };
+  return (
+    <div className="mx-auto mt-6 max-w-2xl space-y-3 px-4">
+      <p className="text-center text-sm text-white/60">دست‌اندرکاران این چپتر</p>
+      <div className="space-y-2">
+        {staff.map((member) => (
+          <div
+            key={`${member.userId}-${member.roleTitle}`}
+            className="flex items-center justify-between rounded-md border border-white/10 bg-white/5 px-3 py-2"
+          >
+            <Link href={`/app/team/${member.userId}`} className="min-w-0">
+              <p className="truncate text-sm text-white">
+                {member.username ? `@${member.username}` : member.firstName}
+              </p>
+              <p className="text-xs text-white/50">{STAFF_ROLE_LABELS[member.roleTitle]}</p>
+            </Link>
+            <DonateButton receiverId={member.userId} authenticated={isAuthenticated} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
