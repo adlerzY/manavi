@@ -82,7 +82,7 @@ export function DoublePageReader({
   const leftAction = isRtl ? goForward : goBackward;
 
   return (
-    <div className="relative flex h-screen w-full items-center justify-center gap-1 bg-black" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className="relative flex h-full w-full items-center justify-center gap-1 bg-black" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="relative h-full w-1/2">
         {leftUrl && <ProtectedImage src={leftUrl} alt="" fill priority sizes="50vw" className="object-contain" />}
       </div>

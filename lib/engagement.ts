@@ -1,13 +1,12 @@
 export const LEADERBOARD_TAG = "leaderboard";
-export const LEADERBOARD_SIZE = 50;
+export const LEADERBOARD_SIZE = 30;
 
-export type LeaderboardBoard = "active" | "donors" | "supported";
+export type LeaderboardBoard = "publishers" | "team";
 export type LeaderboardPeriod = "week" | "month" | "all";
 
 export const LEADERBOARD_BOARDS: { id: LeaderboardBoard; label: string }[] = [
-  { id: "active", label: "فعال‌ترین‌ها" },
-  { id: "donors", label: "حامیان" },
-  { id: "supported", label: "حمایت‌شده‌ترین‌ها" },
+  { id: "publishers", label: "ناشران" },
+  { id: "team", label: "تیم‌ها" },
 ];
 
 export const LEADERBOARD_PERIODS: { id: LeaderboardPeriod; label: string; days: number | null }[] = [
@@ -27,32 +26,20 @@ export const ENGAGEMENT_POINTS = {
 
 export interface LeaderboardEntry {
   rank: number;
+  id: string;
   userId: string;
   name: string;
   avatarUrl: string | null;
   activeTitle: string | null;
+  href: string;
   score: number;
-  stats: Record<string, number>;
+  supporters: number;
 }
 
 export function parseBoard(value?: string): LeaderboardBoard {
-  return LEADERBOARD_BOARDS.some((board) => board.id === value) ? (value as LeaderboardBoard) : "active";
+  return LEADERBOARD_BOARDS.some((board) => board.id === value) ? (value as LeaderboardBoard) : "publishers";
 }
 
 export function parsePeriod(value?: string): LeaderboardPeriod {
   return LEADERBOARD_PERIODS.some((period) => period.id === value) ? (value as LeaderboardPeriod) : "week";
-}
-
-export function engagementRules(): { label: string; points: string }[] {
-  const fa = (value: number) => value.toLocaleString("fa-IR");
-  return [
-    { label: "خواندن هر چپتر (هر چپتر فقط یک‌بار حساب می‌شود)", points: `${fa(ENGAGEMENT_POINTS.read)} امتیاز` },
-    {
-      label: `نظر روی یک چپتر (حداقل ${fa(ENGAGEMENT_POINTS.minCommentLength)} حرف، یک‌بار برای هر چپتر)`,
-      points: `${fa(ENGAGEMENT_POINTS.comment)} امتیاز`,
-    },
-    { label: "واکنش به یک چپتر", points: `${fa(ENGAGEMENT_POINTS.reaction)} امتیاز` },
-    { label: "امتیازدهی به اثر یا نسخه", points: `${fa(ENGAGEMENT_POINTS.rating)} امتیاز` },
-    { label: `حمایت مالی (هر ${fa(ENGAGEMENT_POINTS.donationCoinsPerPoint)} سکه)`, points: `${fa(1)} امتیاز` },
-  ];
 }

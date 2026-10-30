@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
@@ -12,33 +11,39 @@ import { GenrePill } from "@/components/catalog/genre-pill";
 import { ComicDetailTabs } from "@/components/catalog/comic-detail-tabs";
 import { ChapterOnePreview } from "@/components/catalog/chapter-one-preview";
 import { ChapterList, type ChapterListItem } from "@/components/catalog/chapter-list";
+import { ComicCredits } from "@/components/catalog/comic-credits";
+import { ComicMoreSheet } from "@/components/catalog/comic-more-sheet";
 import { EditionSelector } from "@/components/catalog/edition-selector";
 import { RatingPanel } from "@/components/catalog/rating-panel";
 import { ReportButton } from "@/components/catalog/report-button";
 import { RequestEditionCard } from "@/components/catalog/request-edition-card";
 import { BackButton } from "@/components/navigation/back-button";
 import { ComicUnlockButton } from "@/components/reader/comic-unlock-button";
-import { SafeAvatar } from "@/components/ui/safe-avatar";
+import { ExpandableText } from "@/components/ui/expandable-text";
 import { SafeCoverImage } from "@/components/ui/safe-cover-image";
 import { getChapterAccessList, getEditionUnlockPreview } from "@/lib/chapters";
 import { getChapterUnlockCoinCost } from "@/lib/platform-settings";
 import { getWorkEditions, pickEdition, getUserRatingContext, getUserEditionRequest } from "@/lib/editions";
 import { averageScore, requiredReadChapters } from "@/lib/rating";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
-import { STAFF_ROLE_LABELS } from "@/lib/staff-roles";
 import { COMIC_STATUS_LABELS } from "@/lib/labels";
 import { getSimilarComics, recordComicView } from "@/lib/recommendations";
 
 export const revalidate = 300;
 
+type TabId = "preview" | "episodes" | "similar";
+
+const VALID_TABS: TabId[] = ["preview", "episodes", "similar"];
+const MAX_VISIBLE_GENRES = 5;
+
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ edition?: string; lang?: string }>;
+  searchParams: Promise<{ edition?: string; lang?: string; tab?: string }>;
 }
 
 export default async function ComicDetailPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
-  const { edition: editionParam, lang: langParam } = await searchParams;
+  const { edition: editionParam, lang: langParam, tab: tabParam } = await searchParams;
 
   const comic = await prisma.comic.findUnique({
     where: { slug },
@@ -170,8 +175,17 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
         : { chapterId: firstChapter.id, label: "شروع خواندن" }
       : null;
 
+  const requestedTab = VALID_TABS.find((value) => value === tabParam);
+  const defaultTab: TabId = requestedTab ?? (hasRead ? "episodes" : "preview");
+
   const editionOptions = editions.map((edition) => ({ ...edition, price: edition.priceCoinsOverride ?? defaultPrice }));
+  const alternativeCount = Math.max(0, editions.length - 1);
   const visibleStaff = comic.staff.filter((s) => !s.editionId || s.editionId === selected?.id);
+  const creditsStaff = visibleStaff.map((s) => ({
+    userId: s.user.id,
+    name: s.user.username ? `@${s.user.username}` : s.user.firstName,
+    role: s.roleTitle,
+  }));
   const chapterPrice = selected?.priceCoinsOverride ?? defaultPrice;
   const isAdmin = user?.role === "ADMIN";
 
@@ -185,20 +199,21 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
         owned: isAdmin || ownedChapterIds.has(chapter.id),
         isRead: readChapterIds.has(chapter.id),
         isLatest: index === 0,
+        isCurrent: resumeChapter?.id === chapter.id,
       }))
     : [];
 
   const content = (
     <>
       <div
-        className="relative h-40 w-full overflow-hidden bg-surface sm:h-56"
+        className="relative h-32 w-full overflow-hidden bg-surface sm:h-48"
         style={!comic.bannerImage ? { backgroundColor: comic.dominantColor ?? "#1E1E1E" } : undefined}
       >
         {comic.bannerImage && (
           <SafeCoverImage src={comic.bannerImage} alt="" fill priority sizes="100vw" className="object-cover opacity-60" />
         )}
         <div
-          className="absolute inset-x-0 bottom-0 h-24"
+          className="absolute inset-x-0 bottom-0 h-20"
           style={{ backgroundImage: "linear-gradient(to top, #121212, transparent)" }}
         />
         <div className="absolute right-4 top-4 z-10">
@@ -206,7 +221,7 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
         </div>
       </div>
 
-      <div className="mx-auto -mt-16 max-w-4xl px-4 pb-4">
+      <div className="mx-auto -mt-12 max-w-4xl px-4 pb-3">
         {(isPrivileged || isTeamMember) && comic.approvalStatus !== "APPROVED" && (
           <div
             className={`mb-4 rounded-md border px-4 py-3 text-sm ${
@@ -221,16 +236,14 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
           </div>
         )}
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <div className="relative h-56 w-40 flex-shrink-0 overflow-hidden rounded-md bg-surface shadow-lg">
-            <SafeCoverImage src={comic.coverImage} alt={comic.title} fill priority sizes="160px" className="object-cover" />
+        <div className="flex items-end gap-3">
+          <div className="relative h-40 w-28 flex-shrink-0 overflow-hidden rounded-md bg-surface shadow-lg">
+            <SafeCoverImage src={comic.coverImage} alt={comic.title} fill priority sizes="112px" className="object-cover" />
           </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-semibold text-text-main">{comic.title}</h1>
-            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text-muted">
-              <span className="rounded-full bg-surface px-2.5 py-1 text-xs text-primary">
-                {comic.category.name}
-              </span>
+          <div className="min-w-0 flex-1 pb-1">
+            <h1 className="text-xl font-semibold leading-snug text-text-main">{comic.title}</h1>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-text-muted">
+              <span className="rounded-full bg-surface px-2.5 py-1 text-primary">{comic.category.name}</span>
               <span>{COMIC_STATUS_LABELS[comic.status]}</span>
               <span>·</span>
               <span>{sortedChapters.length.toLocaleString("fa-IR")} چپتر</span>
@@ -241,39 +254,74 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
                 </>
               )}
             </p>
-
-            {selected && (
-              <Link
-                href={`/app/publisher/${selected.publisherId}`}
-                className="mt-2 inline-flex items-center gap-2 rounded-full bg-surface py-1.5 pl-3 pr-1.5 text-xs text-text-muted hover:text-primary"
-              >
-                <SafeAvatar src={selected.publisherAvatarUrl} fallbackText={selected.publisherName} size={24} />
-                {selected.publisherName}
-              </Link>
-            )}
-
-            {comic.genres.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {comic.genres.map(({ genre }) => (
-                  <GenrePill key={genre.id} id={genre.id} name={genre.name} />
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-3">
-          <BookmarkButton comicId={comic.id} comicSlug={comic.slug} authenticated={Boolean(user)} initialBookmarked={bookmarked} />
-        </div>
-
-        {selected && (
-          <div className="mt-4">
-            <EditionSelector slug={comic.slug} editions={editionOptions} selectedId={selected.id} />
+        {comic.genres.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {comic.genres.slice(0, MAX_VISIBLE_GENRES).map(({ genre }) => (
+              <GenrePill key={genre.id} id={genre.id} name={genre.name} />
+            ))}
           </div>
         )}
 
+        <ComicCredits
+          publisher={
+            selected
+              ? { id: selected.publisherId, name: selected.publisherName, avatarUrl: selected.publisherAvatarUrl }
+              : null
+          }
+          staff={creditsStaff}
+        />
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <BookmarkButton comicId={comic.id} comicSlug={comic.slug} authenticated={Boolean(user)} initialBookmarked={bookmarked} />
+          <ComicMoreSheet
+            label={alternativeCount > 0 ? `${alternativeCount.toLocaleString("fa-IR")} ترجمه‌ی دیگر` : "بیشتر"}
+            highlight={alternativeCount > 0}
+            editions={
+              alternativeCount > 0 && selected ? (
+                <EditionSelector slug={comic.slug} editions={editionOptions} selectedId={selected.id} />
+              ) : null
+            }
+            rating={
+              selected ? (
+                <RatingPanel
+                  workId={comic.id}
+                  editionId={selected.id}
+                  authenticated={Boolean(user)}
+                  work={{
+                    average: averageScore(comic.ratingTotal, comic.ratingCount),
+                    count: comic.ratingCount,
+                    mine: ratingContext.workScore,
+                  }}
+                  edition={{
+                    average: averageScore(selected.ratingTotal, selected.ratingCount),
+                    count: selected.ratingCount,
+                    mine: ratingContext.editionScore,
+                  }}
+                  canRateWork={ratingContext.canRateWork}
+                  canRateEdition={ratingContext.canRateEdition}
+                  requiredEditionReads={requiredReadChapters(selected.chapterCount)}
+                />
+              ) : null
+            }
+            request={
+              <RequestEditionCard workId={comic.id} authenticated={Boolean(user)} activeLanguage={editionRequest?.language ?? null} />
+            }
+            report={
+              user ? (
+                <div className="flex flex-wrap items-center gap-4">
+                  {selected && <ReportButton targetType="EDITION" targetId={selected.id} label="گزارش مشکل این نسخه" />}
+                  <ReportButton targetType="WORK" targetId={comic.id} label="گزارش مشکل این اثر" />
+                </div>
+              ) : null
+            }
+          />
+        </div>
+
         {selected && licenseActive && unlockPreview.lockedCount > 0 && (
-          <div className="mt-4">
+          <div className="mt-3">
             <ComicUnlockButton
               editionId={selected.id}
               lockedCount={unlockPreview.lockedCount}
@@ -295,49 +343,10 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
         <ComicDetailTabs
           episodeCount={sortedChapters.length}
           readingCta={readingCta}
-          defaultTab={hasRead ? "episodes" : "preview"}
+          defaultTab={defaultTab}
           preview={
-            <div className="space-y-6">
-              <p className="text-sm leading-7 text-text-muted">{comic.description}</p>
-
-              {selected && (
-                <RatingPanel
-                  workId={comic.id}
-                  editionId={selected.id}
-                  authenticated={Boolean(user)}
-                  work={{
-                    average: averageScore(comic.ratingTotal, comic.ratingCount),
-                    count: comic.ratingCount,
-                    mine: ratingContext.workScore,
-                  }}
-                  edition={{
-                    average: averageScore(selected.ratingTotal, selected.ratingCount),
-                    count: selected.ratingCount,
-                    mine: ratingContext.editionScore,
-                  }}
-                  canRateWork={ratingContext.canRateWork}
-                  canRateEdition={ratingContext.canRateEdition}
-                  requiredEditionReads={requiredReadChapters(selected.chapterCount)}
-                />
-              )}
-
-              {visibleStaff.length > 0 && (
-                <div>
-                  <h2 className="mb-2 text-sm font-medium text-text-main">دست‌اندرکاران</h2>
-                  <div className="flex flex-wrap gap-2">
-                    {visibleStaff.map((s) => (
-                      <Link
-                        key={s.id}
-                        href={`/app/team/${s.user.id}`}
-                        className="rounded-md border border-border px-3 py-2 text-xs text-text-main hover:border-primary"
-                      >
-                        {s.user.username ? `@${s.user.username}` : s.user.firstName}
-                        <span className="mr-1 text-text-muted">— {STAFF_ROLE_LABELS[s.roleTitle] ?? s.roleTitle}</span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="space-y-5">
+              <ExpandableText text={comic.description} />
 
               {licenseActive && firstChapter && firstChapterPages.length > 0 && (
                 <div>
@@ -345,18 +354,15 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
                   <ChapterOnePreview chapterId={firstChapter.id} chapterNumber={firstChapter.chapterNumber} previewImages={firstChapterPages} />
                 </div>
               )}
-
-              <RequestEditionCard workId={comic.id} authenticated={Boolean(user)} activeLanguage={editionRequest?.language ?? null} />
-
-              {user && (
-                <div className="flex flex-wrap items-center gap-4">
-                  {selected && <ReportButton targetType="EDITION" targetId={selected.id} label="گزارش مشکل این نسخه" />}
-                  <ReportButton targetType="WORK" targetId={comic.id} label="گزارش مشکل این اثر" />
-                </div>
-              )}
             </div>
           }
-          episodes={<ChapterList chapters={chapterListItems} price={chapterPrice} />}
+          episodes={
+            <ChapterList
+              chapters={chapterListItems}
+              price={chapterPrice}
+              focusCurrent={Boolean(resumeChapter) && defaultTab === "episodes"}
+            />
+          }
           similar={
             similarComics.length > 0 ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">

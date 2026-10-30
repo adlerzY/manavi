@@ -2,13 +2,17 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
+import { getAllowedAgeRatings } from "@/lib/content-filter";
+import { isEligibleDonationReceiver } from "@/lib/donations";
+import { parseCustomLinks, type ProfileLink } from "@/lib/profile-links";
+import { STAFF_ROLE_LABELS } from "@/lib/staff-roles";
+import { titleLabel } from "@/lib/achievements";
 import { DonateButton } from "@/components/team/donate-button";
 import { BackButton } from "@/components/navigation/back-button";
-import { WalletAndLinks } from "@/components/support/wallet-and-links";
+import { ProfileLinkChips } from "@/components/support/profile-link-chips";
+import { HomeComicCard } from "@/components/catalog/home-comic-card";
+import { ExpandableText } from "@/components/ui/expandable-text";
 import { SafeAvatar } from "@/components/ui/safe-avatar";
-import { SafeCoverImage } from "@/components/ui/safe-cover-image";
-import { parseCustomLinks } from "@/lib/profile-links";
-import { STAFF_ROLE_LABELS } from "@/lib/staff-roles";
 
 interface PageProps {
   params: Promise<{ userId: string }>;
@@ -17,131 +21,121 @@ interface PageProps {
 export default async function TeamProfilePage({ params }: PageProps) {
   const { userId } = await params;
 
-  const [profileUser, sessionUser] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        username: true,
-        bio: true,
-        avatarUrl: true,
-        telegramPhotoUrl: true,
-        donationLink: true,
-        cryptoWalletLabel: true,
-        cryptoWalletAddress: true,
-        customLinks: true,
-        staffRoles: {
-          select: { roleTitle: true, comic: { select: { id: true, title: true, slug: true, coverImage: true } } },
-        },
+  const [sessionUser, allowedRatings] = await Promise.all([getSessionUser(), getAllowedAgeRatings()]);
+
+  const profileUser = await prisma.user.findFirst({
+    where: { id: userId, deletedAt: null },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      username: true,
+      bio: true,
+      avatarUrl: true,
+      telegramPhotoUrl: true,
+      donationLink: true,
+      customLinks: true,
+      activeTitle: true,
+      staffRoles: {
+        where: { comic: { approvalStatus: "APPROVED", ageRating: { in: allowedRatings } } },
+        select: { roleTitle: true, comic: { select: { id: true, title: true, slug: true, coverImage: true } } },
       },
-    }),
-    getSessionUser(),
-  ]);
+    },
+  });
 
   if (!profileUser) {
     notFound();
   }
 
-  const chapterCounts = await prisma.chapterStaff.groupBy({
-    by: ["roleTitle"],
-    where: { userId: profileUser.id, chapter: { publishedAt: { not: null } } },
-    _count: { _all: true },
-  });
-
-  const comicsByTitle = new Map<
-    string,
-    { id: string; title: string; slug: string; coverImage: string; roles: Set<string> }
-  >();
-
-  for (const entry of profileUser.staffRoles) {
-    const existing = comicsByTitle.get(entry.comic.id);
-    if (existing) {
-      existing.roles.add(entry.roleTitle);
-    } else {
-      comicsByTitle.set(entry.comic.id, { ...entry.comic, roles: new Set([entry.roleTitle]) });
-    }
-  }
-
   const isOwnProfile = sessionUser?.id === profileUser.id;
 
+  const [chapterCounts, canReceive] = await Promise.all([
+    prisma.chapterStaff.groupBy({
+      by: ["roleTitle"],
+      where: { userId: profileUser.id, chapter: { publishedAt: { not: null } } },
+      _count: { _all: true },
+    }),
+    isOwnProfile ? Promise.resolve(false) : isEligibleDonationReceiver(profileUser.id),
+  ]);
+
+  const comicsById = new Map<string, { id: string; title: string; slug: string; coverImage: string; roles: string[] }>();
+  for (const entry of profileUser.staffRoles) {
+    const existing = comicsById.get(entry.comic.id);
+    if (existing) {
+      if (!existing.roles.includes(entry.roleTitle)) existing.roles.push(entry.roleTitle);
+    } else {
+      comicsById.set(entry.comic.id, { ...entry.comic, roles: [entry.roleTitle] });
+    }
+  }
+  const comics = [...comicsById.values()];
+
+  const links: ProfileLink[] = [{ label: "حمایت خارجی", url: profileUser.donationLink }]
+    .filter((item): item is ProfileLink => Boolean(item.url))
+    .concat(parseCustomLinks(profileUser.customLinks));
+
+  const title = titleLabel(profileUser.activeTitle);
+
   return (
-    <>
-      <main className="min-h-screen bg-background px-4 py-10">
-        <div className="mx-auto max-w-3xl">
-          <div className="mb-4">
-            <BackButton fallbackHref="/app" variant="plain" />
-          </div>
-          <div className="flex items-center gap-4">
-            <SafeAvatar src={profileUser.avatarUrl ?? profileUser.telegramPhotoUrl} fallbackText={profileUser.firstName} size={64} />
-            <div>
-              <h1 className="text-xl font-semibold text-text-main">
-                {profileUser.firstName} {profileUser.lastName ?? ""}
-              </h1>
-              {profileUser.username && <p className="text-sm text-text-muted">@{profileUser.username}</p>}
-            </div>
-          </div>
+    <main className="min-h-screen bg-background px-4 py-6">
+      <div className="mx-auto max-w-3xl space-y-5">
+        <BackButton fallbackHref="/app" variant="plain" />
 
-          {profileUser.bio && <p className="mt-4 max-w-xl text-sm text-text-muted">{profileUser.bio}</p>}
-
-          {!isOwnProfile && (
-            <div className="mt-4 space-y-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <DonateButton receiverId={profileUser.id} authenticated={Boolean(sessionUser)} />
-                {profileUser.donationLink && (
-                  <a href={profileUser.donationLink} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
-                    لینک دونیت خارجی
-                  </a>
-                )}
-              </div>
-              <WalletAndLinks
-                cryptoWalletLabel={profileUser.cryptoWalletLabel}
-                cryptoWalletAddress={profileUser.cryptoWalletAddress}
-                customLinks={parseCustomLinks(profileUser.customLinks)}
-              />
-            </div>
+        <header className="flex items-center gap-3">
+          <SafeAvatar src={profileUser.avatarUrl ?? profileUser.telegramPhotoUrl} fallbackText={profileUser.firstName} size={56} />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-semibold text-text-main">
+              {profileUser.firstName} {profileUser.lastName ?? ""}
+            </h1>
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+              {profileUser.username && <span>@{profileUser.username}</span>}
+              {title && <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] text-accent">{title}</span>}
+            </p>
+          </div>
+          {canReceive && (
+            <DonateButton
+              receiverId={profileUser.id}
+              authenticated={Boolean(sessionUser)}
+              receiverName={profileUser.firstName}
+            />
           )}
-
           {isOwnProfile && (
-            <Link href="/app/profile" className="mt-4 inline-block text-xs text-primary underline">
+            <Link href="/app/profile" className="flex-shrink-0 text-xs text-primary underline">
               ویرایش پروفایل
             </Link>
           )}
+        </header>
 
-          <div className="mt-6 grid grid-cols-3 gap-3">
-            {chapterCounts.map((c) => (
-              <div key={c.roleTitle} className="rounded-md border border-border bg-surface p-4 text-center">
-                <p className="text-2xl font-semibold text-primary">{c._count._all}</p>
-                <p className="mt-1 text-xs text-text-muted">{STAFF_ROLE_LABELS[c.roleTitle as keyof typeof STAFF_ROLE_LABELS] ?? c.roleTitle}</p>
-              </div>
-            ))}
-            {chapterCounts.length === 0 && (
-              <p className="col-span-3 text-sm text-text-muted">هنوز چپتری ثبت نشده است.</p>
-            )}
-          </div>
+        {profileUser.bio && <ExpandableText text={profileUser.bio} />}
 
-          <h2 className="mb-3 mt-8 text-sm font-medium text-text-main">پروژه‌ها</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            {Array.from(comicsByTitle.values()).map((comic) => (
-              <Link key={comic.id} href={`/app/comic/${comic.slug}`} className="block">
-                <div className="relative aspect-[2/3] w-full overflow-hidden rounded-md bg-surface">
-                  <SafeCoverImage src={comic.coverImage} alt={comic.title} fill sizes="(max-width: 768px) 50vw, 200px" className="object-cover" />
-                </div>
-                <p className="mt-2 truncate text-sm text-text-main">{comic.title}</p>
-                <p className="text-xs text-text-muted">
-                  {Array.from(comic.roles)
-                    .map((r) => STAFF_ROLE_LABELS[r as keyof typeof STAFF_ROLE_LABELS] ?? r)
-                    .join("، ")}
-                </p>
-              </Link>
+        {chapterCounts.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {chapterCounts.map((count) => (
+              <span key={count.roleTitle} className="rounded-full bg-surface px-3 py-1.5 text-xs text-text-main">
+                {STAFF_ROLE_LABELS[count.roleTitle]} · {count._count._all.toLocaleString("fa-IR")} چپتر
+              </span>
             ))}
-            {comicsByTitle.size === 0 && (
-              <p className="col-span-full text-sm text-text-muted">هنوز پروژه‌ای ثبت نشده است.</p>
-            )}
           </div>
-        </div>
-      </main>
-    </>
+        )}
+
+        <ProfileLinkChips links={links} />
+
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-text-main">پروژه‌ها</h2>
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+            {comics.map((comic) => (
+              <HomeComicCard
+                key={comic.id}
+                slug={comic.slug}
+                title={comic.title}
+                coverImage={comic.coverImage}
+                latestChapter={null}
+                badgeLabel={STAFF_ROLE_LABELS[comic.roles[0] as keyof typeof STAFF_ROLE_LABELS]}
+              />
+            ))}
+            {comics.length === 0 && <p className="col-span-full text-sm text-text-muted">هنوز پروژه‌ای ثبت نشده است.</p>}
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }

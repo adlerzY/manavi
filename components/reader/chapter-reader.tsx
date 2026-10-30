@@ -48,6 +48,7 @@ interface ChapterReaderProps {
 const DESKTOP_BREAKPOINT_PX = 768;
 const SCROLL_HIDE_THRESHOLD_PX = 8;
 const SCROLL_TOP_SAFE_ZONE_PX = 60;
+const READER_AREA_STYLE = { height: "calc(100dvh - var(--tg-content-safe-area-top, 0px) - 3.5rem)" };
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false);
@@ -191,17 +192,16 @@ export function ChapterReader({
       <DevToolsGuard />
       <ReaderGuide />
 
-      <div
-        style={{ top: "var(--tg-content-safe-area-top, 0px)" }}
-        className={`fixed inset-x-0 z-40 flex items-center justify-between bg-black/80 px-2 py-2 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "-translate-y-full"}`}
-      >
-        <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="reader" />
-        <div className="text-center">
-          <p className="text-sm font-medium text-white">{comicTitle}</p>
-          <p className="text-xs text-white/60">چپتر {chapterNumber.toLocaleString("fa-IR")}</p>
+      <header style={{ paddingTop: "var(--tg-content-safe-area-top, 0px)" }} className="bg-black">
+        <div className="flex h-14 items-center justify-between gap-2 px-2">
+          <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="reader" />
+          <div className="min-w-0 flex-1 text-center">
+            <p className="truncate text-sm font-medium text-white">{comicTitle}</p>
+            <p className="text-xs text-white/60">چپتر {chapterNumber.toLocaleString("fa-IR")}</p>
+          </div>
+          <ReadingModeToggle mode={effectiveMode} onChange={handleModeChange} />
         </div>
-        <ReadingModeToggle mode={effectiveMode} onChange={handleModeChange} />
-      </div>
+      </header>
 
       {renderMode === "VERTICAL" && (
         <VerticalReader
@@ -217,31 +217,35 @@ export function ChapterReader({
       )}
 
       {renderMode === "HORIZONTAL" && (
-        <HorizontalReader
-          pages={pages}
-          currentPage={horizontalPage}
-          direction={direction}
-          onPageChange={setHorizontalPage}
-          onRequestPrevChapter={onRequestPrevChapter}
-          onRequestNextChapter={onRequestEnd}
-          hasPrevChapter={Boolean(prevChapterId)}
-          hasNextChapter
-          onToggleControls={toggleControls}
-        />
+        <div style={READER_AREA_STYLE}>
+          <HorizontalReader
+            pages={pages}
+            currentPage={horizontalPage}
+            direction={direction}
+            onPageChange={setHorizontalPage}
+            onRequestPrevChapter={onRequestPrevChapter}
+            onRequestNextChapter={onRequestEnd}
+            hasPrevChapter={Boolean(prevChapterId)}
+            hasNextChapter
+            onToggleControls={toggleControls}
+          />
+        </div>
       )}
 
       {renderMode === "DOUBLE_PAGE" && (
-        <DoublePageReader
-          pages={pages}
-          currentPage={horizontalPage}
-          direction={direction}
-          onPageChange={setHorizontalPage}
-          onRequestPrevChapter={onRequestPrevChapter}
-          onRequestNextChapter={onRequestEnd}
-          hasPrevChapter={Boolean(prevChapterId)}
-          hasNextChapter
-          onToggleControls={toggleControls}
-        />
+        <div style={READER_AREA_STYLE}>
+          <DoublePageReader
+            pages={pages}
+            currentPage={horizontalPage}
+            direction={direction}
+            onPageChange={setHorizontalPage}
+            onRequestPrevChapter={onRequestPrevChapter}
+            onRequestNextChapter={onRequestEnd}
+            hasPrevChapter={Boolean(prevChapterId)}
+            hasNextChapter
+            onToggleControls={toggleControls}
+          />
+        </div>
       )}
 
       {renderMode === "VERTICAL" && (

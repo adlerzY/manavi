@@ -21,7 +21,7 @@ export async function ContinueReadingSection({ allowedRatings }: { allowedRating
               title={item.title}
               coverImage={item.coverImage}
               latestChapter={item.chapterNumber}
-              href={`/app/read/${item.chapterId}`}
+              href={`/app/comic/${item.slug}?tab=episodes`}
               progress={item.progress}
               badgeLabel={`ادامه · چپتر ${item.chapterNumber.toLocaleString("fa-IR")}`}
             />

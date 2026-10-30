@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { Bell, Library, Wallet, Trophy, Award } from "lucide-react";
+import { Award, Bell, Coins, Gift, Library, Settings, Trophy, Wallet } from "lucide-react";
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
+import { Disclosure } from "@/components/ui/disclosure";
 import { EditProfileForm } from "@/components/profile/edit-profile-form";
 import { AgeVerificationToggle } from "@/components/profile/age-verification-toggle";
 import { ProfileMenuLink } from "@/components/profile/profile-menu-link";
+import { LeaderboardVisibilityToggle } from "@/components/profile/leaderboard-visibility-toggle";
 import { ReferralCard } from "@/components/gamification/referral-card";
 import { SafeAvatar } from "@/components/ui/safe-avatar";
 import { getReferralLink } from "@/lib/site-config";
@@ -13,7 +15,6 @@ import { parseCustomLinks } from "@/lib/profile-links";
 import { getReferralRewardCoins } from "@/lib/platform-settings";
 import { ROLE_LABELS, canUploadAvatar, hasEarningsAccess } from "@/lib/roles";
 import { getUnreadNotificationCount } from "@/lib/notifications";
-import { LeaderboardVisibilityToggle } from "@/components/profile/leaderboard-visibility-toggle";
 import { titleLabel } from "@/lib/achievements";
 
 export default async function ProfilePage() {
@@ -26,8 +27,7 @@ export default async function ProfilePage() {
     );
   }
 
-  const [bookmarkCount, readingCount, referralRewardCoins, publisherContext, showEarnings, unreadCount] = await Promise.all([
-    prisma.bookmark.count({ where: { userId: user.id } }),
+  const [readingCount, referralRewardCoins, publisherContext, showEarnings, unreadCount] = await Promise.all([
     prisma.readHistory.count({ where: { userId: user.id } }),
     getReferralRewardCoins(),
     getPublisherContext(user),
@@ -39,91 +39,84 @@ export default async function ProfilePage() {
   const showPublisherPanel = Boolean(publisherContext) && !user.isBanned;
   const avatarUploadAllowed = canUploadAvatar(user);
   const referralLink = getReferralLink(user.referralCode);
+  const activeTitle = titleLabel(user.activeTitle);
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8">
-      <div className="mx-auto max-w-2xl space-y-8">
-        <div className="flex items-center gap-4">
-          <SafeAvatar src={user.avatarUrl ?? user.telegramPhotoUrl} fallbackText={user.firstName} size={64} />
-          <div>
-            <h1 className="text-lg font-semibold text-text-main">
+    <main className="min-h-screen bg-background px-4 py-6">
+      <div className="mx-auto max-w-2xl space-y-4">
+        <header className="flex items-center gap-3">
+          <SafeAvatar src={user.avatarUrl ?? user.telegramPhotoUrl} fallbackText={user.firstName} size={56} />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-semibold text-text-main">
               {user.firstName} {user.lastName ?? ""}
             </h1>
-            {user.username && <p className="text-sm text-text-muted">@{user.username}</p>}
-            <div className="flex flex-wrap gap-1">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+              {user.username && <span>@{user.username}</span>}
               {user.role !== "USER" && (
-                <span className="mt-1 inline-block rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                  {ROLE_LABELS[user.role]}
-                </span>
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">{ROLE_LABELS[user.role]}</span>
               )}
-              {titleLabel(user.activeTitle) && (
-                <span className="mr-1 mt-1 inline-block rounded-full bg-accent/10 px-2.5 py-1 text-xs text-accent">
-                  {titleLabel(user.activeTitle)}
-                </span>
-              )}
-            </div>
+              {activeTitle && <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] text-accent">{activeTitle}</span>}
+            </p>
           </div>
+        </header>
+
+        <div className="flex items-center justify-between rounded-md border border-border bg-surface px-4 py-3">
+          <div>
+            <p className="text-xs text-text-muted">موجودی سکه</p>
+            <p className="mt-0.5 text-lg font-semibold text-primary">🪙 {user.coinsBalance.toLocaleString("fa-IR")}</p>
+          </div>
+          <Link
+            href="/app/shop"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+          >
+            شارژ سکه
+          </Link>
         </div>
 
         {(showAdminPanel || showPublisherPanel) && (
-          <section className="space-y-2">
+          <div className="flex gap-2">
             {showAdminPanel && (
               <Link
                 href="/admin"
-                className="block rounded-md bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground"
+                className="flex-1 rounded-md bg-primary px-3 py-2.5 text-center text-sm font-medium text-primary-foreground"
               >
-                ورود به پنل مدیریت
+                پنل مدیریت
               </Link>
             )}
             {showPublisherPanel && (
               <Link
                 href="/publisher"
-                className="block rounded-md border border-primary px-4 py-3 text-center text-sm font-medium text-primary"
+                className="flex-1 rounded-md border border-primary px-3 py-2.5 text-center text-sm font-medium text-primary"
               >
-                ورود به پنل ناشر
+                پنل ناشر
               </Link>
             )}
-          </section>
+          </div>
         )}
 
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium text-text-main">حساب من</h2>
-          <ProfileMenuLink
-            href="/app/notifications"
-            icon={<Bell size={20} />}
-            title="اعلان‌ها"
-            subtitle={unreadCount > 0 ? `${unreadCount.toLocaleString("fa-IR")} اعلان خوانده‌نشده` : "همه‌ی اعلان‌ها خوانده شده‌اند"}
-          />
+        <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
           <ProfileMenuLink
             href="/app/library"
-            icon={<Library size={20} />}
+            icon={<Library size={18} />}
             title="کتابخانه من"
-            subtitle={`${readingCount.toLocaleString("fa-IR")} اثر در حال مطالعه · ${bookmarkCount.toLocaleString("fa-IR")} علاقه‌مندی`}
+            meta={readingCount > 0 ? `${readingCount.toLocaleString("fa-IR")} اثر` : undefined}
           />
           <ProfileMenuLink
-            href="/app/wallet"
-            icon={<Wallet size={20} />}
-            title="کیف پول"
-            subtitle={`موجودی: ${user.coinsBalance.toLocaleString("fa-IR")} سکه · تاریخچه تراکنش‌ها`}
+            href="/app/notifications"
+            icon={<Bell size={18} />}
+            title="اعلان‌ها"
+            meta={unreadCount > 0 ? `${unreadCount.toLocaleString("fa-IR")} جدید` : undefined}
+            highlight={unreadCount > 0}
           />
-          <ProfileMenuLink
-            href="/app/leaderboard"
-            icon={<Trophy size={20} />}
-            title="رتبه‌بندی"
-            subtitle="فعال‌ترین‌ها، حامیان و حمایت‌شده‌ترین‌ها"
-          />
-          <ProfileMenuLink
-            href="/app/achievements"
-            icon={<Award size={20} />}
-            title="دستاوردها و تگ‌ها"
-            subtitle="با فعالیت در ماناوی نشان و تگ بگیرید"
-          />
-        </section>
+          <ProfileMenuLink href="/app/wallet" icon={<Wallet size={18} />} title="تاریخچه‌ی کیف پول" />
+          <ProfileMenuLink href="/app/achievements" icon={<Award size={18} />} title="دستاوردها و تگ‌ها" />
+          <ProfileMenuLink href="/app/leaderboard" icon={<Trophy size={18} />} title="رتبه‌بندی ناشران و تیم‌ها" />
+          {showEarnings && <ProfileMenuLink href="/app/earnings" icon={<Coins size={18} />} title="درآمد و تسویه‌حساب" />}
+        </div>
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-text-main">تنظیمات</h2>
+        <Disclosure title="تنظیمات" subtitle="محتوای ۱۸+ و ویرایش پروفایل" icon={<Settings size={18} />}>
           <AgeVerificationToggle current={user.isAgeVerified} />
-          <LeaderboardVisibilityToggle current={user.leaderboardHidden} />
+          {showEarnings && <LeaderboardVisibilityToggle current={user.leaderboardHidden} />}
           <CollapsibleSection triggerLabel="ویرایش پروفایل">
             <EditProfileForm
               canUploadAvatar={avatarUploadAllowed}
@@ -135,25 +128,20 @@ export default async function ProfilePage() {
               initialCustomLinks={parseCustomLinks(user.customLinks)}
             />
           </CollapsibleSection>
-        </section>
+        </Disclosure>
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-text-main">فعالیت و امکانات دیگر</h2>
+        <Disclosure
+          title="دعوت دوستان"
+          subtitle={`${user.referralCount.toLocaleString("fa-IR")} دعوت موفق`}
+          icon={<Gift size={18} />}
+        >
           <ReferralCard
             referralLink={referralLink}
             referralCode={user.referralCode}
             referralCount={user.referralCount}
             rewardCoins={referralRewardCoins}
           />
-          {showEarnings && (
-            <Link
-              href="/app/earnings"
-              className="block rounded-md border border-border bg-surface px-4 py-3 text-center text-sm text-text-main hover:border-primary"
-            >
-              درآمد و تسویه‌حساب‌های من
-            </Link>
-          )}
-        </section>
+        </Disclosure>
       </div>
     </main>
   );

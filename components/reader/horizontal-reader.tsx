@@ -80,7 +80,7 @@ export function HorizontalReader({
   const leftAction = isRtl ? goForward : goBackward;
 
   return (
-    <div className="relative h-screen w-full bg-black" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className="relative h-full w-full bg-black" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       {currentUrl && <ProtectedImage src={currentUrl} alt={`صفحه ${currentPage}`} fill priority sizes="100vw" className="object-contain" />}
 
       <button onClick={rightAction} aria-label={isRtl ? "صفحه قبل" : "صفحه بعد"} className="absolute inset-y-0 right-0 z-20 w-1/3" />
