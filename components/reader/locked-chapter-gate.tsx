@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { unlockChapterWithCoins } from "@/app/actions/chapter-access";
+import { BackButton } from "@/components/navigation/back-button";
+import { Mascot } from "@/components/ui/mascot";
 
 interface LockedChapterGateProps {
   chapterId: string;
@@ -43,32 +45,55 @@ export function LockedChapterGate({ chapterId, comicSlug, coinsBalance, coinCost
   const hasEnoughCoins = coinsBalance >= coinCost;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-      <p className="text-lg font-medium text-text-main">این چپتر سکه‌ای است</p>
-      <p className="max-w-sm text-sm text-text-muted">
-        برای خواندن این چپتر {coinCost.toLocaleString("fa-IR")} سکه لازم است.
-      </p>
+    <div
+      style={{ paddingTop: "var(--tg-content-safe-area-top, 0px)" }}
+      className="relative flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center"
+    >
+      <div className="absolute right-3" style={{ top: "calc(var(--tg-content-safe-area-top, 0px) + 0.75rem)" }}>
+        <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="plain" />
+      </div>
+
+      <Mascot pose="coin" size={150} float />
+
+      <div className="space-y-2">
+        <p className="text-lg font-medium text-text-main">این چپتر سکه‌ای است</p>
+        <p className="mx-auto max-w-sm text-sm leading-7 text-text-muted">
+          برای خواندن این چپتر {coinCost.toLocaleString("fa-IR")} سکه لازم است.
+        </p>
+      </div>
 
       {hasEnoughCoins ? (
         <button
           onClick={handleCoinUnlock}
           disabled={pending}
-          className="w-full max-w-xs rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          className="w-full max-w-xs rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
           {pending ? "در حال پرداخت…" : `پرداخت ${coinCost.toLocaleString("fa-IR")} سکه و خواندن`}
         </button>
       ) : (
         <Link
           href={`/app/shop?redirect=${encodeURIComponent(returnTo)}`}
-          className="w-full max-w-xs rounded-md bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground"
+          className="w-full max-w-xs rounded-xl bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground"
         >
           خرید سکه (کسری: {shortfall.toLocaleString("fa-IR")} سکه)
         </Link>
       )}
 
-      <Link href={`/app/comic/${comicSlug}`} className="text-xs text-accent underline">
-        باز کردن کل نسخه یکجا از صفحه‌ی عنوان
+      <Link
+        href={`/app/comic/${comicSlug}`}
+        className="w-full max-w-xs rounded-xl border border-border px-4 py-3 text-center text-sm text-text-main"
+      >
+        بازگشت به صفحه‌ی اثر
       </Link>
+
+      <div className="flex flex-col items-center gap-2">
+        <Link href="/app/free" className="text-xs text-primary underline">
+          سکه نداری؟ آثار تمام رایگان رو ببین
+        </Link>
+        <Link href={`/app/comic/${comicSlug}`} className="text-xs text-accent underline">
+          باز کردن کل نسخه یکجا از صفحه‌ی عنوان
+        </Link>
+      </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
     </div>

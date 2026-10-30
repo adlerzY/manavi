@@ -1,71 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Hand, ArrowLeftRight, Layers } from "lucide-react";
+import { GuideSheet, type GuideStep } from "@/components/guide/guide-sheet";
 
-const STORAGE_KEY = "manavi-reader-guide-v1";
+const ZONE_FILL = "rgba(0,220,100,0.22)";
+const PING_STYLE = { transformBox: "fill-box", transformOrigin: "center" } as const;
 
-const TIPS = [
+function TapZones({ variant }: { variant: "controls" | "paging" }) {
+  return (
+    <svg viewBox="0 0 120 200" className="h-44 w-auto" fill="none" aria-hidden>
+      <rect x="4" y="4" width="112" height="192" rx="18" fill="#0a0a0a" stroke="rgba(255,255,255,0.25)" strokeWidth="2" />
+      <rect x="40" y="56" width="40" height="30" rx="4" fill="rgba(255,255,255,0.07)" />
+      <rect x="40" y="94" width="40" height="46" rx="4" fill="rgba(255,255,255,0.07)" />
+      {variant === "controls" ? (
+        <>
+          <rect x="28" y="40" width="64" height="120" rx="10" fill={ZONE_FILL} stroke="#00DC64" strokeDasharray="4 4" />
+          <circle cx="60" cy="100" r="9" fill="#00DC64" />
+          <circle cx="60" cy="100" r="9" fill="#00DC64" className="animate-ping" style={PING_STYLE} />
+          <rect x="14" y="170" width="92" height="14" rx="7" fill="rgba(0,220,100,0.35)" />
+        </>
+      ) : (
+        <>
+          <rect x="10" y="40" width="24" height="120" rx="10" fill={ZONE_FILL} stroke="#00DC64" strokeDasharray="4 4" />
+          <rect x="86" y="40" width="24" height="120" rx="10" fill={ZONE_FILL} stroke="#00DC64" strokeDasharray="4 4" />
+          <path d="M26 92 L18 100 L26 108" stroke="#00DC64" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M94 92 L102 100 L94 108" stroke="#00DC64" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="98" cy="138" r="8" fill="#00DC64" />
+          <circle cx="98" cy="138" r="8" fill="#00DC64" className="animate-ping" style={PING_STYLE} />
+        </>
+      )}
+    </svg>
+  );
+}
+
+const STEPS: GuideStep[] = [
   {
-    icon: <Hand size={22} />,
-    title: "نمایش کنترل‌ها",
-    text: "با یک ضربه روی وسط صفحه، نوار بالا و پایین نمایش داده یا پنهان می‌شود.",
+    pose: "reading",
+    title: "به ریدر ماناوی خوش اومدی",
+    text: "چند تا نکته‌ی کوتاه که خوندن رو راحت‌تر می‌کنه. هر موقع خواستی با دکمه‌ی ⓘ بالای صفحه دوباره ببینیش.",
   },
   {
-    icon: <ArrowLeftRight size={22} />,
+    visual: <TapZones variant="controls" />,
+    title: "یه ضربه وسط صفحه",
+    text: "نوار پایین (چپتر قبلی و بعدی، لیست چپترها و خروج به صفحه‌ی اثر) نمایش داده یا پنهان می‌شه. با اسکرول به پایین جمع می‌شه و با اسکرول به بالا برمی‌گرده.",
+  },
+  {
+    visual: <TapZones variant="paging" />,
     title: "ورق زدن",
-    text: "در حالت افقی و دوصفحه‌ای، با کشیدن انگشت یا لمس کنار صفحه ورق بزن. در حالت عمودی فقط اسکرول کن.",
+    text: "توی حالت افقی و دوصفحه‌ای، کنار صفحه رو لمس کن یا انگشتت رو بکش. توی حالت عمودی فقط اسکرول کن.",
   },
   {
-    icon: <Layers size={22} />,
+    pose: "point",
     title: "تغییر حالت مطالعه",
-    text: "از دکمه‌های بالای صفحه می‌توانی بین حالت عمودی، افقی و دوصفحه‌ای جابه‌جا شوی.",
+    text: "از بالای صفحه بین عمودی، افقی و دوصفحه‌ای جابه‌جا شو. هدر فقط اول چپتر هست؛ اگه وسط چپتر بودی یه‌کم به بالا برگرد.",
+  },
+  {
+    pose: "celebrate",
+    title: "آخر چپتر",
+    text: "ریکشن بزن، نظر بذار، از مترجم‌ها حمایت کن و با «چپتر بعدی» ادامه بده. هر جا گیر کردی، دکمه‌ی کتاب پایین صفحه تو رو به صفحه‌ی اثر برمی‌گردونه.",
   },
 ];
 
-export function ReaderGuide() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    try {
-      if (!window.localStorage.getItem(STORAGE_KEY)) setVisible(true);
-    } catch {}
-  }, []);
-
-  function dismiss() {
-    setVisible(false);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, "1");
-    } catch {}
-  }
-
-  if (!visible) return null;
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 px-6">
-      <div className="w-full max-w-sm space-y-5 rounded-2xl border border-white/10 bg-neutral-900 p-6">
-        <h2 className="text-center text-base font-semibold text-white">راهنمای سریع ریدر</h2>
-        <div className="space-y-4">
-          {TIPS.map((tip) => (
-            <div key={tip.title} className="flex items-start gap-3">
-              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                {tip.icon}
-              </div>
-              <div>
-                <p className="text-sm font-medium text-white">{tip.title}</p>
-                <p className="mt-1 text-sm leading-7 text-white/60">{tip.text}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={dismiss}
-          className="w-full rounded-md bg-primary px-4 py-3 text-sm font-medium text-primary-foreground"
-        >
-          متوجه شدم
-        </button>
-      </div>
-    </div>
-  );
+export function ReaderGuide({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return <GuideSheet open={open} steps={STEPS} onClose={onClose} finishLabel="بزن بریم" />;
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Info, X } from "lucide-react";
 import type { ReadingMode } from "@prisma/client";
 import type { ReadingDirection } from "@/lib/reading";
 import { updateReadHistory } from "@/app/actions/read-history";
@@ -18,6 +18,7 @@ import { DevToolsGuard } from "./dev-tools-guard";
 import { ReaderGuide } from "./reader-guide";
 import { BackButton } from "@/components/navigation/back-button";
 import { getStoredReadingModeOverride, setStoredReadingModeOverride } from "@/lib/reading";
+import { hasSeenGuide, markGuideSeen } from "@/lib/guide";
 import type { StaffCreditItem } from "./chapter-staff-credits";
 
 interface ChapterOption { id: string; chapterNumber: number; title: string | null }
@@ -48,8 +49,7 @@ interface ChapterReaderProps {
 const DESKTOP_BREAKPOINT_PX = 768;
 const SCROLL_HIDE_THRESHOLD_PX = 8;
 const SCROLL_TOP_SAFE_ZONE_PX = 60;
-const READER_AREA_STYLE = { height: "100dvh" };
-const HEADER_SPACER_STYLE = { height: "calc(var(--tg-content-safe-area-top, 0px) + 3.5rem)" };
+const READER_AREA_STYLE = { height: "calc(100dvh - var(--tg-content-safe-area-top, 0px) - 3.5rem)" };
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false);
@@ -101,8 +101,18 @@ export function ChapterReader({
   const [horizontalPage, setHorizontalPage] = useState(initialPage);
   const [verticalCurrentPage, setVerticalCurrentPage] = useState(initialPage);
   const [endOpen, setEndOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const lastScrollYRef = useRef(0);
   const nextChapterPrefetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasSeenGuide("reader")) setGuideOpen(true);
+  }, []);
+
+  function handleCloseGuide() {
+    markGuideSeen("reader");
+    setGuideOpen(false);
+  }
 
   useEffect(() => {
     setEndOpen(false);
@@ -188,13 +198,11 @@ export function ChapterReader({
     <div className="relative min-h-screen bg-black overscroll-none">
       <WatermarkOverlay label={watermarkLabel} />
       <DevToolsGuard />
-      <ReaderGuide />
+      <ReaderGuide open={guideOpen} onClose={handleCloseGuide} />
 
       <header
         style={{ paddingTop: "var(--tg-content-safe-area-top, 0px)" }}
-        className={`fixed inset-x-0 top-0 z-40 bg-black/80 backdrop-blur-sm transition-transform duration-200 ${
-          controlsVisible ? "translate-y-0" : "-translate-y-full"
-        }`}
+        className="relative z-30 border-b border-white/5 bg-black"
       >
         <div className="flex h-14 items-center justify-between gap-2 px-2">
           <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="reader" />
@@ -202,11 +210,19 @@ export function ChapterReader({
             <p className="truncate text-sm font-medium text-white">{comicTitle}</p>
             <p className="text-xs text-white/60">چپتر {chapterNumber.toLocaleString("fa-IR")}</p>
           </div>
-          <ReadingModeToggle mode={effectiveMode} onChange={handleModeChange} />
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setGuideOpen(true)}
+              aria-label="راهنمای ریدر"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white/70"
+            >
+              <Info size={18} />
+            </button>
+            <ReadingModeToggle mode={effectiveMode} onChange={handleModeChange} />
+          </div>
         </div>
       </header>
-
-      {renderMode === "VERTICAL" && <div aria-hidden style={HEADER_SPACER_STYLE} />}
 
       {renderMode === "VERTICAL" && (
         <VerticalReader
@@ -299,12 +315,12 @@ export function ChapterReader({
         className={`fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-black/80 px-4 py-3 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "translate-y-full"}`}
       >
         {prevChapterId ? (
-          <Link href={`/app/read/${prevChapterId}`} aria-label="چپتر قبلی" className="flex h-11 w-11 items-center justify-center rounded-md bg-white/10 text-white">
+          <Link href={`/app/read/${prevChapterId}`} aria-label="چپتر قبلی" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
             <ChevronRight size={20} />
           </Link>
-        ) : <div className="w-11" />}
+        ) : <div className="w-11 flex-shrink-0" />}
 
-        <select value={chapterId} onChange={(e) => router.push(`/app/read/${e.target.value}`)} className="h-11 flex-1 rounded-md bg-white/10 px-3 text-sm text-white">
+        <select value={chapterId} onChange={(e) => router.push(`/app/read/${e.target.value}`)} className="h-11 min-w-0 flex-1 rounded-md bg-white/10 px-3 text-sm text-white">
           {chapterOptions.map((option) => (
             <option key={option.id} value={option.id} className="bg-neutral-900 text-white">
               چپتر {option.chapterNumber.toLocaleString("fa-IR")}{option.title ? ` — ${option.title}` : ""}
@@ -313,10 +329,14 @@ export function ChapterReader({
         </select>
 
         {nextChapterId ? (
-          <Link href={`/app/read/${nextChapterId}`} aria-label="چپتر بعدی" className="flex h-11 w-11 items-center justify-center rounded-md bg-white/10 text-white">
+          <Link href={`/app/read/${nextChapterId}`} aria-label="چپتر بعدی" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
             <ChevronLeft size={20} />
           </Link>
-        ) : <div className="w-11" />}
+        ) : <div className="w-11 flex-shrink-0" />}
+
+        <Link href={`/app/comic/${comicSlug}`} aria-label="صفحه اثر" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
+          <BookOpen size={20} />
+        </Link>
       </div>
     </div>
   );

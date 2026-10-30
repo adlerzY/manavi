@@ -5,6 +5,8 @@ import { ComicCard } from "@/components/catalog/comic-card";
 import { PopularGenreCards } from "@/components/catalog/popular-genre-cards";
 import { ExploreSearchClient } from "@/components/catalog/explore-search-client";
 import { TopSearches } from "@/components/catalog/top-searches";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Mascot } from "@/components/ui/mascot";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
 import { getAllCategories } from "@/lib/categories";
 import { getAllGenres, getPopularGenres } from "@/lib/genres";
@@ -105,6 +107,24 @@ export default async function ExplorePage({ searchParams }: PageProps) {
 
         {!showingResults && (
           <div className="mt-6 space-y-8">
+            <div
+              className="relative overflow-hidden rounded-2xl border border-border p-4"
+              style={{ backgroundImage: "linear-gradient(135deg, rgba(0,220,100,0.12), rgba(236,72,153,0.08))" }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-semibold text-text-main">دنبال چی می‌گردی؟</h2>
+                  <p className="mt-1 text-xs leading-6 text-text-muted">
+                    اسم اثر رو جستجو کن یا با فیلترها ژانر، وضعیت و نوع دسترسی رو انتخاب کن.
+                  </p>
+                  <Link href="/app/free" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                    مشاهده‌ی آثار تمام رایگان
+                  </Link>
+                </div>
+                <Mascot pose="thinking" size={92} float />
+              </div>
+            </div>
+
             {popularGenres.length > 0 && (
               <div>
                 <h2 className="mb-3 text-sm font-medium text-text-main">دسته‌بندی‌های داغ</h2>
@@ -145,9 +165,18 @@ export default async function ExplorePage({ searchParams }: PageProps) {
                 />
               ))}
               {comics.length === 0 && (
-                <p className="col-span-full py-10 text-center text-sm text-text-muted">
-                  با این فیلترها موردی یافت نشد — فیلترها را کمتر کنید.
-                </p>
+                <div className="col-span-full">
+                  <EmptyState
+                    pose="thinking"
+                    title="چیزی پیدا نشد"
+                    description="با این فیلترها اثری نبود. فیلترها رو کم کن یا یه عبارت دیگه رو امتحان کن."
+                    actions={[
+                      { href: "/app/explore", label: "پاک کردن فیلترها" },
+                      { href: "/app/free", label: "آثار تمام رایگان", variant: "ghost" },
+                    ]}
+                    compact
+                  />
+                </div>
               )}
             </div>
 

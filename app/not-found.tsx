@@ -1,13 +1,19 @@
-import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function NotFound() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-      <p className="text-4xl font-bold text-primary">۴۰۴</p>
-      <p className="text-sm text-text-muted">صفحه‌ای که دنبالش بودید پیدا نشد.</p>
-      <Link href="/app" className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
-        بازگشت به خانه
-      </Link>
+    <main className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="w-full max-w-sm">
+        <EmptyState
+          pose="sad"
+          title="این صفحه پیدا نشد"
+          description="شاید لینک قدیمی شده یا اثر برداشته شده. از یکی از مسیرهای زیر ادامه بده."
+          actions={[
+            { href: "/app", label: "بازگشت به خانه" },
+            { href: "/app/explore", label: "جستجوی آثار", variant: "ghost" },
+          ]}
+        />
+      </div>
     </main>
   );
 }

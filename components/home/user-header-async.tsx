@@ -11,6 +11,7 @@ export async function UserHeaderSection() {
       coinsBalance={user?.coinsBalance ?? 0}
       authenticated={Boolean(user)}
       unreadNotifications={unreadNotifications}
+      firstName={user?.firstName ?? null}
     />
   );
 }

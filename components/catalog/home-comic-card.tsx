@@ -11,6 +11,7 @@ interface HomeComicCardProps {
   href?: string;
   progress?: number | null;
   badgeLabel?: string;
+  isFree?: boolean;
 }
 
 export function HomeComicCard({
@@ -23,12 +24,17 @@ export function HomeComicCard({
   href,
   progress = null,
   badgeLabel,
+  isFree = false,
 }: HomeComicCardProps) {
   const badge = badgeLabel ?? (latestChapter !== null ? `چپتر ${latestChapter}` : null);
 
   return (
     <Link href={href ?? `/app/comic/${slug}`} className="block">
-      <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-surface transition-transform active:scale-[0.97]">
+      <div
+        className={`relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-surface transition-transform active:scale-[0.97] ${
+          isFree ? "ring-1 ring-primary/50" : ""
+        }`}
+      >
         <SafeCoverImage
           src={coverImage}
           alt={title}
@@ -43,10 +49,19 @@ export function HomeComicCard({
             {badge}
           </span>
         )}
-        {completed && (
-          <span className="absolute left-1.5 top-1.5 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] text-primary-foreground">
-            پایان‌یافته
-          </span>
+        {(isFree || completed) && (
+          <div className="pointer-events-none absolute left-1.5 top-1.5 flex flex-col items-start gap-1">
+            {isFree && (
+              <span className="rounded-full bg-gradient-to-l from-lime-300 to-primary px-2 py-0.5 text-[10px] font-bold text-black shadow-md shadow-black/40">
+                رایگان
+              </span>
+            )}
+            {completed && (
+              <span className="rounded-full bg-primary/90 px-2 py-0.5 text-[10px] text-primary-foreground">
+                پایان‌یافته
+              </span>
+            )}
+          </div>
         )}
         {progress !== null && (
           <div className="absolute inset-x-0 bottom-0 h-1 bg-black/60">

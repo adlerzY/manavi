@@ -3,6 +3,9 @@ import { getSessionUser } from "@/lib/auth";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
 import { getLibrary, type LibraryEntry } from "@/lib/library";
 import { LibraryCard } from "@/components/library/library-card";
+import { EmptyState, type EmptyStateAction } from "@/components/ui/empty-state";
+import { TelegramOnlyNotice } from "@/components/ui/telegram-only-notice";
+import type { MascotPose } from "@/components/ui/mascot";
 
 type TabId = "reading" | "bookmarks" | "finished";
 
@@ -12,10 +15,28 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "finished", label: "تمام‌شده" },
 ];
 
-const EMPTY_MESSAGES: Record<TabId, string> = {
-  reading: "هنوز چیزی را شروع نکرده‌اید. از بخش جستجو یک اثر پیدا کنید و بخوانید.",
-  bookmarks: "هنوز اثری را بوکمارک نکرده‌اید. در صفحه هر اثر می‌توانید آن را به علاقه‌مندی‌ها اضافه کنید.",
-  finished: "هنوز اثر پایان‌یافته‌ای را تا آخر نخوانده‌اید.",
+const EMPTY_CONTENT: Record<TabId, { pose: MascotPose; title: string; description: string; actions: EmptyStateAction[] }> = {
+  reading: {
+    pose: "reading",
+    title: "هنوز چیزی رو شروع نکردی",
+    description: "یه اثر پیدا کن و بخون؛ جای خوندنت اینجا ذخیره می‌شه تا هر وقت خواستی ادامه بدی.",
+    actions: [
+      { href: "/app/explore", label: "رفتن به جستجو" },
+      { href: "/app/free", label: "آثار تمام رایگان", variant: "ghost" },
+    ],
+  },
+  bookmarks: {
+    pose: "thinking",
+    title: "هنوز اثری رو بوکمارک نکردی",
+    description: "توی صفحه‌ی هر اثر بوکمارکش کن تا از چپتر جدیدش باخبر بشی.",
+    actions: [{ href: "/app/explore", label: "پیدا کردن اثر" }],
+  },
+  finished: {
+    pose: "celebrate",
+    title: "هنوز اثر تمام‌شده‌ای نداری",
+    description: "وقتی اثر پایان‌یافته‌ای رو تا آخرین چپتر بخونی، اینجا میاد.",
+    actions: [{ href: "/app/library", label: "ادامه‌ی مطالعه" }],
+  },
 };
 
 interface PageProps {
@@ -32,11 +53,7 @@ export default async function LibraryPage({ searchParams }: PageProps) {
   const user = await getSessionUser();
 
   if (!user) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
-        <p className="text-sm text-text-muted">برای مشاهده کتابخانه، این صفحه را از داخل تلگرام باز کنید.</p>
-      </main>
-    );
+    return <TelegramOnlyNotice message="برای دیدن کتابخانه، ماناوی رو از داخل تلگرام باز کن." />;
   }
 
   const allowedRatings = await getAllowedAgeRatings();
@@ -44,6 +61,7 @@ export default async function LibraryPage({ searchParams }: PageProps) {
 
   const tab: TabId = TABS.some((item) => item.id === tabParam) ? (tabParam as TabId) : "reading";
   const entries = library[tab];
+  const empty = EMPTY_CONTENT[tab];
 
   return (
     <main className="min-h-screen bg-background px-4 py-8">
@@ -76,15 +94,7 @@ export default async function LibraryPage({ searchParams }: PageProps) {
             ))}
           </div>
         ) : (
-          <div className="space-y-4 rounded-md border border-border bg-surface p-6 text-center">
-            <p className="text-sm leading-7 text-text-muted">{EMPTY_MESSAGES[tab]}</p>
-            <Link
-              href="/app/explore"
-              className="inline-block rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground"
-            >
-              رفتن به جستجو
-            </Link>
-          </div>
+          <EmptyState pose={empty.pose} title={empty.title} description={empty.description} actions={empty.actions} />
         )}
       </div>
     </main>

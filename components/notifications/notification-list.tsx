@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bell, BookOpen, CheckCircle2, MessageSquare, Wallet, X } from "lucide-react";
 import type { NotificationType } from "@prisma/client";
 import { markAllNotificationsRead, markNotificationRead } from "@/app/actions/notifications";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export interface NotificationItem {
   id: string;
@@ -66,14 +67,13 @@ export function NotificationList({ initialItems, onMarkRead, onMarkAll, onNaviga
 
   if (items.length === 0) {
     return (
-      <div className="space-y-3 rounded-md border border-border bg-surface px-6 py-10 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Bell size={22} />
-        </div>
-        <p className="text-sm leading-7 text-text-muted">
-          هنوز اعلانی ندارید. با بوکمارک کردن آثار، از انتشار چپترهای جدید همین‌جا باخبر می‌شوید.
-        </p>
-      </div>
+      <EmptyState
+        pose="sleep"
+        title="اینجا هنوز ساکته"
+        description="با بوکمارک کردن آثار، از انتشار چپترهای جدید همین‌جا باخبر می‌شی."
+        actions={[{ href: "/app/explore", label: "پیدا کردن اثر برای بوکمارک" }]}
+        compact
+      />
     );
   }
 

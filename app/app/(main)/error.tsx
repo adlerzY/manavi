@@ -1,30 +1,30 @@
 "use client";
 
 import { useEffect } from "react";
+import { EmptyState } from "@/components/ui/empty-state";
 
-export default function Error({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error(error);
   }, [error]);
 
   return (
-    <main className="flex min-h-[60vh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-      <p className="text-lg font-medium text-text-main">یه مشکلی پیش اومد</p>
-      <p className="max-w-sm text-sm text-text-muted">
-        در بارگذاری این صفحه خطایی رخ داد. لطفاً دوباره تلاش کنید.
-      </p>
-      <button
-        onClick={reset}
-        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-      >
-        تلاش دوباره
-      </button>
+    <main className="flex min-h-[70vh] flex-1 items-center justify-center bg-background px-6">
+      <div className="w-full max-w-sm">
+        <EmptyState
+          pose="sad"
+          title="یه مشکلی پیش اومد"
+          description="در بارگذاری این صفحه خطایی رخ داد. دوباره تلاش کن یا برگرد به خانه."
+          actions={[{ href: "/app", label: "بازگشت به خانه" }]}
+        >
+          <button
+            onClick={reset}
+            className="flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground"
+          >
+            تلاش دوباره
+          </button>
+        </EmptyState>
+      </div>
     </main>
   );
 }

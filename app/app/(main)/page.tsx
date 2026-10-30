@@ -11,11 +11,13 @@ import {
   getCategoryPreview,
 } from "@/lib/home-feed";
 import type { HomeFeedComic } from "@/lib/home-feed";
+import { getFullyFreeComics } from "@/lib/free-feed";
 import { getHomeFeedComics } from "@/app/actions/home-feed";
 import { UserHeaderSection } from "@/components/home/user-header-async";
 import { UserHeaderSkeleton } from "@/components/home/user-header-skeleton";
 import { ContinueReadingSection } from "@/components/home/continue-reading-section";
 import { HeroCarousel } from "@/components/home/hero-carousel";
+import { FullyFreeSection } from "@/components/home/fully-free-section";
 import { NewestPopularSection } from "@/components/home/newest-popular-section";
 import { RecommendedSectionAsync } from "@/components/home/recommended-section-async";
 import { BecauseYouReadAsync } from "@/components/home/because-you-read-section";
@@ -25,6 +27,8 @@ import { LatestCommentsSection } from "@/components/home/latest-comments-section
 import { CategoryRowSection } from "@/components/home/category-row-section";
 
 export const revalidate = 300;
+
+const FULLY_FREE_LIMIT = 12;
 
 export default async function AppHomePage() {
   maybeTriggerScheduledPublish();
@@ -38,6 +42,7 @@ export default async function AppHomePage() {
 
   const [
     heroComics,
+    fullyFree,
     genres,
     homepageCategories,
     newest,
@@ -48,6 +53,7 @@ export default async function AppHomePage() {
     categoryPreviews,
   ] = await Promise.all([
     getHeroComics(allowedRatings),
+    getFullyFreeComics(allowedRatings, FULLY_FREE_LIMIT),
     getAllGenres(),
     homepageCategoriesPromise,
     getHomeFeedComics("newest"),
@@ -69,6 +75,8 @@ export default async function AppHomePage() {
       <Suspense fallback={null}>
         <ContinueReadingSection allowedRatings={allowedRatings} />
       </Suspense>
+
+      <FullyFreeSection comics={fullyFree} />
 
       <NewestPopularSection initialNewest={newest} initialPopular={popular} genres={genres.map((g) => ({ id: g.id, name: g.name }))} />
 

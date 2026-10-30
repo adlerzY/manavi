@@ -1,16 +1,18 @@
 import { ComicCardSkeletonGrid } from "@/components/catalog/comic-card-skeleton";
+import { UserHeaderSkeleton } from "@/components/home/user-header-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Loading() {
   return (
     <main className="min-h-screen bg-background">
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-3">
-        <Skeleton className="h-7 w-24" />
-        <Skeleton className="h-8 w-20 rounded-full" />
-      </header>
+      <UserHeaderSkeleton />
 
-      <section className="px-4 pb-10 pt-8">
+      <section className="px-4 pb-6 pt-2">
         <Skeleton className="mx-auto aspect-[16/9] w-full max-w-4xl rounded-2xl sm:aspect-[21/9]" />
+      </section>
+
+      <section className="mx-auto max-w-4xl px-4 py-3">
+        <Skeleton className="h-56 w-full rounded-3xl" />
       </section>
 
       <section className="mx-auto max-w-4xl px-4 py-6">

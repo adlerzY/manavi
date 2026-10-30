@@ -1,16 +1,18 @@
 import Link from "next/link";
-import { Award, Coins, Gift, Library, Trophy, Wallet } from "lucide-react";
+import { Award, Coins, Info, Library, Trophy, Wallet } from "lucide-react";
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
-import { Disclosure } from "@/components/ui/disclosure";
 import { EditProfileForm } from "@/components/profile/edit-profile-form";
 import { AgeVerificationToggle } from "@/components/profile/age-verification-toggle";
 import { ProfileIconLink } from "@/components/profile/profile-icon-link";
 import { SettingsSheet } from "@/components/profile/settings-sheet";
 import { LeaderboardVisibilityToggle } from "@/components/profile/leaderboard-visibility-toggle";
-import { ReferralCard } from "@/components/gamification/referral-card";
+import { ReferralSheet } from "@/components/profile/referral-sheet";
+import { GuideLauncher } from "@/components/guide/guide-launcher";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { SafeAvatar } from "@/components/ui/safe-avatar";
+import { Mascot } from "@/components/ui/mascot";
+import { TelegramOnlyNotice } from "@/components/ui/telegram-only-notice";
 import { getReferralLink } from "@/lib/site-config";
 import { parseCustomLinks } from "@/lib/profile-links";
 import { getReferralRewardCoins } from "@/lib/platform-settings";
@@ -21,11 +23,7 @@ import { titleLabel } from "@/lib/achievements";
 export default async function ProfilePage() {
   const user = await getSessionUser();
   if (!user) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
-        <p className="text-sm text-text-muted">برای مشاهده پروفایل، این صفحه را از داخل تلگرام باز کنید.</p>
-      </main>
-    );
+    return <TelegramOnlyNotice message="برای دیدن پروفایل، ماناوی رو از داخل تلگرام باز کن." />;
   }
 
   const [referralRewardCoins, publisherContext, showEarnings, unreadCount] = await Promise.all([
@@ -42,10 +40,10 @@ export default async function ProfilePage() {
   const activeTitle = titleLabel(user.activeTitle);
 
   return (
-    <main className="min-h-screen bg-background px-4 py-6">
-      <div className="mx-auto max-w-2xl space-y-4">
-        <header className="flex items-center gap-3">
-          <SafeAvatar src={user.avatarUrl ?? user.telegramPhotoUrl} fallbackText={user.firstName} size={56} />
+    <main className="flex flex-1 flex-col overflow-hidden bg-background px-4 pb-3 pt-3">
+      <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-3">
+        <header className="flex flex-shrink-0 items-center gap-3">
+          <SafeAvatar src={user.avatarUrl ?? user.telegramPhotoUrl} fallbackText={user.firstName} size={52} />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-semibold text-text-main">
               {user.firstName} {user.lastName ?? ""}
@@ -81,25 +79,25 @@ export default async function ProfilePage() {
           </div>
         </header>
 
-        <div className="flex items-center justify-between rounded-md border border-border bg-surface px-4 py-3">
+        <div className="flex flex-shrink-0 items-center justify-between rounded-xl border border-border bg-surface px-4 py-3">
           <div>
             <p className="text-xs text-text-muted">موجودی سکه</p>
             <p className="mt-0.5 text-lg font-semibold text-primary">🪙 {user.coinsBalance.toLocaleString("fa-IR")}</p>
           </div>
           <Link
             href="/app/shop"
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
           >
             شارژ سکه
           </Link>
         </div>
 
         {(showAdminPanel || showPublisherPanel) && (
-          <div className="flex gap-2">
+          <div className="flex flex-shrink-0 gap-2">
             {showAdminPanel && (
               <Link
                 href="/admin"
-                className="flex-1 rounded-md bg-primary px-3 py-2.5 text-center text-sm font-medium text-primary-foreground"
+                className="flex-1 rounded-xl bg-primary px-3 py-2.5 text-center text-sm font-medium text-primary-foreground"
               >
                 پنل مدیریت
               </Link>
@@ -107,7 +105,7 @@ export default async function ProfilePage() {
             {showPublisherPanel && (
               <Link
                 href="/publisher"
-                className="flex-1 rounded-md border border-primary px-3 py-2.5 text-center text-sm font-medium text-primary"
+                className="flex-1 rounded-xl border border-primary px-3 py-2.5 text-center text-sm font-medium text-primary"
               >
                 پنل ناشر
               </Link>
@@ -115,26 +113,30 @@ export default async function ProfilePage() {
           </div>
         )}
 
-        <div className="grid auto-cols-fr grid-flow-col gap-2">
+        <div className="grid flex-shrink-0 grid-cols-3 gap-2">
           <ProfileIconLink href="/app/library" icon={<Library size={18} />} label="کتابخانه" />
           <ProfileIconLink href="/app/wallet" icon={<Wallet size={18} />} label="کیف پول" />
           <ProfileIconLink href="/app/achievements" icon={<Award size={18} />} label="دستاوردها" />
           <ProfileIconLink href="/app/leaderboard" icon={<Trophy size={18} />} label="رتبه‌بندی" />
           {showEarnings && <ProfileIconLink href="/app/earnings" icon={<Coins size={18} />} label="درآمد" />}
+          <GuideLauncher guide="app-tour" label="راهنما" icon={<Info size={18} />} />
         </div>
 
-        <Disclosure
-          title="دعوت دوستان"
-          subtitle={`${user.referralCount.toLocaleString("fa-IR")} دعوت موفق`}
-          icon={<Gift size={18} />}
-        >
-          <ReferralCard
-            referralLink={referralLink}
-            referralCode={user.referralCode}
-            referralCount={user.referralCount}
-            rewardCoins={referralRewardCoins}
+        <div className="relative min-h-0 flex-1">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ backgroundImage: "radial-gradient(ellipse at center, rgba(0,220,100,0.12), transparent 65%)" }}
           />
-        </Disclosure>
+          <Mascot pose="reading" fluid className="absolute inset-0" />
+        </div>
+
+        <ReferralSheet
+          referralLink={referralLink}
+          referralCode={user.referralCode}
+          referralCount={user.referralCount}
+          rewardCoins={referralRewardCoins}
+        />
       </div>
     </main>
   );
