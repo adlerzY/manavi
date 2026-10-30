@@ -16,7 +16,6 @@ import {
   Tags,
   Layers,
   UserCircle,
-  Globe,
   MessageSquare,
   Gem,
   Coins,
@@ -49,7 +48,7 @@ interface SidebarNavProps {
 }
 
 const FOOTER_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/", label: "بازگشت به سایت", icon: Globe },
+  { href: "/app", label: "بازگشت به اپ", icon: Home },
 ];
 
 function formatBadge(value: number): string {

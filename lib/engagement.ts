@@ -3,16 +3,22 @@ export const LEADERBOARD_SIZE = 30;
 
 export type LeaderboardBoard = "publishers" | "team";
 export type LeaderboardPeriod = "week" | "month" | "all";
+export type LeaderboardSort = "uploads" | "interactions";
 
 export const LEADERBOARD_BOARDS: { id: LeaderboardBoard; label: string }[] = [
   { id: "publishers", label: "ناشران" },
-  { id: "team", label: "تیم‌ها" },
+  { id: "team", label: "دست‌اندرکاران" },
 ];
 
 export const LEADERBOARD_PERIODS: { id: LeaderboardPeriod; label: string; days: number | null }[] = [
   { id: "week", label: "۷ روز اخیر", days: 7 },
   { id: "month", label: "۳۰ روز اخیر", days: 30 },
   { id: "all", label: "همه‌ی زمان‌ها", days: null },
+];
+
+export const LEADERBOARD_SORTS: { id: LeaderboardSort; label: string }[] = [
+  { id: "uploads", label: "بیشترین آپلود" },
+  { id: "interactions", label: "بیشترین تعامل" },
 ];
 
 export const ENGAGEMENT_POINTS = {
@@ -30,10 +36,9 @@ export interface LeaderboardEntry {
   userId: string;
   name: string;
   avatarUrl: string | null;
-  activeTitle: string | null;
   href: string;
-  score: number;
-  supporters: number;
+  uploads: number;
+  interactions: number;
 }
 
 export function parseBoard(value?: string): LeaderboardBoard {
@@ -42,4 +47,8 @@ export function parseBoard(value?: string): LeaderboardBoard {
 
 export function parsePeriod(value?: string): LeaderboardPeriod {
   return LEADERBOARD_PERIODS.some((period) => period.id === value) ? (value as LeaderboardPeriod) : "week";
+}
+
+export function parseSort(value?: string): LeaderboardSort {
+  return LEADERBOARD_SORTS.some((sort) => sort.id === value) ? (value as LeaderboardSort) : "uploads";
 }

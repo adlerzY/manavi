@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Search, Library, Gem, User } from "lucide-react";
+import { Home, Search, Library, User } from "lucide-react";
 
 const ITEMS = [
   { href: "/app", label: "خانه", icon: Home },
   { href: "/app/explore", label: "جستجو", icon: Search },
   { href: "/app/library", label: "کتابخانه", icon: Library },
-  { href: "/app/shop", label: "فروشگاه", icon: Gem },
   { href: "/app/profile", label: "پروفایل", icon: User },
 ] as const;
 

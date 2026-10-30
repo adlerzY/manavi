@@ -16,6 +16,13 @@ export interface NotificationItem {
   createdLabel: string;
 }
 
+interface NotificationListProps {
+  initialItems: NotificationItem[];
+  onMarkRead?: () => void;
+  onMarkAll?: () => void;
+  onNavigate?: () => void;
+}
+
 const TYPE_ICONS: Record<NotificationType, ReactNode> = {
   NEW_CHAPTER: <BookOpen size={20} />,
   COMMENT_REPLY: <MessageSquare size={20} />,
@@ -29,7 +36,7 @@ const TYPE_ICONS: Record<NotificationType, ReactNode> = {
 
 const NEGATIVE_TYPES: NotificationType[] = ["COMIC_REJECTED", "CHAPTER_REJECTED"];
 
-export function NotificationList({ initialItems }: { initialItems: NotificationItem[] }) {
+export function NotificationList({ initialItems, onMarkRead, onMarkAll, onNavigate }: NotificationListProps) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [isPending, startTransition] = useTransition();
@@ -39,13 +46,18 @@ export function NotificationList({ initialItems }: { initialItems: NotificationI
   async function handleOpen(item: NotificationItem) {
     if (!item.read) {
       setItems((prev) => prev.map((entry) => (entry.id === item.id ? { ...entry, read: true } : entry)));
+      onMarkRead?.();
       await markNotificationRead(item.id).catch(() => {});
     }
-    if (item.href) router.push(item.href);
+    if (item.href) {
+      onNavigate?.();
+      router.push(item.href);
+    }
   }
 
   function handleMarkAll() {
     setItems((prev) => prev.map((entry) => ({ ...entry, read: true })));
+    onMarkAll?.();
     startTransition(async () => {
       await markAllNotificationsRead().catch(() => {});
       router.refresh();

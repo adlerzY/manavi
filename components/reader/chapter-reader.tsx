@@ -48,7 +48,8 @@ interface ChapterReaderProps {
 const DESKTOP_BREAKPOINT_PX = 768;
 const SCROLL_HIDE_THRESHOLD_PX = 8;
 const SCROLL_TOP_SAFE_ZONE_PX = 60;
-const READER_AREA_STYLE = { height: "calc(100dvh - var(--tg-content-safe-area-top, 0px) - 3.5rem)" };
+const READER_AREA_STYLE = { height: "100dvh" };
+const HEADER_SPACER_STYLE = { height: "calc(var(--tg-content-safe-area-top, 0px) + 3.5rem)" };
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false);
@@ -77,9 +78,6 @@ function useImmersiveReading() {
     }
 
     return () => {
-      try {
-        webApp?.enableVerticalSwipes?.();
-      } catch {}
       if (canRequestFullscreen && document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
@@ -192,7 +190,12 @@ export function ChapterReader({
       <DevToolsGuard />
       <ReaderGuide />
 
-      <header style={{ paddingTop: "var(--tg-content-safe-area-top, 0px)" }} className="bg-black">
+      <header
+        style={{ paddingTop: "var(--tg-content-safe-area-top, 0px)" }}
+        className={`fixed inset-x-0 top-0 z-40 bg-black/80 backdrop-blur-sm transition-transform duration-200 ${
+          controlsVisible ? "translate-y-0" : "-translate-y-full"
+        }`}
+      >
         <div className="flex h-14 items-center justify-between gap-2 px-2">
           <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="reader" />
           <div className="min-w-0 flex-1 text-center">
@@ -202,6 +205,8 @@ export function ChapterReader({
           <ReadingModeToggle mode={effectiveMode} onChange={handleModeChange} />
         </div>
       </header>
+
+      {renderMode === "VERTICAL" && <div aria-hidden style={HEADER_SPACER_STYLE} />}
 
       {renderMode === "VERTICAL" && (
         <VerticalReader

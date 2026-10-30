@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { Award, Bell, Coins, Gift, Library, Settings, Trophy, Wallet } from "lucide-react";
+import { Award, Coins, Gift, Library, Trophy, Wallet } from "lucide-react";
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { Disclosure } from "@/components/ui/disclosure";
 import { EditProfileForm } from "@/components/profile/edit-profile-form";
 import { AgeVerificationToggle } from "@/components/profile/age-verification-toggle";
-import { ProfileMenuLink } from "@/components/profile/profile-menu-link";
+import { ProfileIconLink } from "@/components/profile/profile-icon-link";
+import { SettingsSheet } from "@/components/profile/settings-sheet";
 import { LeaderboardVisibilityToggle } from "@/components/profile/leaderboard-visibility-toggle";
 import { ReferralCard } from "@/components/gamification/referral-card";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { SafeAvatar } from "@/components/ui/safe-avatar";
 import { getReferralLink } from "@/lib/site-config";
 import { parseCustomLinks } from "@/lib/profile-links";
@@ -27,8 +28,7 @@ export default async function ProfilePage() {
     );
   }
 
-  const [readingCount, referralRewardCoins, publisherContext, showEarnings, unreadCount] = await Promise.all([
-    prisma.readHistory.count({ where: { userId: user.id } }),
+  const [referralRewardCoins, publisherContext, showEarnings, unreadCount] = await Promise.all([
     getReferralRewardCoins(),
     getPublisherContext(user),
     hasEarningsAccess(user),
@@ -57,6 +57,27 @@ export default async function ProfilePage() {
               )}
               {activeTitle && <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] text-accent">{activeTitle}</span>}
             </p>
+          </div>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <NotificationBell
+              initialUnread={unreadCount}
+              buttonClassName="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-text-main"
+            />
+            <SettingsSheet>
+              <AgeVerificationToggle current={user.isAgeVerified} />
+              {showEarnings && <LeaderboardVisibilityToggle current={user.leaderboardHidden} />}
+              <CollapsibleSection triggerLabel="ویرایش پروفایل">
+                <EditProfileForm
+                  canUploadAvatar={avatarUploadAllowed}
+                  initialBio={user.bio}
+                  initialAvatarUrl={user.avatarUrl}
+                  initialDonationLink={user.donationLink}
+                  initialCryptoWalletLabel={user.cryptoWalletLabel}
+                  initialCryptoWalletAddress={user.cryptoWalletAddress}
+                  initialCustomLinks={parseCustomLinks(user.customLinks)}
+                />
+              </CollapsibleSection>
+            </SettingsSheet>
           </div>
         </header>
 
@@ -94,41 +115,13 @@ export default async function ProfilePage() {
           </div>
         )}
 
-        <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
-          <ProfileMenuLink
-            href="/app/library"
-            icon={<Library size={18} />}
-            title="کتابخانه من"
-            meta={readingCount > 0 ? `${readingCount.toLocaleString("fa-IR")} اثر` : undefined}
-          />
-          <ProfileMenuLink
-            href="/app/notifications"
-            icon={<Bell size={18} />}
-            title="اعلان‌ها"
-            meta={unreadCount > 0 ? `${unreadCount.toLocaleString("fa-IR")} جدید` : undefined}
-            highlight={unreadCount > 0}
-          />
-          <ProfileMenuLink href="/app/wallet" icon={<Wallet size={18} />} title="تاریخچه‌ی کیف پول" />
-          <ProfileMenuLink href="/app/achievements" icon={<Award size={18} />} title="دستاوردها و تگ‌ها" />
-          <ProfileMenuLink href="/app/leaderboard" icon={<Trophy size={18} />} title="رتبه‌بندی ناشران و تیم‌ها" />
-          {showEarnings && <ProfileMenuLink href="/app/earnings" icon={<Coins size={18} />} title="درآمد و تسویه‌حساب" />}
+        <div className="grid auto-cols-fr grid-flow-col gap-2">
+          <ProfileIconLink href="/app/library" icon={<Library size={18} />} label="کتابخانه" />
+          <ProfileIconLink href="/app/wallet" icon={<Wallet size={18} />} label="کیف پول" />
+          <ProfileIconLink href="/app/achievements" icon={<Award size={18} />} label="دستاوردها" />
+          <ProfileIconLink href="/app/leaderboard" icon={<Trophy size={18} />} label="رتبه‌بندی" />
+          {showEarnings && <ProfileIconLink href="/app/earnings" icon={<Coins size={18} />} label="درآمد" />}
         </div>
-
-        <Disclosure title="تنظیمات" subtitle="محتوای ۱۸+ و ویرایش پروفایل" icon={<Settings size={18} />}>
-          <AgeVerificationToggle current={user.isAgeVerified} />
-          {showEarnings && <LeaderboardVisibilityToggle current={user.leaderboardHidden} />}
-          <CollapsibleSection triggerLabel="ویرایش پروفایل">
-            <EditProfileForm
-              canUploadAvatar={avatarUploadAllowed}
-              initialBio={user.bio}
-              initialAvatarUrl={user.avatarUrl}
-              initialDonationLink={user.donationLink}
-              initialCryptoWalletLabel={user.cryptoWalletLabel}
-              initialCryptoWalletAddress={user.cryptoWalletAddress}
-              initialCustomLinks={parseCustomLinks(user.customLinks)}
-            />
-          </CollapsibleSection>
-        </Disclosure>
 
         <Disclosure
           title="دعوت دوستان"

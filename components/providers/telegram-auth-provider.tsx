@@ -42,6 +42,10 @@ function setupTelegramViewport(webApp: TelegramWebApp): () => void {
     webApp.expand();
   } catch {}
 
+  try {
+    webApp.disableVerticalSwipes?.();
+  } catch {}
+
   applySafeAreaCssVars(webApp);
 
   try {

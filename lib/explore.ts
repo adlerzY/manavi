@@ -23,6 +23,31 @@ export interface ExploreFilters {
   language?: string;
 }
 
+function normalizeSearchText(value: string): string {
+  return value
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildSearchClauses(raw: string): Prisma.ComicWhereInput[] {
+  const normalized = normalizeSearchText(raw);
+  const arabicVariant = normalized.replace(/ی/g, "ي").replace(/ک/g, "ك");
+  const titleTerms = [...new Set([raw, normalized, arabicVariant])].filter(Boolean);
+
+  const clauses: Prisma.ComicWhereInput[] = titleTerms.map((term) => ({
+    title: { contains: term, mode: "insensitive" },
+  }));
+
+  const slugTerm = normalized.toLowerCase().replace(/[\s_]+/g, "-");
+  if (/^[a-z0-9-]+$/.test(slugTerm)) {
+    clauses.push({ slug: { contains: slugTerm, mode: "insensitive" } });
+  }
+
+  return clauses;
+}
+
 export async function resolveExploreWhere(filters: ExploreFilters): Promise<Prisma.ComicWhereInput> {
   const allowedRatings = await getAllowedAgeRatings();
   const category = filters.categorySlug ? await getCategoryBySlug(filters.categorySlug) : null;
@@ -31,7 +56,7 @@ export async function resolveExploreWhere(filters: ExploreFilters): Promise<Pris
   return {
     approvalStatus: "APPROVED",
     ageRating: { in: allowedRatings },
-    ...(trimmedQuery ? { title: { contains: trimmedQuery, mode: "insensitive" as const } } : {}),
+    ...(trimmedQuery ? { OR: buildSearchClauses(trimmedQuery) } : {}),
     ...(category ? { categoryId: category.id } : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.genreIds?.length ? { genres: { some: { genreId: { in: filters.genreIds } } } } : {}),

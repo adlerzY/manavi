@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { approveChapter, rejectChapter, type PendingChapterRow } from "@/app/admin/actions/chapter-approval";
+import { SafeCoverImage } from "@/components/ui/safe-cover-image";
 
 export function ChapterApprovalQueue({ initialChapters }: { initialChapters: PendingChapterRow[] }) {
   const [chapters, setChapters] = useState(initialChapters);
@@ -40,15 +41,20 @@ export function ChapterApprovalQueue({ initialChapters }: { initialChapters: Pen
       <div className="divide-y divide-border rounded-md border border-border">
         {chapters.map((chapter) => (
           <div key={chapter.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <div>
-              <Link href={`/admin/comics/${chapter.comic.id}`} className="text-sm text-text-main hover:text-primary">
-                {chapter.comic.title} — چپتر {chapter.chapterNumber.toLocaleString("fa-IR")}
-                {chapter.title ? ` — ${chapter.title}` : ""}
-              </Link>
-              <p className="text-xs text-text-muted">
-                {chapter.uploaderName ? `آپلود توسط ${chapter.uploaderName} · ` : ""}
-                {new Date(chapter.createdAt).toLocaleString("fa-IR")}
-              </p>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="relative h-16 w-11 flex-shrink-0 overflow-hidden rounded-md bg-surface">
+                <SafeCoverImage src={chapter.comic.coverImage} alt={chapter.comic.title} fill sizes="44px" className="object-cover" />
+              </div>
+              <div className="min-w-0">
+                <Link href={`/admin/comics/${chapter.comic.id}`} className="text-sm text-text-main hover:text-primary">
+                  {chapter.comic.title} — چپتر {chapter.chapterNumber.toLocaleString("fa-IR")}
+                  {chapter.title ? ` — ${chapter.title}` : ""}
+                </Link>
+                <p className="text-xs text-text-muted">
+                  {chapter.uploaderName ? `آپلود توسط ${chapter.uploaderName} · ` : ""}
+                  {new Date(chapter.createdAt).toLocaleString("fa-IR")}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => handleApprove(chapter.id)} disabled={isPending} className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50">

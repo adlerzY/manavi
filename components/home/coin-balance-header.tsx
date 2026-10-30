@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 interface CoinBalanceHeaderProps {
   coinsBalance: number;
@@ -51,9 +51,10 @@ export function CoinBalanceHeader({ coinsBalance, authenticated, unreadNotificat
   return (
     <>
       <header
-        className={`sticky top-[var(--tg-content-safe-area-top,0px)] z-30 flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-2.5 backdrop-blur-md transition-transform duration-200 ${
-          hidden ? "-translate-y-full" : "translate-y-0"
-        }`}
+        style={{
+          transform: hidden ? "translateY(calc(-100% - var(--tg-content-safe-area-top, 0px)))" : "translateY(0)",
+        }}
+        className="sticky top-[var(--tg-content-safe-area-top,0px)] z-30 flex items-center justify-between border-b border-border/60 bg-background/80 px-4 py-2.5 backdrop-blur-md transition-transform duration-200"
       >
         <div className="flex items-center gap-2">
           <Image src="/favicon.svg" alt="ماناوی" width={28} height={28} priority className="rounded-md" />
@@ -62,22 +63,10 @@ export function CoinBalanceHeader({ coinsBalance, authenticated, unreadNotificat
 
         <div className="flex items-center gap-2">
           {authenticated && (
-            <Link
-              href="/app/notifications"
-              aria-label={
-                unreadNotifications > 0
-                  ? `اعلان‌ها، ${unreadNotifications.toLocaleString("fa-IR")} خوانده‌نشده`
-                  : "اعلان‌ها"
-              }
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-text-main"
-            >
-              <Bell size={18} />
-              {unreadNotifications > 0 && (
-                <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[11px] leading-4 text-accent-foreground">
-                  {unreadNotifications > 99 ? "۹۹+" : unreadNotifications.toLocaleString("fa-IR")}
-                </span>
-              )}
-            </Link>
+            <NotificationBell
+              initialUnread={unreadNotifications}
+              buttonClassName="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-text-main"
+            />
           )}
 
           <button

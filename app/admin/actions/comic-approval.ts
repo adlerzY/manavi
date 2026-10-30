@@ -14,6 +14,7 @@ export interface PendingComicRow {
   id: string;
   title: string;
   slug: string;
+  coverImage: string;
   createdAt: string;
   creatorName: string | null;
   rejectionNote: string | null;
@@ -25,12 +26,12 @@ export async function listPendingComics(): Promise<PendingComicRow[]> {
     where: { approvalStatus: { in: ["PENDING_APPROVAL", "NEEDS_CHANGES"] } },
     orderBy: { createdAt: "asc" },
     select: {
-      id: true, title: true, slug: true, createdAt: true, rejectionNote: true,
+      id: true, title: true, slug: true, coverImage: true, createdAt: true, rejectionNote: true,
       createdBy: { select: { firstName: true, username: true } },
     },
   });
   return comics.map((c) => ({
-    id: c.id, title: c.title, slug: c.slug, createdAt: c.createdAt.toISOString(),
+    id: c.id, title: c.title, slug: c.slug, coverImage: c.coverImage, createdAt: c.createdAt.toISOString(),
     rejectionNote: c.rejectionNote,
     creatorName: c.createdBy ? (c.createdBy.username ? `@${c.createdBy.username}` : c.createdBy.firstName) : null,
   }));

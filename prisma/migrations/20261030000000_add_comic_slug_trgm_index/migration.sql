@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "Comic_slug_trgm_idx" ON "Comic" USING GIN ("slug" gin_trgm_ops);

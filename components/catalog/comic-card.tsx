@@ -52,7 +52,7 @@ export function ComicCard({
         ) : null}
         <div className="absolute inset-x-0 bottom-0 p-3">
           <p className="truncate text-sm font-medium text-white drop-shadow-sm">{title}</p>
-          {latestChapter !== null && <p className="text-xs text-white/80 drop-shadow-sm">فصل {latestChapter}</p>}
+          {latestChapter !== null && <p className="text-xs text-white/80 drop-shadow-sm">چپتر {latestChapter}</p>}
         </div>
       </div>
     </Link>

@@ -21,7 +21,7 @@ export interface PendingChapterRow {
   chapterNumber: number;
   title: string | null;
   createdAt: string;
-  comic: { id: string; title: string; slug: string };
+  comic: { id: string; title: string; slug: string; coverImage: string };
   uploaderName: string | null;
 }
 
@@ -36,7 +36,7 @@ export async function listPendingChapters(): Promise<PendingChapterRow[]> {
       chapterNumber: true,
       title: true,
       createdAt: true,
-      comic: { select: { id: true, title: true, slug: true } },
+      comic: { select: { id: true, title: true, slug: true, coverImage: true } },
       uploadedBy: { select: { firstName: true, username: true } },
     },
   });

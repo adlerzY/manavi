@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
+import { SafeCoverImage } from "@/components/ui/safe-cover-image";
 import { CreateComicForm } from "@/components/admin/create-comic-form";
 import { getAllGenres } from "@/lib/genres";
 import { getAllCategories } from "@/lib/categories";
@@ -47,6 +48,8 @@ export default async function AdminComicsPage({ searchParams }: PageProps) {
         title: true,
         slug: true,
         status: true,
+        coverImage: true,
+        dominantColor: true,
         license: { select: { status: true } },
         category: { select: { name: true } },
         _count: { select: { chapters: true } },
@@ -135,12 +138,18 @@ export default async function AdminComicsPage({ searchParams }: PageProps) {
 
         <div className="divide-y divide-border rounded-md border border-border">
           {comics.map((c) => (
-            <Link key={c.id} href={`/admin/comics/${c.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-surface">
-              <div>
-                <p className="text-sm text-text-main">{c.title}</p>
-                <p className="text-xs text-text-muted">اسلاگ: {c.slug} · {c.category.name}</p>
+            <Link key={c.id} href={`/admin/comics/${c.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface">
+              <div
+                className="relative h-16 w-11 flex-shrink-0 overflow-hidden rounded-md bg-surface"
+                style={{ backgroundColor: c.dominantColor ?? "#1E1E1E" }}
+              >
+                <SafeCoverImage src={c.coverImage} alt={c.title} fill sizes="44px" className="object-cover" />
               </div>
-              <p className="text-xs text-text-muted">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-text-main">{c.title}</p>
+                <p className="truncate text-xs text-text-muted">اسلاگ: {c.slug} · {c.category.name}</p>
+              </div>
+              <p className="flex-shrink-0 text-xs text-text-muted">
                 {c.license.status} · {(publishedByComicId.get(c.id) ?? 0).toLocaleString("fa-IR")}/{c._count.chapters.toLocaleString("fa-IR")} چپتر منتشرشده
               </p>
             </Link>

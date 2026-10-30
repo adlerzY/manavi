@@ -5,6 +5,7 @@ import { getAllCategories } from "@/lib/categories";
 import { buildLicenseOptions } from "@/lib/platform-license";
 import { listComicStaff } from "@/app/admin/actions/comic-staff";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
+import { SafeCoverImage } from "@/components/ui/safe-cover-image";
 import { EditComicForm } from "@/components/admin/edit-comic-form";
 import { ComicStaffManager } from "@/components/admin/comic-staff-manager";
 import { ChapterListManager } from "@/components/admin/chapter-list-manager";
@@ -68,9 +69,12 @@ export default async function AdminComicDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-center gap-3">
           <BackButton fallbackHref="/admin/comics" variant="plain" />
-          <h1 className="text-xl font-semibold text-text-main">{comic.title}</h1>
+          <div className="relative h-20 w-14 flex-shrink-0 overflow-hidden rounded-md bg-surface">
+            <SafeCoverImage src={comic.coverImage} alt={comic.title} fill sizes="56px" className="object-cover" />
+          </div>
+          <h1 className="min-w-0 truncate text-xl font-semibold text-text-main">{comic.title}</h1>
         </div>
         <ComicDeleteButton comicId={comic.id} comicTitle={comic.title} />
       </div>

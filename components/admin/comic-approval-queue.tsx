@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { approveComic, rejectComic, type PendingComicRow } from "@/app/admin/actions/comic-approval";
+import { SafeCoverImage } from "@/components/ui/safe-cover-image";
 
 export function ComicApprovalQueue({ initialComics }: { initialComics: PendingComicRow[] }) {
   const [comics, setComics] = useState(initialComics);
@@ -37,13 +38,18 @@ export function ComicApprovalQueue({ initialComics }: { initialComics: PendingCo
         {comics.map((comic) => (
           <div key={comic.id} className="space-y-2 px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <Link href={`/admin/comics/${comic.id}`} className="text-sm text-text-main hover:text-primary">{comic.title}</Link>
-                <p className="text-xs text-text-muted">
-                  {comic.creatorName ? `ساخته‌شده توسط ${comic.creatorName} · ` : ""}
-                  {new Date(comic.createdAt).toLocaleString("fa-IR")}
-                  {comic.rejectionNote && <span className="text-accent"> · قبلاً رد شده</span>}
-                </p>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="relative h-16 w-11 flex-shrink-0 overflow-hidden rounded-md bg-surface">
+                  <SafeCoverImage src={comic.coverImage} alt={comic.title} fill sizes="44px" className="object-cover" />
+                </div>
+                <div className="min-w-0">
+                  <Link href={`/admin/comics/${comic.id}`} className="text-sm text-text-main hover:text-primary">{comic.title}</Link>
+                  <p className="text-xs text-text-muted">
+                    {comic.creatorName ? `ساخته‌شده توسط ${comic.creatorName} · ` : ""}
+                    {new Date(comic.createdAt).toLocaleString("fa-IR")}
+                    {comic.rejectionNote && <span className="text-accent"> · قبلاً رد شده</span>}
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => handleApprove(comic.id)} disabled={isPending} className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50">تایید و انتشار</button>
