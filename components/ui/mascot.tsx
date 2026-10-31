@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useState, type ReactNode } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 
 export type MascotPose =
   | "wave"
@@ -42,13 +41,18 @@ export function Mascot({
   fallback = null,
 }: MascotProps) {
   const [broken, setBroken] = useState(false);
-  const reduceMotion = useReducedMotion();
 
   if (broken) return <>{fallback}</>;
 
-  const body = (
+  const floating = float && !fluid;
+
+  return (
     <div
-      className={fluid ? (className ?? "relative h-full w-full") : `relative flex-shrink-0 ${className ?? ""}`}
+      className={
+        fluid
+          ? (className ?? "relative h-full w-full")
+          : `relative flex-shrink-0 ${floating ? "mascot-float" : ""} ${className ?? ""}`
+      }
       style={fluid ? undefined : { width: size, height: size }}
     >
       <Image
@@ -63,17 +67,5 @@ export function Mascot({
         className="pointer-events-none select-none object-contain"
       />
     </div>
-  );
-
-  if (!float || fluid || reduceMotion) return body;
-
-  return (
-    <motion.div
-      className="flex-shrink-0"
-      animate={{ y: [0, -6, 0] }}
-      transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-    >
-      {body}
-    </motion.div>
   );
 }

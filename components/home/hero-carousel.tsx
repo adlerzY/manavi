@@ -22,6 +22,7 @@ export function HeroCarousel({ comics }: { comics: HeroComic[] }) {
   const [paused, setPaused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [mounted, setMounted] = useState<number[]>([0]);
 
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -30,6 +31,14 @@ export function HeroCarousel({ comics }: { comics: HeroComic[] }) {
     query.addEventListener("change", handler);
     return () => query.removeEventListener("change", handler);
   }, []);
+
+  useEffect(() => {
+    if (comics.length === 0) return;
+    setMounted((prev) => {
+      const missing = [index, (index + 1) % comics.length].filter((i) => !prev.includes(i));
+      return missing.length > 0 ? [...prev, ...missing] : prev;
+    });
+  }, [index, comics.length]);
 
   const autoplay = comics.length > 1 && !paused && !hovered && !reduceMotion;
 
@@ -62,7 +71,16 @@ export function HeroCarousel({ comics }: { comics: HeroComic[] }) {
               aria-hidden={i !== index}
               className={`absolute inset-0 transition-opacity duration-700 ${i === index ? "opacity-100" : "pointer-events-none opacity-0"}`}
             >
-              <SafeCoverImage src={comic.coverImage} alt={comic.title} fill priority={i === 0} sizes="(max-width: 768px) 100vw, 900px" className="object-cover" />
+              {mounted.includes(i) && (
+                <SafeCoverImage
+                  src={comic.coverImage}
+                  alt={comic.title}
+                  fill
+                  priority={i === 0}
+                  sizes="(max-width: 768px) 100vw, 900px"
+                  className="object-cover"
+                />
+              )}
               <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.1) 60%)" }} />
               <div className="absolute inset-x-0 bottom-0 p-5">
                 {comic.featuredBadge && (

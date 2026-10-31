@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import { Mascot, type MascotPose } from "@/components/ui/mascot";
 
@@ -21,7 +20,6 @@ interface GuideSheetProps {
 
 export function GuideSheet({ open, steps, onClose, finishLabel = "متوجه شدم" }: GuideSheetProps) {
   const [index, setIndex] = useState(0);
-  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (open) setIndex(0);
@@ -71,19 +69,13 @@ export function GuideSheet({ open, steps, onClose, finishLabel = "متوجه ش�
           <X size={18} />
         </button>
 
-        <motion.div
-          key={current}
-          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
-          className="relative"
-        >
+        <div key={current} className="guide-enter relative">
           <div className="flex h-44 items-center justify-center">
             {step.visual ?? <Mascot pose={step.pose ?? "wave"} size={170} float />}
           </div>
           <h2 className="mt-3 text-base font-semibold text-white">{step.title}</h2>
           <p className="mx-auto mt-2 max-w-xs text-sm leading-7 text-white/65">{step.text}</p>
-        </motion.div>
+        </div>
 
         <div className="relative mt-5 flex items-center justify-center gap-1.5" aria-hidden>
           {steps.map((_, i) => (

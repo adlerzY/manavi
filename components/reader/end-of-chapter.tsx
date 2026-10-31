@@ -5,6 +5,7 @@ import { ChapterReactions } from "./chapter-reactions";
 import { ChapterAdSlot } from "./chapter-ad-slot";
 import { ChapterStaffCredits, type StaffCreditItem } from "./chapter-staff-credits";
 import { ReportButton } from "@/components/catalog/report-button";
+import { useReaderNav } from "@/lib/client/reader-nav";
 
 interface ReactionSummary { emoji: string; count: number }
 
@@ -29,6 +30,8 @@ export function EndOfChapter({
   showAd,
   staffCredits,
 }: EndOfChapterProps) {
+  const { chapterHref, exitToComic } = useReaderNav(comicSlug);
+
   return (
     <div className="border-t border-white/10 bg-black pb-8 pt-4">
       <p className="text-center text-xs text-white/50">پایان چپتر</p>
@@ -44,7 +47,8 @@ export function EndOfChapter({
       <div className="mx-auto mt-4 flex max-w-2xl flex-col gap-1 px-4">
         {nextChapterId ? (
           <Link
-            href={`/app/read/${nextChapterId}`}
+            replace
+            href={chapterHref(nextChapterId)}
             className="rounded-md bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground"
           >
             چپتر بعدی
@@ -52,9 +56,9 @@ export function EndOfChapter({
         ) : (
           <p className="rounded-md border border-border py-3 text-center text-sm text-white/60">این آخرین چپتر منتشرشده است</p>
         )}
-        <Link href={`/app/comic/${comicSlug}`} className="py-3 text-center text-sm text-white/70">
+        <button type="button" onClick={exitToComic} className="py-3 text-center text-sm text-white/70">
           بازگشت به صفحه اثر
-        </Link>
+        </button>
       </div>
 
       <ChapterStaffCredits staff={staffCredits} isAuthenticated={isAuthenticated} />

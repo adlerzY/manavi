@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { BookOpen, ChevronLeft, ChevronRight, Info, X } from "lucide-react";
 import type { ReadingMode } from "@prisma/client";
@@ -19,6 +18,7 @@ import { ReaderGuide } from "./reader-guide";
 import { BackButton } from "@/components/navigation/back-button";
 import { getStoredReadingModeOverride, setStoredReadingModeOverride } from "@/lib/reading";
 import { hasSeenGuide, markGuideSeen } from "@/lib/guide";
+import { useReaderNav } from "@/lib/client/reader-nav";
 import type { StaffCreditItem } from "./chapter-staff-credits";
 
 interface ChapterOption { id: string; chapterNumber: number; title: string | null }
@@ -49,6 +49,7 @@ interface ChapterReaderProps {
 const DESKTOP_BREAKPOINT_PX = 768;
 const SCROLL_HIDE_THRESHOLD_PX = 8;
 const SCROLL_TOP_SAFE_ZONE_PX = 60;
+const HORIZONTAL_PERSIST_DELAY_MS = 2000;
 const READER_AREA_STYLE = { height: "calc(100dvh - var(--tg-content-safe-area-top, 0px) - 3.5rem)" };
 
 function useIsDesktop() {
@@ -90,9 +91,9 @@ export function ChapterReader({
   prevChapterId, nextChapterId, chapterOptions, initialPage, initialScrollFraction,
   reactionSummary, initialUserReaction, isAuthenticated, watermarkLabel, showAd, staffCredits,
 }: ChapterReaderProps) {
-  const router = useRouter();
   const isDesktop = useIsDesktop();
   const direction = readingDirection;
+  const { chapterHref, goToChapter, exitToComic } = useReaderNav(comicSlug);
 
   useImmersiveReading();
 
@@ -187,11 +188,14 @@ export function ChapterReader({
 
   useEffect(() => {
     if (renderMode === "VERTICAL") return;
-    const timeout = setTimeout(() => persistProgress(horizontalPage, 0), 1200);
+    const timeout = setTimeout(() => persistProgress(horizontalPage, 0), HORIZONTAL_PERSIST_DELAY_MS);
     return () => clearTimeout(timeout);
   }, [renderMode, horizontalPage, persistProgress]);
 
-  const onRequestPrevChapter = () => prevChapterId && router.push(`/app/read/${prevChapterId}`);
+  const onRequestPrevChapter = useCallback(() => {
+    if (prevChapterId) goToChapter(prevChapterId);
+  }, [prevChapterId, goToChapter]);
+
   const onRequestEnd = useCallback(() => setEndOpen(true), []);
 
   return (
@@ -205,7 +209,7 @@ export function ChapterReader({
         className="relative z-30 border-b border-white/5 bg-black"
       >
         <div className="flex h-14 items-center justify-between gap-2 px-2">
-          <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="reader" />
+          <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="reader" onBack={exitToComic} />
           <div className="min-w-0 flex-1 text-center">
             <p className="truncate text-sm font-medium text-white">{comicTitle}</p>
             <p className="text-xs text-white/60">چپتر {chapterNumber.toLocaleString("fa-IR")}</p>
@@ -315,12 +319,12 @@ export function ChapterReader({
         className={`fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-black/80 px-4 py-3 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "translate-y-full"}`}
       >
         {prevChapterId ? (
-          <Link href={`/app/read/${prevChapterId}`} aria-label="چپتر قبلی" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
+          <Link replace href={chapterHref(prevChapterId)} aria-label="چپتر قبلی" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
             <ChevronRight size={20} />
           </Link>
         ) : <div className="w-11 flex-shrink-0" />}
 
-        <select value={chapterId} onChange={(e) => router.push(`/app/read/${e.target.value}`)} className="h-11 min-w-0 flex-1 rounded-md bg-white/10 px-3 text-sm text-white">
+        <select value={chapterId} onChange={(e) => goToChapter(e.target.value)} className="h-11 min-w-0 flex-1 rounded-md bg-white/10 px-3 text-sm text-white">
           {chapterOptions.map((option) => (
             <option key={option.id} value={option.id} className="bg-neutral-900 text-white">
               چپتر {option.chapterNumber.toLocaleString("fa-IR")}{option.title ? ` — ${option.title}` : ""}
@@ -329,14 +333,19 @@ export function ChapterReader({
         </select>
 
         {nextChapterId ? (
-          <Link href={`/app/read/${nextChapterId}`} aria-label="چپتر بعدی" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
+          <Link replace href={chapterHref(nextChapterId)} aria-label="چپتر بعدی" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
             <ChevronLeft size={20} />
           </Link>
         ) : <div className="w-11 flex-shrink-0" />}
 
-        <Link href={`/app/comic/${comicSlug}`} aria-label="صفحه اثر" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
+        <button
+          type="button"
+          onClick={exitToComic}
+          aria-label="صفحه اثر"
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white"
+        >
           <BookOpen size={20} />
-        </Link>
+        </button>
       </div>
     </div>
   );

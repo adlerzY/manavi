@@ -18,6 +18,8 @@ interface HorizontalReaderProps {
   onToggleControls: () => void;
 }
 
+const SWIPE_MIN_DISTANCE_PX = 40;
+
 export function HorizontalReader({
   pages,
   currentPage,
@@ -64,13 +66,14 @@ export function HorizontalReader({
   function handleTouchStart(e: TouchEvent) {
     touchStartX.current = e.touches[0].clientX;
   }
+
   function handleTouchEnd(e: TouchEvent) {
     if (touchStartX.current === null) return;
     const deltaX = e.changedTouches[0].clientX - touchStartX.current;
     touchStartX.current = null;
-    if (Math.abs(deltaX) < 40) return;
+    if (Math.abs(deltaX) < SWIPE_MIN_DISTANCE_PX) return;
     const swipedRight = deltaX > 0;
-    const goesBackward = isRtl ? swipedRight : !swipedRight;
+    const goesBackward = isRtl ? !swipedRight : swipedRight;
     if (goesBackward) goBackward();
     else goForward();
   }
@@ -80,7 +83,12 @@ export function HorizontalReader({
   const leftAction = isRtl ? goForward : goBackward;
 
   return (
-    <div className="relative h-full w-full bg-black" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div
+      className="relative h-full w-full bg-black"
+      style={{ touchAction: "pan-y" }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {currentUrl && <ProtectedImage src={currentUrl} alt={`صفحه ${currentPage}`} fill priority sizes="100vw" className="object-contain" />}
 
       <button onClick={rightAction} aria-label={isRtl ? "صفحه قبل" : "صفحه بعد"} className="absolute inset-y-0 right-0 z-20 w-1/3" />

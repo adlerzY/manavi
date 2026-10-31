@@ -6,6 +6,7 @@ import Link from "next/link";
 import { unlockChapterWithCoins } from "@/app/actions/chapter-access";
 import { BackButton } from "@/components/navigation/back-button";
 import { Mascot } from "@/components/ui/mascot";
+import { useReaderNav } from "@/lib/client/reader-nav";
 
 interface LockedChapterGateProps {
   chapterId: string;
@@ -16,6 +17,7 @@ interface LockedChapterGateProps {
 
 export function LockedChapterGate({ chapterId, comicSlug, coinsBalance, coinCost }: LockedChapterGateProps) {
   const router = useRouter();
+  const { chapterHref, exitToComic } = useReaderNav(comicSlug);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keyRef = useRef<string | null>(null);
@@ -40,7 +42,7 @@ export function LockedChapterGate({ chapterId, comicSlug, coinsBalance, coinCost
     setPending(false);
   }
 
-  const returnTo = `/app/read/${chapterId}`;
+  const returnTo = chapterHref(chapterId);
   const shortfall = Math.max(0, coinCost - coinsBalance);
   const hasEnoughCoins = coinsBalance >= coinCost;
 
@@ -50,7 +52,7 @@ export function LockedChapterGate({ chapterId, comicSlug, coinsBalance, coinCost
       className="relative flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center"
     >
       <div className="absolute right-3" style={{ top: "calc(var(--tg-content-safe-area-top, 0px) + 0.75rem)" }}>
-        <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="plain" />
+        <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="plain" onBack={exitToComic} />
       </div>
 
       <Mascot pose="coin" size={150} float />
@@ -79,20 +81,21 @@ export function LockedChapterGate({ chapterId, comicSlug, coinsBalance, coinCost
         </Link>
       )}
 
-      <Link
-        href={`/app/comic/${comicSlug}`}
+      <button
+        type="button"
+        onClick={exitToComic}
         className="w-full max-w-xs rounded-xl border border-border px-4 py-3 text-center text-sm text-text-main"
       >
         بازگشت به صفحه‌ی اثر
-      </Link>
+      </button>
 
       <div className="flex flex-col items-center gap-2">
         <Link href="/app/free" className="text-xs text-primary underline">
           سکه نداری؟ آثار تمام رایگان رو ببین
         </Link>
-        <Link href={`/app/comic/${comicSlug}`} className="text-xs text-accent underline">
+        <button type="button" onClick={exitToComic} className="text-xs text-accent underline">
           باز کردن کل نسخه یکجا از صفحه‌ی عنوان
-        </Link>
+        </button>
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}

@@ -7,12 +7,17 @@ interface BackButtonProps {
   fallbackHref: string;
   className?: string;
   variant?: "overlay" | "plain" | "reader";
+  onBack?: () => void;
 }
 
-export function BackButton({ fallbackHref, className, variant = "overlay" }: BackButtonProps) {
+export function BackButton({ fallbackHref, className, variant = "overlay", onBack }: BackButtonProps) {
   const router = useRouter();
 
   function handleClick() {
+    if (onBack) {
+      onBack();
+      return;
+    }
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
     } else {

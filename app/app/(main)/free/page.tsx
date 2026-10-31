@@ -5,7 +5,6 @@ import { getFullyFreePage } from "@/lib/free-feed";
 import { HomeComicCard } from "@/components/catalog/home-comic-card";
 import { BackButton } from "@/components/navigation/back-button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Mascot } from "@/components/ui/mascot";
 
 export const revalidate = 120;
 
@@ -38,7 +37,6 @@ export default async function FreeComicsPage({ searchParams }: PageProps) {
               {total.toLocaleString("fa-IR")} اثر که همه‌ی چپترهاشون رایگانه
             </p>
           </div>
-          <Mascot pose="celebrate" size={64} float />
         </div>
 
         {comics.length === 0 ? (

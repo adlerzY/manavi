@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
+import { comicReadHref } from "@/lib/reader-links";
 
 interface ReadingCta {
   chapterId: string;
@@ -61,7 +62,7 @@ export function ComicDetailTabs({ preview, episodes, similar, episodeCount, read
         >
           <div className="mx-auto max-w-4xl px-4 py-3">
             <Link
-              href={`/app/read/${readingCta.chapterId}`}
+              href={comicReadHref(readingCta.chapterId)}
               className="flex w-full items-center justify-center rounded-md bg-primary px-4 py-3 text-sm font-medium text-primary-foreground"
             >
               {readingCta.label}

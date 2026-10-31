@@ -17,6 +17,8 @@ interface DoublePageReaderProps {
   onToggleControls: () => void;
 }
 
+const SWIPE_MIN_DISTANCE_PX = 40;
+
 export function DoublePageReader({
   pages,
   currentPage,
@@ -65,13 +67,14 @@ export function DoublePageReader({
   function handleTouchStart(e: TouchEvent) {
     touchStartX.current = e.touches[0].clientX;
   }
+
   function handleTouchEnd(e: TouchEvent) {
     if (touchStartX.current === null) return;
     const deltaX = e.changedTouches[0].clientX - touchStartX.current;
     touchStartX.current = null;
-    if (Math.abs(deltaX) < 40) return;
+    if (Math.abs(deltaX) < SWIPE_MIN_DISTANCE_PX) return;
     const swipedRight = deltaX > 0;
-    const goesBackward = isRtl ? swipedRight : !swipedRight;
+    const goesBackward = isRtl ? !swipedRight : swipedRight;
     if (goesBackward) goBackward();
     else goForward();
   }
@@ -82,7 +85,12 @@ export function DoublePageReader({
   const leftAction = isRtl ? goForward : goBackward;
 
   return (
-    <div className="relative flex h-full w-full items-center justify-center gap-1 bg-black" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div
+      className="relative flex h-full w-full items-center justify-center gap-1 bg-black"
+      style={{ touchAction: "pan-y" }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <div className="relative h-full w-1/2">
         {leftUrl && <ProtectedImage src={leftUrl} alt="" fill priority sizes="50vw" className="object-contain" />}
       </div>

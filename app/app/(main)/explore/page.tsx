@@ -6,10 +6,10 @@ import { PopularGenreCards } from "@/components/catalog/popular-genre-cards";
 import { ExploreSearchClient } from "@/components/catalog/explore-search-client";
 import { TopSearches } from "@/components/catalog/top-searches";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Mascot } from "@/components/ui/mascot";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
 import { getAllCategories } from "@/lib/categories";
 import { getAllGenres, getPopularGenres } from "@/lib/genres";
+import { getActiveEditionLanguages } from "@/lib/active-languages";
 import { resolveExploreWhere, fetchExploreComics, parseExploreSort, type ExploreAccess } from "@/lib/explore";
 import { languageLabel } from "@/lib/languages";
 import { averageScore } from "@/lib/rating";
@@ -65,15 +65,10 @@ export default async function ExplorePage({ searchParams }: PageProps) {
     ? await resolveExploreWhere({ q, categorySlug: type, genreIds, status, access, language })
     : null;
 
-  const [categories, allGenres, languageRows, popularGenres, topSearches, comics, total] = await Promise.all([
+  const [categories, allGenres, languageCodes, popularGenres, topSearches, comics, total] = await Promise.all([
     getAllCategories(),
     getAllGenres(),
-    prisma.edition.findMany({
-      where: { status: "ACTIVE" },
-      distinct: ["language"],
-      select: { language: true },
-      orderBy: { language: "asc" },
-    }),
+    getActiveEditionLanguages(),
     showingResults ? Promise.resolve([]) : getPopularGenres(allowedRatings, POPULAR_GENRE_LIMIT),
     showingResults ? Promise.resolve([]) : getTopSearchTerms(10),
     exploreWhere ? fetchExploreComics(exploreWhere, sort, page, PAGE_SIZE) : Promise.resolve([]),
@@ -98,7 +93,7 @@ export default async function ExplorePage({ searchParams }: PageProps) {
 
   const categoryFilterOptions = categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
   const genreFilterOptions = allGenres.map((g) => ({ id: g.id, name: g.name }));
-  const languageFilterOptions = languageRows.map((row) => ({ code: row.language, label: languageLabel(row.language) }));
+  const languageFilterOptions = languageCodes.map((code) => ({ code, label: languageLabel(code) }));
 
   return (
     <main className="min-h-screen bg-background px-4 py-8">
@@ -107,24 +102,6 @@ export default async function ExplorePage({ searchParams }: PageProps) {
 
         {!showingResults && (
           <div className="mt-6 space-y-8">
-            <div
-              className="relative overflow-hidden rounded-2xl border border-border p-4"
-              style={{ backgroundImage: "linear-gradient(135deg, rgba(0,220,100,0.12), rgba(236,72,153,0.08))" }}
-            >
-              <div className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-sm font-semibold text-text-main">دنبال چی می‌گردی؟</h2>
-                  <p className="mt-1 text-xs leading-6 text-text-muted">
-                    اسم اثر رو جستجو کن یا با فیلترها ژانر، وضعیت و نوع دسترسی رو انتخاب کن.
-                  </p>
-                  <Link href="/app/free" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
-                    مشاهده‌ی آثار تمام رایگان
-                  </Link>
-                </div>
-                <Mascot pose="thinking" size={92} float />
-              </div>
-            </div>
-
             {popularGenres.length > 0 && (
               <div>
                 <h2 className="mb-3 text-sm font-medium text-text-main">دسته‌بندی‌های داغ</h2>

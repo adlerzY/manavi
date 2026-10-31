@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import type { FullyFreeComic } from "@/lib/free-feed";
 import { HomeComicCard } from "@/components/catalog/home-comic-card";
-import { Mascot } from "@/components/ui/mascot";
 
 export function FullyFreeSection({ comics }: { comics: FullyFreeComic[] }) {
   if (comics.length === 0) return null;
@@ -17,7 +16,6 @@ export function FullyFreeSection({ comics }: { comics: FullyFreeComic[] }) {
         }}
       >
         <div className="mb-3 flex items-center gap-3">
-          <Mascot pose="celebrate" size={60} float />
           <div className="min-w-0 flex-1">
             <h2 className="flex items-center gap-2 text-base font-semibold text-text-main">
               تمام رایگان

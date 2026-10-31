@@ -15,7 +15,6 @@ import { getFullyFreeComics } from "@/lib/free-feed";
 import { getHomeFeedComics } from "@/app/actions/home-feed";
 import { UserHeaderSection } from "@/components/home/user-header-async";
 import { UserHeaderSkeleton } from "@/components/home/user-header-skeleton";
-import { ContinueReadingSection } from "@/components/home/continue-reading-section";
 import { HeroCarousel } from "@/components/home/hero-carousel";
 import { FullyFreeSection } from "@/components/home/fully-free-section";
 import { NewestPopularSection } from "@/components/home/newest-popular-section";
@@ -71,10 +70,6 @@ export default async function AppHomePage() {
       </Suspense>
 
       <HeroCarousel comics={heroComics} />
-
-      <Suspense fallback={null}>
-        <ContinueReadingSection allowedRatings={allowedRatings} />
-      </Suspense>
 
       <FullyFreeSection comics={fullyFree} />
 

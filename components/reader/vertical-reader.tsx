@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PlayCircle, PauseCircle } from "lucide-react";
 import { ProtectedImage } from "./protected-image";
 
@@ -16,6 +16,7 @@ interface VerticalReaderProps {
 }
 
 const SCROLL_SPEEDS = [1, 2, 3, 5, 10];
+const PROGRESS_DELAY_MS = 2500;
 
 export function VerticalReader({
   pages,
@@ -60,18 +61,15 @@ export function VerticalReader({
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (visible) {
-          const index = Number((visible.target as HTMLElement).dataset.pageIndex);
-          if (!Number.isNaN(index)) {
-            setCurrentPage(index + 1);
-            onPageChange?.(index + 1);
-          }
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const index = Number((entry.target as HTMLElement).dataset.pageIndex);
+          if (Number.isNaN(index)) continue;
+          setCurrentPage(index + 1);
+          onPageChange?.(index + 1);
         }
       },
-      { threshold: [0.5] }
+      { rootMargin: "-45% 0px -45% 0px", threshold: 0 }
     );
 
     pageRefs.current.forEach((el) => {
@@ -106,7 +104,7 @@ export function VerticalReader({
   useEffect(() => {
     const timeout = setTimeout(() => {
       onProgress(currentPage, scrollFractionRef.current);
-    }, 1500);
+    }, PROGRESS_DELAY_MS);
     return () => clearTimeout(timeout);
   }, [currentPage, onProgress]);
 
@@ -136,31 +134,37 @@ export function VerticalReader({
     };
   }, [autoScroll, speedIndex]);
 
+  const pageNodes = useMemo(
+    () =>
+      pages.map((url, index) => (
+        <div
+          key={url}
+          data-page-index={index}
+          ref={(el) => {
+            pageRefs.current[index] = el;
+          }}
+          className="relative w-full"
+          style={{ contentVisibility: "auto", containIntrinsicSize: "0 1400px" }}
+        >
+          <ProtectedImage
+            src={url}
+            alt={`صفحه ${index + 1}`}
+            width={800}
+            height={1200}
+            sizes="(max-width: 768px) 100vw, 700px"
+            className="h-auto w-full"
+            priority={index < 5}
+            loading={index < 5 ? "eager" : "lazy"}
+          />
+        </div>
+      )),
+    [pages]
+  );
+
   return (
     <>
       <div onClick={onToggleControls} className="mx-auto flex max-w-2xl flex-col">
-        {pages.map((url, index) => (
-          <div
-            key={url}
-            data-page-index={index}
-            ref={(el) => {
-              pageRefs.current[index] = el;
-            }}
-            className="relative w-full"
-            style={{ contentVisibility: "auto", containIntrinsicSize: "0 1400px" }}
-          >
-            <ProtectedImage
-              src={url}
-              alt={`صفحه ${index + 1}`}
-              width={800}
-              height={1200}
-              sizes="(max-width: 768px) 100vw, 700px"
-              className="h-auto w-full"
-              priority={index < 5}
-              loading={index < 5 ? "eager" : "lazy"}
-            />
-          </div>
-        ))}
+        {pageNodes}
       </div>
 
       <div

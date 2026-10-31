@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { headers } from "next/headers";
@@ -12,7 +13,8 @@ import { checkRateLimit } from "@/lib/moderation";
 import { ChapterReader } from "@/components/reader/chapter-reader";
 import { LockedChapterGate } from "@/components/reader/locked-chapter-gate";
 import { AgeVerificationGate } from "@/components/reader/age-verification-gate";
-import { CommentSection } from "@/components/comments/comment-section";
+import { ChapterComments } from "@/components/comments/chapter-comments";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getChapterReactionSummary } from "@/app/actions/reactions";
 import { categoryDirectionToReaderDirection } from "@/lib/reading";
 import type { StaffCreditItem } from "@/components/reader/chapter-staff-credits";
@@ -22,6 +24,16 @@ interface PageProps {
 }
 
 const CHAPTER_READ_RATE_LIMIT = 20;
+
+function CommentsFallback() {
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-8">
+      <Skeleton className="mb-4 h-6 w-16" />
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="mt-4 h-16 w-full" />
+    </div>
+  );
+}
 
 export default async function ReadChapterPage({ params }: PageProps) {
   const { chapterId } = await params;
@@ -160,21 +172,9 @@ export default async function ReadChapterPage({ params }: PageProps) {
   const prevChapterId = currentIndex > 0 ? sortedChapters[currentIndex - 1].id : null;
   const nextChapterId = currentIndex >= 0 && currentIndex < sortedChapters.length - 1 ? sortedChapters[currentIndex + 1].id : null;
 
-  let canReply = user?.role === "ADMIN";
-  if (!canReply && user?.publisherProfile) {
-    canReply = user.publisherProfile.id === chapter.edition.publisherId;
-  }
-  if (!canReply && user) {
-    const staffLink = await prisma.publisherStaff.findFirst({
-      where: { userId: user.id, publisherId: chapter.edition.publisherId },
-      select: { id: true },
-    });
-    canReply = Boolean(staffLink);
-  }
-
   after(() => recordChapterVisit(chapterId, chapter.comic.id, user?.id ?? null).catch(() => {}));
 
-  const [readHistory, pageUrls, reactionData, comments, staffRows] = await Promise.all([
+  const [readHistory, pageUrls, reactionData, staffRows] = await Promise.all([
     user
       ? prisma.readHistory.findUnique({
           where: { userId_comicId: { userId: user.id, comicId: chapter.comic.id } },
@@ -183,31 +183,6 @@ export default async function ReadChapterPage({ params }: PageProps) {
       : Promise.resolve(null),
     getSignedImageUrls(chapter.pages, undefined, { width: 960 }),
     getChapterReactionSummary(chapterId, user?.id ?? null),
-    prisma.comment.findMany({
-      where: { chapterId, parentId: null, status: "APPROVED" },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      select: {
-        id: true,
-        content: true,
-        isSpoiler: true,
-        isStaffReply: true,
-        createdAt: true,
-        user: { select: { firstName: true, lastName: true, username: true, activeTitle: true } },
-        replies: {
-          where: { status: "APPROVED" },
-          orderBy: { createdAt: "asc" },
-          select: {
-            id: true,
-            content: true,
-            isSpoiler: true,
-            isStaffReply: true,
-            createdAt: true,
-            user: { select: { firstName: true, lastName: true, username: true, activeTitle: true } },
-          },
-        },
-      },
-    }),
     prisma.chapterStaff.findMany({
       where: { chapterId },
       select: {
@@ -251,15 +226,9 @@ export default async function ReadChapterPage({ params }: PageProps) {
         staffCredits={staffCredits}
       />
       <div className="bg-background">
-        <CommentSection
-          chapterId={chapter.id}
-          initialComments={comments.map((c) => ({
-            ...c,
-            createdAt: c.createdAt.toISOString(),
-            replies: c.replies.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
-          }))}
-          canReply={canReply}
-        />
+        <Suspense fallback={<CommentsFallback />}>
+          <ChapterComments chapterId={chapter.id} publisherId={chapter.edition.publisherId} />
+        </Suspense>
       </div>
     </>
   );

@@ -229,6 +229,8 @@ model Comic {
   @@index([status])
   @@index([approvalStatus])
   @@index([createdById])
+  @@index([approvalStatus, ageRating, viewCount(sort: Desc)])
+
 }
 
 enum AgeRating {
@@ -338,6 +340,8 @@ model Chapter {
   @@index([status, scheduledAt])
   @@index([viewCount])
   @@index([uploadedById])
+  @@index([publishedAt(sort: Desc)])
+
 }
 
 model ChapterStaff {
@@ -390,6 +394,8 @@ model ChapterReaction {
 
   @@unique([chapterId, userId])
   @@index([chapterId])
+  @@index([userId])
+
 }
 
 model Comment {
@@ -415,6 +421,8 @@ model Comment {
   @@index([chapterId, createdAt])
   @@index([parentId])
   @@index([status])
+  @@index([userId])
+  @@index([status, createdAt(sort: Desc)])
 }
 
 model Bookmark {
@@ -426,6 +434,8 @@ model Bookmark {
   comic              Comic    @relation(fields: [comicId], references: [id])
 
   @@id([userId, comicId])
+  @@index([comicId])
+
 }
 
 model ReadHistory {

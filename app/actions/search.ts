@@ -1,10 +1,12 @@
 "use server";
 
+import { unstable_cache } from "next/cache";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/moderation";
 
 const MAX_SEARCH_TERM_LENGTH = 100;
+const TOP_TERMS_REVALIDATE_SECONDS = 600;
 
 export async function recordSearchTerm(term: string): Promise<void> {
   const trimmed = term.trim().slice(0, MAX_SEARCH_TERM_LENGTH);
@@ -28,10 +30,17 @@ export interface TopSearchTerm {
   count: number;
 }
 
+const loadTopSearchTerms = unstable_cache(
+  async (limit: number): Promise<TopSearchTerm[]> =>
+    prisma.searchTerm.findMany({
+      orderBy: { count: "desc" },
+      take: limit,
+      select: { term: true, count: true },
+    }),
+  ["search:top-terms"],
+  { revalidate: TOP_TERMS_REVALIDATE_SECONDS, tags: ["search-terms"] }
+);
+
 export async function getTopSearchTerms(limit = 10): Promise<TopSearchTerm[]> {
-  return prisma.searchTerm.findMany({
-    orderBy: { count: "desc" },
-    take: limit,
-    select: { term: true, count: true },
-  });
+  return loadTopSearchTerms(limit);
 }

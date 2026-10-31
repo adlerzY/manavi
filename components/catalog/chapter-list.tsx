@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
+import { comicReadHref } from "@/lib/reader-links";
 
 export interface ChapterListItem {
   id: string;
@@ -47,7 +48,7 @@ export function ChapterList({ chapters, price, focusCurrent = false }: ChapterLi
         <Link
           key={chapter.id}
           ref={chapter.isCurrent ? currentRef : undefined}
-          href={`/app/read/${chapter.id}`}
+          href={comicReadHref(chapter.id)}
           className={`flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface ${
             chapter.isCurrent ? "border-r-2 border-primary bg-primary/5" : ""
           }`}
