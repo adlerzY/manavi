@@ -1,7 +1,7 @@
 "use server";
 
 import { unstable_cache } from "next/cache";
-import type { AgeRating } from "@prisma/client";
+import type { AgeRating, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
 
@@ -15,48 +15,96 @@ export interface HomeFeedComic {
 }
 
 const HOME_FEED_LIST_REVALIDATE_SECONDS = 120;
+const HOME_FEED_SIZE = 18;
+const NEWEST_WINDOW = 300;
+
+const COMIC_CARD_SELECT = {
+  id: true,
+  title: true,
+  slug: true,
+  coverImage: true,
+  status: true,
+} satisfies Prisma.ComicSelect;
+
+interface LatestEntry {
+  comicId: string;
+  latestChapter: number | null;
+}
+
+function buildComicFilter(allowedRatings: AgeRating[], genreId: string | null): Prisma.ComicWhereInput {
+  return {
+    ageRating: { in: allowedRatings },
+    approvalStatus: "APPROVED",
+    ...(genreId ? { genres: { some: { genreId } } } : {}),
+  };
+}
+
+async function loadLatestEntries(comicFilter: Prisma.ComicWhereInput): Promise<LatestEntry[]> {
+  const where: Prisma.ChapterWhereInput = { publishedAt: { not: null }, comic: comicFilter };
+
+  const recent = await prisma.chapter.findMany({
+    where,
+    orderBy: { publishedAt: "desc" },
+    take: NEWEST_WINDOW,
+    select: { comicId: true, chapterNumber: true },
+  });
+
+  const seen = new Map<string, number | null>();
+  for (const row of recent) {
+    if (!seen.has(row.comicId)) seen.set(row.comicId, row.chapterNumber);
+    if (seen.size >= HOME_FEED_SIZE) break;
+  }
+
+  if (seen.size >= HOME_FEED_SIZE || recent.length < NEWEST_WINDOW) {
+    return [...seen.entries()].map(([comicId, latestChapter]) => ({ comicId, latestChapter }));
+  }
+
+  const groups = await prisma.chapter.groupBy({
+    by: ["comicId"],
+    where,
+    _max: { publishedAt: true, chapterNumber: true },
+    orderBy: { _max: { publishedAt: "desc" } },
+    take: HOME_FEED_SIZE,
+  });
+  return groups.map((group) => ({ comicId: group.comicId, latestChapter: group._max.chapterNumber }));
+}
 
 const fetchHomeFeedComics = unstable_cache(
   async (mode: "newest" | "popular", allowedRatings: AgeRating[], genreId: string | null): Promise<HomeFeedComic[]> => {
+    const comicFilter = buildComicFilter(allowedRatings, genreId);
+
     if (mode === "newest") {
-      const rows = await prisma.chapter.findMany({
-        where: {
-          publishedAt: { not: null },
-          comic: {
-            ageRating: { in: allowedRatings },
-            approvalStatus: "APPROVED",
-            genres: genreId ? { some: { genreId } } : undefined,
-          },
-        },
-        orderBy: { publishedAt: "desc" },
-        distinct: ["comicId"],
-        take: 18,
-        select: {
-          chapterNumber: true,
-          comic: { select: { id: true, title: true, slug: true, coverImage: true, status: true } },
-        },
+      const latest = await loadLatestEntries(comicFilter);
+      if (latest.length === 0) return [];
+
+      const rows = await prisma.comic.findMany({
+        where: { id: { in: latest.map((entry) => entry.comicId) } },
+        select: COMIC_CARD_SELECT,
       });
-      return rows.map((r) => ({
-        ...r.comic,
-        latestChapter: r.chapterNumber,
-        completed: r.comic.status === "COMPLETED",
-      }));
+      const byId = new Map(rows.map((row) => [row.id, row]));
+
+      const result: HomeFeedComic[] = [];
+      for (const entry of latest) {
+        const comic = byId.get(entry.comicId);
+        if (!comic) continue;
+        result.push({
+          id: comic.id,
+          title: comic.title,
+          slug: comic.slug,
+          coverImage: comic.coverImage,
+          latestChapter: entry.latestChapter,
+          completed: comic.status === "COMPLETED",
+        });
+      }
+      return result;
     }
 
     const comics = await prisma.comic.findMany({
-      where: {
-        ageRating: { in: allowedRatings },
-        approvalStatus: "APPROVED",
-        genres: genreId ? { some: { genreId } } : undefined,
-      },
+      where: comicFilter,
       orderBy: { viewCount: "desc" },
-      take: 18,
+      take: HOME_FEED_SIZE,
       select: {
-        id: true,
-        title: true,
-        slug: true,
-        coverImage: true,
-        status: true,
+        ...COMIC_CARD_SELECT,
         chapters: {
           where: { publishedAt: { not: null } },
           orderBy: { chapterNumber: "desc" },
@@ -66,16 +114,16 @@ const fetchHomeFeedComics = unstable_cache(
       },
     });
 
-    return comics.map((c) => ({
-      id: c.id,
-      title: c.title,
-      slug: c.slug,
-      coverImage: c.coverImage,
-      latestChapter: c.chapters[0]?.chapterNumber ?? null,
-      completed: c.status === "COMPLETED",
+    return comics.map((comic) => ({
+      id: comic.id,
+      title: comic.title,
+      slug: comic.slug,
+      coverImage: comic.coverImage,
+      latestChapter: comic.chapters[0]?.chapterNumber ?? null,
+      completed: comic.status === "COMPLETED",
     }));
   },
-  ["home-feed:list"],
+  ["home-feed:list:v2"],
   { revalidate: HOME_FEED_LIST_REVALIDATE_SECONDS, tags: ["home-feed"] }
 );
 

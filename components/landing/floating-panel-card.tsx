@@ -62,7 +62,6 @@ export function FloatingPanelCard({
             src={imageSrc}
             alt={sublabel}
             fill
-            unoptimized
             sizes="(max-width: 640px) 160px, 176px"
             className="object-cover"
             priority={priority}

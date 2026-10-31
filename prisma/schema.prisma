@@ -121,6 +121,7 @@ model PublisherStaff {
   user      User      @relation(fields: [userId], references: [id])
 
   @@unique([publisherId, userId, role])
+  @@index([userId])
 }
 
 enum LicenseStatus {
@@ -230,6 +231,7 @@ model Comic {
   @@index([approvalStatus])
   @@index([createdById])
   @@index([approvalStatus, ageRating, viewCount(sort: Desc)])
+  @@index([approvalStatus, ageRating, createdAt(sort: Desc)])
 
 }
 
@@ -283,6 +285,7 @@ model ComicStaff {
 
   @@unique([comicId, userId, roleTitle])
   @@index([editionId])
+    @@index([userId])
 }
 
 enum StaffRole {
@@ -355,6 +358,7 @@ model ChapterStaff {
   user    User    @relation(fields: [userId], references: [id])
 
   @@unique([chapterId, userId, roleTitle])
+  @@index([userId])
 }
 
 model ChapterUnlock {
@@ -380,6 +384,7 @@ model ChapterReadMark {
 
   @@id([userId, chapterId])
   @@index([userId, comicId])
+  @@index([readAt])
 }
 
 model ChapterReaction {
@@ -395,7 +400,7 @@ model ChapterReaction {
   @@unique([chapterId, userId])
   @@index([chapterId])
   @@index([userId])
-
+  @@index([createdAt])
 }
 
 model Comment {

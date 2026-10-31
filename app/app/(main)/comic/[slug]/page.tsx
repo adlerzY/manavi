@@ -80,8 +80,7 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
     notFound();
   }
 
-  const user = await getSessionUser();
-  const editions = await getWorkEditions(comic.id);
+  const [user, editions] = await Promise.all([getSessionUser(), getWorkEditions(comic.id)]);
 
   const isPrivileged = user?.role === "ADMIN" || user?.id === comic.createdById;
   let isTeamMember = false;
@@ -152,12 +151,12 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
       ? getUserRatingContext(user?.id ?? null, comic.id, selected.id, selected.chapterCount)
       : Promise.resolve(emptyRatingContext),
     user ? getUserEditionRequest(user.id, comic.id) : Promise.resolve(null),
-    user && licenseActive && coinChapterIds.length > 0 && user.role !== "ADMIN"
+    user && selected && licenseActive && coinChapterIds.length > 0 && user.role !== "ADMIN"
       ? prisma.entitlement
           .findMany({
             where: {
               userId: user.id,
-              chapterId: { in: coinChapterIds },
+              chapter: { editionId: selected.id },
               OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
             },
             select: { chapterId: true },

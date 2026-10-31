@@ -77,15 +77,20 @@ export function invalidateChapterAccessList(comicId: string): void {
 export async function userHasChapterAccess(
   userId: string | null,
   chapterId: string,
-  role?: string
+  role?: string,
+  knownAccessType?: ChapterAccessType
 ): Promise<boolean> {
-  const chapter = await prisma.chapter.findUnique({
-    where: { id: chapterId },
-    select: { accessType: true },
-  });
-  if (!chapter) return false;
-  if (chapter.accessType === ChapterAccessType.FREE) return true;
+  let accessType = knownAccessType;
+  if (!accessType) {
+    const chapter = await prisma.chapter.findUnique({
+      where: { id: chapterId },
+      select: { accessType: true },
+    });
+    if (!chapter) return false;
+    accessType = chapter.accessType;
+  }
 
+  if (accessType === ChapterAccessType.FREE) return true;
   if (!userId) return false;
   if (role === "ADMIN") return true;
 
@@ -107,29 +112,21 @@ export interface ComicUnlockPreview {
 }
 
 export async function getEditionUnlockPreview(userId: string | null, editionId: string): Promise<ComicUnlockPreview> {
-  const [cost, chapters] = await Promise.all([
+  const baseWhere = {
+    editionId,
+    status: "PUBLISHED" as const,
+    accessType: ChapterAccessType.COIN,
+    isLocked: false,
+  };
+
+  const [cost, total, owned] = await Promise.all([
     getEditionChapterPrice(editionId),
-    prisma.chapter.findMany({
-      where: { editionId, status: "PUBLISHED", accessType: ChapterAccessType.COIN, isLocked: false },
-      select: { id: true },
-    }),
+    prisma.chapter.count({ where: baseWhere }),
+    userId
+      ? prisma.chapter.count({ where: { ...baseWhere, entitlements: { some: { userId, expiresAt: null } } } })
+      : Promise.resolve(0),
   ]);
 
-  if (chapters.length === 0) {
-    return { lockedCount: 0, totalCost: 0, coinCost: cost };
-  }
-
-  const ownedIds = userId
-    ? new Set(
-        (
-          await prisma.entitlement.findMany({
-            where: { userId, chapterId: { in: chapters.map((c) => c.id) }, expiresAt: null },
-            select: { chapterId: true },
-          })
-        ).map((entry) => entry.chapterId)
-      )
-    : new Set<string>();
-
-  const lockedCount = chapters.filter((c) => !ownedIds.has(c.id)).length;
+  const lockedCount = Math.max(0, total - owned);
   return { lockedCount, totalCost: lockedCount * cost, coinCost: cost };
 }

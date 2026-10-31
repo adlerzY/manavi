@@ -3,7 +3,9 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SlidersHorizontal, X } from "lucide-react";
-import { FilterDrawer } from "./filter-drawer";
+import dynamic from "next/dynamic";
+
+const FilterDrawer = dynamic(() => import("./filter-drawer").then((module) => module.FilterDrawer), { ssr: false });
 
 interface CategoryFilterOption {
   id: string;
@@ -196,22 +198,24 @@ export function ExploreSearchClient({ categories, genres, languages }: ExploreSe
         </div>
       )}
 
-      <FilterDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        categories={categories}
-        genres={genres}
-        languages={languages}
-        initialType={type}
-        initialGenreIds={genreIds}
-        initialStatus={status}
-        initialAccess={access}
-        initialLanguage={lang}
-        currentQuery={q}
-        onApply={(next) =>
-          pushParams({ type: next.type, genreIds: next.genreIds, status: next.status, access: next.access, lang: next.lang })
-        }
-      />
+      {drawerOpen && (
+        <FilterDrawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          categories={categories}
+          genres={genres}
+          languages={languages}
+          initialType={type}
+          initialGenreIds={genreIds}
+          initialStatus={status}
+          initialAccess={access}
+          initialLanguage={lang}
+          currentQuery={q}
+          onApply={(next) =>
+            pushParams({ type: next.type, genreIds: next.genreIds, status: next.status, access: next.access, lang: next.lang })
+          }
+        />
+      )}
     </div>
   );
 }

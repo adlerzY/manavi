@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { BookOpen, ChevronLeft, ChevronRight, Info, X } from "lucide-react";
 import type { ReadingMode } from "@prisma/client";
@@ -9,17 +10,18 @@ import { updateReadHistory } from "@/app/actions/read-history";
 import { getChapterPrefetchUrls } from "@/app/actions/chapter-prefetch";
 import { VerticalReader } from "./vertical-reader";
 import { HorizontalReader } from "./horizontal-reader";
-import { DoublePageReader } from "./double-page-reader";
 import { ReadingModeToggle } from "./reading-mode-toggle";
 import { EndOfChapter } from "./end-of-chapter";
 import { WatermarkOverlay } from "./watermark-overlay";
 import { DevToolsGuard } from "./dev-tools-guard";
-import { ReaderGuide } from "./reader-guide";
 import { BackButton } from "@/components/navigation/back-button";
 import { getStoredReadingModeOverride, setStoredReadingModeOverride } from "@/lib/reading";
 import { hasSeenGuide, markGuideSeen } from "@/lib/guide";
 import { useReaderNav } from "@/lib/client/reader-nav";
 import type { StaffCreditItem } from "./chapter-staff-credits";
+
+const DoublePageReader = dynamic(() => import("./double-page-reader").then((module) => module.DoublePageReader));
+const ReaderGuide = dynamic(() => import("./reader-guide").then((module) => module.ReaderGuide), { ssr: false });
 
 interface ChapterOption { id: string; chapterNumber: number; title: string | null }
 interface ReactionSummary { emoji: string; count: number }
@@ -100,11 +102,10 @@ export function ChapterReader({
   const [controlsVisible, setControlsVisible] = useState(true);
   const [effectiveMode, setEffectiveMode] = useState<ReadingMode>(readingMode);
   const [horizontalPage, setHorizontalPage] = useState(initialPage);
-  const [verticalCurrentPage, setVerticalCurrentPage] = useState(initialPage);
   const [endOpen, setEndOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const lastScrollYRef = useRef(0);
-  const nextChapterPrefetchedRef = useRef(false);
+  const prefetchedForRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!hasSeenGuide("reader")) setGuideOpen(true);
@@ -154,22 +155,29 @@ export function ChapterReader({
 
   const renderMode: ReadingMode = effectiveMode === "DOUBLE_PAGE" && !isDesktop ? "HORIZONTAL" : effectiveMode;
 
-  useEffect(() => {
-    if (!nextChapterId || nextChapterPrefetchedRef.current || pages.length === 0) return;
-    const currentPage = renderMode === "VERTICAL" ? verticalCurrentPage : horizontalPage;
-    const remaining = pages.length - currentPage;
-    if (remaining > 2) return;
+  const prefetchNextChapter = useCallback(
+    (currentPage: number) => {
+      if (!nextChapterId || pages.length === 0) return;
+      if (prefetchedForRef.current === nextChapterId) return;
+      if (pages.length - currentPage > 2) return;
 
-    nextChapterPrefetchedRef.current = true;
-    getChapterPrefetchUrls(nextChapterId)
-      .then((urls) => {
-        urls.forEach((url) => {
-          const img = new window.Image();
-          img.src = url;
-        });
-      })
-      .catch(() => {});
-  }, [renderMode, verticalCurrentPage, horizontalPage, pages.length, nextChapterId]);
+      prefetchedForRef.current = nextChapterId;
+      getChapterPrefetchUrls(nextChapterId)
+        .then((urls) => {
+          urls.forEach((url) => {
+            const img = new window.Image();
+            img.src = url;
+          });
+        })
+        .catch(() => {});
+    },
+    [nextChapterId, pages.length]
+  );
+
+  useEffect(() => {
+    if (renderMode === "VERTICAL") return;
+    prefetchNextChapter(horizontalPage);
+  }, [renderMode, horizontalPage, prefetchNextChapter]);
 
   const toggleControls = useCallback(() => setControlsVisible((prev) => !prev), []);
 
@@ -198,11 +206,21 @@ export function ChapterReader({
 
   const onRequestEnd = useCallback(() => setEndOpen(true), []);
 
+  const chapterOptionNodes = useMemo(
+    () =>
+      chapterOptions.map((option) => (
+        <option key={option.id} value={option.id} className="bg-neutral-900 text-white">
+          چپتر {option.chapterNumber.toLocaleString("fa-IR")}{option.title ? ` — ${option.title}` : ""}
+        </option>
+      )),
+    [chapterOptions]
+  );
+
   return (
     <div className="relative min-h-screen bg-black overscroll-none">
       <WatermarkOverlay label={watermarkLabel} />
       <DevToolsGuard />
-      <ReaderGuide open={guideOpen} onClose={handleCloseGuide} />
+      {guideOpen && <ReaderGuide open={guideOpen} onClose={handleCloseGuide} />}
 
       <header
         style={{ paddingTop: "var(--tg-content-safe-area-top, 0px)" }}
@@ -234,7 +252,7 @@ export function ChapterReader({
           initialPage={initialPage}
           initialScrollFraction={initialScrollFraction}
           onProgress={persistProgress}
-          onPageChange={setVerticalCurrentPage}
+          onPageChange={prefetchNextChapter}
           seekToPage={null}
           onToggleControls={toggleControls}
           controlsVisible={controlsVisible}
@@ -325,11 +343,7 @@ export function ChapterReader({
         ) : <div className="w-11 flex-shrink-0" />}
 
         <select value={chapterId} onChange={(e) => goToChapter(e.target.value)} className="h-11 min-w-0 flex-1 rounded-md bg-white/10 px-3 text-sm text-white">
-          {chapterOptions.map((option) => (
-            <option key={option.id} value={option.id} className="bg-neutral-900 text-white">
-              چپتر {option.chapterNumber.toLocaleString("fa-IR")}{option.title ? ` — ${option.title}` : ""}
-            </option>
-          ))}
+          {chapterOptionNodes}
         </select>
 
         {nextChapterId ? (

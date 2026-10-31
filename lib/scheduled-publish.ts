@@ -92,8 +92,14 @@ export async function executeScheduledPublish(): Promise<ScheduledPublishResult>
   return { published: publishedChapters.length };
 }
 
+let lastLocalAttemptAt = 0;
+
 export function maybeTriggerScheduledPublish(): void {
   if (!isRedisConfigured) return;
+
+  const now = Date.now();
+  if (now - lastLocalAttemptAt < THROTTLE_SECONDS * 1000) return;
+  lastLocalAttemptAt = now;
 
   after(async () => {
     try {

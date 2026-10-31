@@ -9,7 +9,7 @@ import { notifyAdmin } from "@/lib/admin-alert";
 const WEBHOOK_SECRET = process.env.TONAPI_WEBHOOK_SECRET;
 
 const MAX_BODY_BYTES = 256 * 1024;
-const WEBHOOK_RATE_LIMIT_PER_MINUTE = 20;
+const WEBHOOK_RATE_LIMIT_PER_MINUTE = 120;
 const MISCONFIG_ALERT_THROTTLE_MS = 30 * 60 * 1000;
 
 let lastMisconfigAlertAt = 0;

@@ -24,8 +24,8 @@ export interface EditionSummary {
 }
 
 export async function ensureDefaultEdition(workId: string): Promise<void> {
-  const existing = await prisma.edition.count({ where: { workId } });
-  if (existing > 0) return;
+  const existing = await prisma.edition.findFirst({ where: { workId }, select: { id: true } });
+  if (existing) return;
 
   const comic = await prisma.comic.findUnique({
     where: { id: workId },
@@ -46,13 +46,19 @@ export async function getPrimaryEditionId(workId: string): Promise<string | null
   const comic = await prisma.comic.findUnique({ where: { id: workId }, select: { licenseId: true } });
   if (!comic) return null;
 
+  const findMatching = () =>
+    prisma.edition.findFirst({
+      where: { workId, licenseId: comic.licenseId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+
+  let matching = await findMatching();
+  if (matching) return matching.id;
+
   await ensureDefaultEdition(workId);
 
-  const matching = await prisma.edition.findFirst({
-    where: { workId, licenseId: comic.licenseId },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
+  matching = await findMatching();
   if (matching) return matching.id;
 
   const any = await prisma.edition.findFirst({ where: { workId }, orderBy: { createdAt: "asc" }, select: { id: true } });
@@ -60,26 +66,31 @@ export async function getPrimaryEditionId(workId: string): Promise<string | null
 }
 
 export async function getWorkEditions(workId: string): Promise<EditionSummary[]> {
-  await ensureDefaultEdition(workId);
+  const loadRows = () =>
+    prisma.edition.findMany({
+      where: { workId, status: { in: ["ACTIVE", "ARCHIVED"] } },
+      select: {
+        id: true,
+        workId: true,
+        language: true,
+        title: true,
+        status: true,
+        publisherId: true,
+        priceCoinsOverride: true,
+        crossUnlockEnabled: true,
+        ratingCount: true,
+        ratingTotal: true,
+        publisher: { select: { name: true, avatarUrl: true } },
+        license: { select: { status: true } },
+        _count: { select: { chapters: { where: { publishedAt: { not: null } } } } },
+      },
+    });
 
-  const rows = await prisma.edition.findMany({
-    where: { workId, status: { in: ["ACTIVE", "ARCHIVED"] } },
-    select: {
-      id: true,
-      workId: true,
-      language: true,
-      title: true,
-      status: true,
-      publisherId: true,
-      priceCoinsOverride: true,
-      crossUnlockEnabled: true,
-      ratingCount: true,
-      ratingTotal: true,
-      publisher: { select: { name: true, avatarUrl: true } },
-      license: { select: { status: true } },
-      _count: { select: { chapters: { where: { publishedAt: { not: null } } } } },
-    },
-  });
+  let rows = await loadRows();
+  if (rows.length === 0) {
+    await ensureDefaultEdition(workId);
+    rows = await loadRows();
+  }
 
   const latest = rows.length
     ? await prisma.chapter.groupBy({

@@ -17,6 +17,7 @@ interface VerticalReaderProps {
 
 const SCROLL_SPEEDS = [1, 2, 3, 5, 10];
 const PROGRESS_DELAY_MS = 2500;
+const EAGER_PAGE_COUNT = 4;
 
 export function VerticalReader({
   pages,
@@ -45,7 +46,7 @@ export function VerticalReader({
     const frame = requestAnimationFrame(() => {
       const rect = target.getBoundingClientRect();
       const offset = window.scrollY + rect.top + rect.height * initialScrollFraction;
-      window.scrollTo(0, offset);
+      window.scrollTo({ top: offset, left: 0, behavior: "instant" });
     });
 
     return () => cancelAnimationFrame(frame);
@@ -119,15 +120,24 @@ export function VerticalReader({
   }, [currentPage, pages]);
 
   useEffect(() => {
-    if (!autoScroll) {
-      if (autoScrollFrame.current) cancelAnimationFrame(autoScrollFrame.current);
-      return;
-    }
-    const speed = SCROLL_SPEEDS[speedIndex];
-    function step() {
-      window.scrollBy(0, speed);
+    if (!autoScroll) return;
+
+    const pixelsPerSecond = SCROLL_SPEEDS[speedIndex] * 60;
+    let last = performance.now();
+    let carry = 0;
+
+    function step(now: number) {
+      const elapsed = Math.min(now - last, 64);
+      last = now;
+      carry += (pixelsPerSecond * elapsed) / 1000;
+      const whole = Math.floor(carry);
+      if (whole > 0) {
+        carry -= whole;
+        window.scrollBy({ top: whole, left: 0, behavior: "instant" });
+      }
       autoScrollFrame.current = requestAnimationFrame(step);
     }
+
     autoScrollFrame.current = requestAnimationFrame(step);
     return () => {
       if (autoScrollFrame.current) cancelAnimationFrame(autoScrollFrame.current);
@@ -153,8 +163,8 @@ export function VerticalReader({
             height={1200}
             sizes="(max-width: 768px) 100vw, 700px"
             className="h-auto w-full"
-            priority={index < 5}
-            loading={index < 5 ? "eager" : "lazy"}
+            priority={index === 0}
+            loading={index < EAGER_PAGE_COUNT ? "eager" : "lazy"}
           />
         </div>
       )),

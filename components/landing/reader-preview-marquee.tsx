@@ -51,7 +51,6 @@ export function ReaderPreviewMarquee({ panelImageSrc }: ReaderPreviewMarqueeProp
               src={panelImageSrc}
               alt="پیش‌نمایش ریدر مانهوا"
               fill
-              unoptimized
               sizes="260px"
               className="object-cover object-top"
               priority

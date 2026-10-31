@@ -156,12 +156,29 @@ async function buildEntries(board: LeaderboardBoard, rows: ScoreRow[]): Promise<
   return entries;
 }
 
-export const getLeaderboard = unstable_cache(
-  async (board: LeaderboardBoard, period: LeaderboardPeriod, sort: LeaderboardSort): Promise<LeaderboardEntry[]> => {
+function shortlistRows(rows: ScoreRow[]): ScoreRow[] {
+  const byUser = new Map<string, ScoreRow>();
+  for (const sort of ["uploads", "interactions"] as const) {
+    for (const row of rankRows(rows, sort)) byUser.set(row.userId, row);
+  }
+  return [...byUser.values()];
+}
+
+const loadScores = unstable_cache(
+  async (board: LeaderboardBoard, period: LeaderboardPeriod): Promise<ScoreRow[]> => {
     const since = periodStart(period);
     const rows = board === "publishers" ? await queryPublishers(since) : await queryTeam(since);
+    return shortlistRows(rows);
+  },
+  ["leaderboard:scores:v1"],
+  { revalidate: 300, tags: [LEADERBOARD_TAG] }
+);
+
+export const getLeaderboard = unstable_cache(
+  async (board: LeaderboardBoard, period: LeaderboardPeriod, sort: LeaderboardSort): Promise<LeaderboardEntry[]> => {
+    const rows = await loadScores(board, period);
     return buildEntries(board, rankRows(rows, sort));
   },
-  ["leaderboard:v3"],
+  ["leaderboard:v4"],
   { revalidate: 300, tags: [LEADERBOARD_TAG] }
 );

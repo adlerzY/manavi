@@ -56,7 +56,7 @@ export async function getChapterPrefetchUrls(chapterId: string): Promise<string[
 
   if (chapter.comic.ageRating !== "NORMAL" && !user?.isAgeVerified) return [];
 
-  const hasAccess = await userHasChapterAccess(user?.id ?? null, chapterId, user?.role);
+  const hasAccess = await userHasChapterAccess(user?.id ?? null, chapterId, user?.role, chapter.accessType);
   if (!hasAccess) return [];
 
   return getSignedImageUrls(chapter.pages.slice(0, PREFETCH_PAGE_COUNT), undefined, { width: 960 });

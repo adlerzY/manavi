@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser, invalidateSessionUserCache } from "@/lib/auth";
@@ -10,7 +10,6 @@ import { safeError } from "@/lib/errors";
 import { donateCoins } from "@/lib/donations";
 import { createNotifications } from "@/lib/notifications";
 import { maybeEvaluateAchievements } from "@/lib/achievement-engine";
-import { LEADERBOARD_TAG } from "@/lib/engagement";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -52,7 +51,6 @@ export async function donateWithCoins(input: {
     if (!result.success || !result.donationId) return { success: false, error: result.error };
 
     await invalidateSessionUserCache(user.id);
-    revalidateTag(LEADERBOARD_TAG, "max");
     revalidatePath("/app/wallet");
     revalidatePath(`/app/team/${input.receiverId}`);
 

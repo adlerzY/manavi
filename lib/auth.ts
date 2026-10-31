@@ -142,7 +142,7 @@ export async function requireComicManageAccessByComicId(comicId: string): Promis
   return requireComicManageAccess(comic.license.publisherId);
 }
 
-export async function getPublisherContext(user: SessionUser | null): Promise<PublisherContext | null> {
+export const getPublisherContext = cache(async (user: SessionUser | null): Promise<PublisherContext | null> => {
   if (!user) return null;
 
   if (user.publisherProfile) {
@@ -159,7 +159,7 @@ export async function getPublisherContext(user: SessionUser | null): Promise<Pub
   }
 
   return null;
-}
+});
 
 export async function getUploaderVerification(userId: string, comicId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({

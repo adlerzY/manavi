@@ -35,48 +35,57 @@ function CommentsFallback() {
   );
 }
 
+async function resolveRateLimitKey(userId: string | null): Promise<string> {
+  if (userId) return `chapter-read:${userId}`;
+  const forwarded = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim();
+  return `chapter-read:ip:${forwarded ?? "unknown"}`;
+}
+
 export default async function ReadChapterPage({ params }: PageProps) {
   const { chapterId } = await params;
 
-  const chapter = await prisma.chapter.findUnique({
-    where: { id: chapterId },
-    select: {
-      id: true,
-      editionId: true,
-      chapterNumber: true,
-      title: true,
-      pages: true,
-      publishedAt: true,
-      accessType: true,
-      isLocked: true,
-      edition: {
-        select: {
-          status: true,
-          publisherId: true,
-          license: {
-            select: {
-              status: true,
-              terminatedAt: true,
-              startDate: true,
-              endDate: true,
+  const [chapter, user] = await Promise.all([
+    prisma.chapter.findUnique({
+      where: { id: chapterId },
+      select: {
+        id: true,
+        editionId: true,
+        chapterNumber: true,
+        title: true,
+        pages: true,
+        publishedAt: true,
+        accessType: true,
+        isLocked: true,
+        edition: {
+          select: {
+            status: true,
+            publisherId: true,
+            license: {
+              select: {
+                status: true,
+                terminatedAt: true,
+                startDate: true,
+                endDate: true,
+              },
             },
           },
         },
-      },
-      comic: {
-        select: {
-          id: true,
-          title: true,
-          slug: true,
-          readingMode: true,
-          ageRating: true,
-          approvalStatus: true,
-          createdById: true,
-          category: { select: { readingDirection: true } },
+        comic: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            readingMode: true,
+            ageRating: true,
+            approvalStatus: true,
+            createdById: true,
+            category: { select: { readingDirection: true } },
+          },
         },
       },
-    },
-  });
+    }),
+    getSessionUser(),
+  ]);
 
   if (!chapter || !chapter.publishedAt) {
     notFound();
@@ -90,15 +99,13 @@ export default async function ReadChapterPage({ params }: PageProps) {
     );
   }
 
-  const [user, accessList] = await Promise.all([
-    getSessionUser(),
+  const [accessList, withinRateLimit] = await Promise.all([
     getChapterAccessList(chapter.comic.id, chapter.editionId),
+    user?.role === "ADMIN"
+      ? Promise.resolve(true)
+      : resolveRateLimitKey(user?.id ?? null).then((key) => checkRateLimit(key, CHAPTER_READ_RATE_LIMIT)),
   ]);
 
-  const rateLimitKey = user
-    ? `chapter-read:${user.id}`
-    : `chapter-read:ip:${(await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"}`;
-  const withinRateLimit = user?.role === "ADMIN" ? true : await checkRateLimit(rateLimitKey, CHAPTER_READ_RATE_LIMIT);
   if (!withinRateLimit) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
@@ -147,21 +154,19 @@ export default async function ReadChapterPage({ params }: PageProps) {
 
   const showAd = chapter.accessType === "FREE";
 
-  const locked = chapter.accessType === "COIN";
-
-  if (locked) {
-    const hasAccess = await userHasChapterAccess(user?.id ?? null, chapterId, user?.role);
+  if (chapter.accessType === "COIN") {
+    const hasAccess = await userHasChapterAccess(user?.id ?? null, chapterId, user?.role, chapter.accessType);
     if (!hasAccess) {
-      const coinCost = await getChapterUnlockCoinCost();
-      const editionPrice = await prisma.edition
-        .findUnique({ where: { id: chapter.editionId }, select: { priceCoinsOverride: true } })
-        .then((edition) => edition?.priceCoinsOverride ?? coinCost);
+      const [coinCost, editionRow] = await Promise.all([
+        getChapterUnlockCoinCost(),
+        prisma.edition.findUnique({ where: { id: chapter.editionId }, select: { priceCoinsOverride: true } }),
+      ]);
       return (
         <LockedChapterGate
           chapterId={chapterId}
           comicSlug={chapter.comic.slug}
           coinsBalance={user?.coinsBalance ?? 0}
-          coinCost={editionPrice}
+          coinCost={editionRow?.priceCoinsOverride ?? coinCost}
         />
       );
     }

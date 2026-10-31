@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import type { AgeRating, ComicStatus } from "@prisma/client";
 import { prisma } from "./prisma";
 
@@ -55,13 +56,15 @@ export async function getLibrary(userId: string, allowedRatings: AgeRating[]): P
   const comicIds = [...new Set([...history.map((h) => h.comicId), ...bookmarks.map((b) => b.comic.id)])];
   if (comicIds.length === 0) return { reading: [], bookmarks: [], finished: [] };
 
+  type LastChapterRow = { id: string; chapterNumber: number; pageCount: number };
+
   const [lastChapters, latestRows] = await Promise.all([
     history.length > 0
-      ? prisma.chapter.findMany({
-          where: { id: { in: history.map((h) => h.lastChapterId) } },
-          select: { id: true, chapterNumber: true, pages: true },
-        })
-      : Promise.resolve([]),
+      ? prisma.$queryRaw<LastChapterRow[]>`
+          SELECT "id", "chapterNumber", COALESCE(cardinality("pages"), 0)::int AS "pageCount"
+          FROM "Chapter"
+          WHERE "id" IN (${Prisma.join(history.map((entry) => entry.lastChapterId))})`
+      : Promise.resolve<LastChapterRow[]>([]),
     prisma.chapter.groupBy({
       by: ["comicId"],
       where: { comicId: { in: comicIds }, publishedAt: { not: null } },
@@ -80,7 +83,7 @@ export async function getLibrary(userId: string, allowedRatings: AgeRating[]): P
     const chapter = chapterById.get(entry.lastChapterId);
     const latest = latestByComic.get(entry.comicId) ?? null;
     const lastNumber = chapter ? chapter.chapterNumber : null;
-    const totalPages = chapter ? Math.max(1, chapter.pages.length) : 1;
+    const totalPages = chapter ? Math.max(1, chapter.pageCount) : 1;
     const page = Math.min(totalPages, Math.max(1, entry.lastPage));
 
     const item: LibraryEntry = {

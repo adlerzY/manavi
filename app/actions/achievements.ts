@@ -1,11 +1,10 @@
 "use server";
 
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser, invalidateSessionUserCache } from "@/lib/auth";
 import { safeError } from "@/lib/errors";
 import { achievementByKey } from "@/lib/achievements";
-import { LEADERBOARD_TAG } from "@/lib/engagement";
 
 interface ActionResult {
   success: boolean;
@@ -29,7 +28,6 @@ export async function setActiveTitle(key: string | null): Promise<ActionResult> 
 
     await prisma.user.update({ where: { id: user.id }, data: { activeTitle: key } });
     await invalidateSessionUserCache(user.id);
-    revalidateTag(LEADERBOARD_TAG, "max");
     revalidatePath("/app/achievements");
     revalidatePath("/app/profile");
     return { success: true };

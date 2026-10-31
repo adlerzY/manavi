@@ -45,18 +45,29 @@ function buildRemotePatterns(): RemotePatternEntry[] {
 }
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   images: {
     remotePatterns: buildRemotePatterns(),
+    minimumCacheTTL: 60 * 60 * 24 * 30,
   },
   experimental: {
     serverActions: {
       bodySizeLimit: "3mb",
     },
+    optimizePackageImports: ["lucide-react", "framer-motion"],
   },
   turbopack: {
     resolveAlias: {
       buffer: "buffer",
     },
+  },
+  async headers() {
+    return [
+      {
+        source: "/images/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=86400" }],
+      },
+    ];
   },
 };
 

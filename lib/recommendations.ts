@@ -19,9 +19,11 @@ export async function recordComicView(userId: string, comicId: string): Promise<
   if (!isRedisConfigured) return;
   try {
     const key = recentViewsKey(userId);
-    await redis.zadd(key, { score: Date.now(), member: comicId });
-    await redis.zremrangebyrank(key, 0, -(RECENT_VIEWS_MAX + 1));
-    await redis.expire(key, RECENT_VIEWS_TTL_SECONDS);
+    const pipeline = redis.pipeline();
+    pipeline.zadd(key, { score: Date.now(), member: comicId });
+    pipeline.zremrangebyrank(key, 0, -(RECENT_VIEWS_MAX + 1));
+    pipeline.expire(key, RECENT_VIEWS_TTL_SECONDS);
+    await pipeline.exec();
   } catch {}
 }
 

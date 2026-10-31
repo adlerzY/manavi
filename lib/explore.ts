@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { getAllowedAgeRatings } from "./content-filter";
 import { getCategoryBySlug } from "./categories";
 import { prisma } from "./prisma";
@@ -95,6 +96,44 @@ async function loadByIds(ids: string[]): Promise<ExploreComic[]> {
   return ids.map((id) => byId.get(id)).filter((row): row is ExploreComic => Boolean(row));
 }
 
+const RATING_RANK_LIMIT = 5000;
+const RANKING_REVALIDATE_SECONDS = 120;
+
+const rankComicIdsByRating = unstable_cache(
+  async (where: Prisma.ComicWhereInput): Promise<string[]> => {
+    const rows = await prisma.comic.findMany({
+      where,
+      select: { id: true, ratingTotal: true, ratingCount: true },
+    });
+    return rows
+      .sort(
+        (a, b) =>
+          adjustedScore(b.ratingTotal, b.ratingCount) - adjustedScore(a.ratingTotal, a.ratingCount) ||
+          a.id.localeCompare(b.id)
+      )
+      .slice(0, RATING_RANK_LIMIT)
+      .map((row) => row.id);
+  },
+  ["explore:rank-rating:v1"],
+  { revalidate: RANKING_REVALIDATE_SECONDS, tags: ["explore-ranking"] }
+);
+
+const rankComicIdsByUpdate = unstable_cache(
+  async (where: Prisma.ComicWhereInput, skip: number, take: number): Promise<string[]> => {
+    const groups = await prisma.chapter.groupBy({
+      by: ["comicId"],
+      where: { publishedAt: { not: null }, comic: where },
+      _max: { publishedAt: true },
+      orderBy: { _max: { publishedAt: "desc" } },
+      skip,
+      take,
+    });
+    return groups.map((group) => group.comicId);
+  },
+  ["explore:rank-updated:v1"],
+  { revalidate: RANKING_REVALIDATE_SECONDS, tags: ["explore-ranking"] }
+);
+
 export async function fetchExploreComics(
   where: Prisma.ComicWhereInput,
   sort: ExploreSort,
@@ -104,27 +143,13 @@ export async function fetchExploreComics(
   const skip = (page - 1) * pageSize;
 
   if (sort === "rating") {
-    const rows = await prisma.comic.findMany({
-      where,
-      select: { id: true, ratingTotal: true, ratingCount: true },
-    });
-    const ids = rows
-      .sort((a, b) => adjustedScore(b.ratingTotal, b.ratingCount) - adjustedScore(a.ratingTotal, a.ratingCount))
-      .slice(skip, skip + pageSize)
-      .map((row) => row.id);
-    return loadByIds(ids);
+    const ids = await rankComicIdsByRating(where);
+    return loadByIds(ids.slice(skip, skip + pageSize));
   }
 
   if (sort === "updated") {
-    const groups = await prisma.chapter.groupBy({
-      by: ["comicId"],
-      where: { publishedAt: { not: null }, comic: where },
-      _max: { publishedAt: true },
-      orderBy: { _max: { publishedAt: "desc" } },
-      skip,
-      take: pageSize,
-    });
-    return loadByIds(groups.map((group) => group.comicId));
+    const ids = await rankComicIdsByUpdate(where, skip, pageSize);
+    return loadByIds(ids);
   }
 
   return prisma.comic.findMany({

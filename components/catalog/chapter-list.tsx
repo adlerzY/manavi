@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { comicReadHref } from "@/lib/reader-links";
 
@@ -22,12 +22,19 @@ interface ChapterListProps {
   focusCurrent?: boolean;
 }
 
+const INITIAL_VISIBLE = 80;
+const VISIBLE_STEP = 120;
+
 function Badge({ className, children }: { className: string; children: ReactNode }) {
   return <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs ${className}`}>{children}</span>;
 }
 
 export function ChapterList({ chapters, price, focusCurrent = false }: ChapterListProps) {
   const currentRef = useRef<HTMLAnchorElement>(null);
+  const currentIndex = chapters.findIndex((chapter) => chapter.isCurrent);
+  const [visibleCount, setVisibleCount] = useState(() =>
+    focusCurrent && currentIndex >= 0 ? Math.max(INITIAL_VISIBLE, currentIndex + 20) : INITIAL_VISIBLE
+  );
 
   useEffect(() => {
     if (!focusCurrent) return;
@@ -42,39 +49,55 @@ export function ChapterList({ chapters, price, focusCurrent = false }: ChapterLi
     );
   }
 
-  return (
-    <div className="divide-y divide-border rounded-md border border-border">
-      {chapters.map((chapter) => (
-        <Link
-          key={chapter.id}
-          ref={chapter.isCurrent ? currentRef : undefined}
-          href={comicReadHref(chapter.id)}
-          className={`flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface ${
-            chapter.isCurrent ? "border-r-2 border-primary bg-primary/5" : ""
-          }`}
-        >
-          <div className={`min-w-0 ${chapter.isRead && !chapter.isCurrent ? "opacity-60" : ""}`}>
-            <p className="truncate text-sm text-text-main">
-              چپتر {chapter.chapterNumber.toLocaleString("fa-IR")}
-              {chapter.title ? ` — ${chapter.title}` : ""}
-            </p>
-            {chapter.publishedAt && (
-              <p className="mt-0.5 text-xs text-text-muted">{new Date(chapter.publishedAt).toLocaleDateString("fa-IR")}</p>
-            )}
-          </div>
+  const visible = chapters.slice(0, visibleCount);
+  const remaining = chapters.length - visible.length;
 
-          <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1.5">
-            {chapter.isCurrent && <Badge className="bg-accent text-accent-foreground">ادامه از اینجا</Badge>}
-            {chapter.isLatest && <Badge className="bg-primary text-primary-foreground">آخرین انتشار</Badge>}
-            {chapter.isRead && !chapter.isCurrent && <Badge className="bg-border text-text-muted">خوانده‌شده</Badge>}
-            {!chapter.isCoin && <Badge className="bg-primary/10 text-primary">رایگان</Badge>}
-            {chapter.isCoin && chapter.owned && <Badge className="bg-primary/10 text-primary">باز شده</Badge>}
-            {chapter.isCoin && !chapter.owned && (
-              <Badge className="bg-accent/10 text-accent">🪙 {price.toLocaleString("fa-IR")} سکه</Badge>
-            )}
-          </div>
-        </Link>
-      ))}
+  return (
+    <div className="space-y-3">
+      <div className="divide-y divide-border rounded-md border border-border">
+        {visible.map((chapter) => (
+          <Link
+            key={chapter.id}
+            ref={chapter.isCurrent ? currentRef : undefined}
+            href={comicReadHref(chapter.id)}
+            prefetch={false}
+            className={`flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface ${
+              chapter.isCurrent ? "border-r-2 border-primary bg-primary/5" : ""
+            }`}
+          >
+            <div className={`min-w-0 ${chapter.isRead && !chapter.isCurrent ? "opacity-60" : ""}`}>
+              <p className="truncate text-sm text-text-main">
+                چپتر {chapter.chapterNumber.toLocaleString("fa-IR")}
+                {chapter.title ? ` — ${chapter.title}` : ""}
+              </p>
+              {chapter.publishedAt && (
+                <p className="mt-0.5 text-xs text-text-muted">{new Date(chapter.publishedAt).toLocaleDateString("fa-IR")}</p>
+              )}
+            </div>
+
+            <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1.5">
+              {chapter.isCurrent && <Badge className="bg-accent text-accent-foreground">ادامه از اینجا</Badge>}
+              {chapter.isLatest && <Badge className="bg-primary text-primary-foreground">آخرین انتشار</Badge>}
+              {chapter.isRead && !chapter.isCurrent && <Badge className="bg-border text-text-muted">خوانده‌شده</Badge>}
+              {!chapter.isCoin && <Badge className="bg-primary/10 text-primary">رایگان</Badge>}
+              {chapter.isCoin && chapter.owned && <Badge className="bg-primary/10 text-primary">باز شده</Badge>}
+              {chapter.isCoin && !chapter.owned && (
+                <Badge className="bg-accent/10 text-accent">🪙 {price.toLocaleString("fa-IR")} سکه</Badge>
+              )}
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {remaining > 0 && (
+        <button
+          type="button"
+          onClick={() => setVisibleCount((prev) => prev + VISIBLE_STEP)}
+          className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-text-main hover:border-primary"
+        >
+          نمایش بیشتر ({remaining.toLocaleString("fa-IR")} چپتر باقی‌مانده)
+        </button>
+      )}
     </div>
   );
 }

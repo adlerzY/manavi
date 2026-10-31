@@ -56,7 +56,7 @@ export default async function ExplorePage({ searchParams }: PageProps) {
 
   const showingResults = Boolean(q?.trim() || type || genreIds.length > 0 || status || access || language || sortParam);
 
-  if (q?.trim()) {
+  if (q?.trim() && page === 1) {
     after(() => recordSearchTerm(q.trim()));
   }
 

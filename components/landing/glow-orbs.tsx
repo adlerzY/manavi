@@ -36,10 +36,11 @@ function Orb({ config }: { config: OrbConfig }) {
       <motion.div
         className="rounded-full will-change-transform"
         style={{
-          width: config.size,
-          height: config.size,
-          backgroundColor: config.color,
-          filter: `blur(${config.blur}px)`,
+          width: config.size + config.blur * 2,
+          height: config.size + config.blur * 2,
+          marginTop: -config.blur,
+          marginLeft: -config.blur,
+          backgroundImage: `radial-gradient(circle closest-side, ${config.color}, transparent)`,
         }}
         animate={
           shouldReduceMotion

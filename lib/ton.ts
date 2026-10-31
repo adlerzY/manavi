@@ -30,7 +30,7 @@ export function getPlatformTonAddress(): string {
 export function getPlatformUsdtJettonWalletAddress(): string {
   if (!PLATFORM_USDT_JETTON_WALLET_ADDRESS) {
     throw new Error(
-      "TON_PLATFORM_USDT_WALLET_ADDRESS تنظیم نشده — آدرس کیف‌پول جتون تتر پلتفرم را یک‌بار پیدا و در env ثبت کن."
+      "TON_PLATFORM_USDT_JETTON_WALLET_ADDRESS تنظیم نشده — آدرس کیف‌پول جتون تتر پلتفرم را یک‌بار پیدا و در env ثبت کن."
     );
   }
   return PLATFORM_USDT_JETTON_WALLET_ADDRESS;
@@ -110,6 +110,7 @@ export function buildJettonTransferPayload(input: BuildJettonTransferInput): str
 
   return body.toBoc().toString("base64");
 }
+
 export interface TonApiTransaction {
   hash: string;
   lt?: number;
@@ -145,8 +146,16 @@ async function fetchTransactionsPage(address: string, beforeLt?: number): Promis
   return body.transactions ?? [];
 }
 
+function pruneTxFetchCache(now: number): void {
+  for (const [key, entry] of txFetchCache) {
+    if (entry.expiresAt <= now) txFetchCache.delete(key);
+  }
+}
+
 export async function fetchAccountTransactions(address: string, sinceUnixTime?: number): Promise<TonApiTransaction[]> {
   const now = Date.now();
+  pruneTxFetchCache(now);
+
   const cacheKey = `${address}:${sinceUnixTime ?? 0}`;
   const cached = txFetchCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
