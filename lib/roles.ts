@@ -19,20 +19,15 @@ export function canUploadAvatar(user: { role: Role; publisherProfile: { id: stri
 export async function hasEarningsAccess(user: { id: string; publisherProfile: { id: string } | null }): Promise<boolean> {
   if (user.publisherProfile) return true;
 
-  const [comicRole, chapterRole, allocation, line] = await Promise.all([
+  const [account, comicRole, chapterRole, publisherStaff, withdrawal] = await Promise.all([
+    prisma.earningsAccount.findFirst({ where: { ownerType: "USER", ownerId: user.id }, select: { id: true } }),
     prisma.comicStaff.findFirst({ where: { userId: user.id }, select: { id: true } }),
     prisma.chapterStaff.findFirst({ where: { userId: user.id }, select: { id: true } }),
-    prisma.revenueAllocation.findFirst({
-      where: { beneficiaryType: "USER", beneficiaryId: user.id },
-      select: { id: true },
-    }),
-    prisma.settlementLine.findFirst({
-      where: { beneficiaryType: "USER", beneficiaryId: user.id },
-      select: { id: true },
-    }),
+    prisma.publisherStaff.findFirst({ where: { userId: user.id }, select: { id: true } }),
+    prisma.withdrawalRequest.findFirst({ where: { requesterId: user.id }, select: { id: true } }),
   ]);
 
-  return Boolean(comicRole || chapterRole || allocation || line);
+  return Boolean(account || comicRole || chapterRole || publisherStaff || withdrawal);
 }
 
 export class RoleChangeError extends Error {

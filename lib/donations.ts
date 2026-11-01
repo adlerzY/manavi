@@ -1,7 +1,8 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import { applyWalletDelta, postLedgerEntries, InsufficientCoinsError, type LedgerEntryInput } from "./ledger";
+import { applyWalletDelta, postLedgerEntries, InsufficientCoinsError } from "./ledger";
+import { creditEarnings } from "./earnings";
 import { getCoinPriceUsdt } from "./platform-settings";
 import { BPS_DENOMINATOR, coinsToUnits, microToUsdt, mulBps, unitsToUsdtMicro } from "./units";
 import { DONATION_PLATFORM_BPS, MAX_DONATION_COINS, MIN_DONATION_COINS } from "./billing";
@@ -124,34 +125,27 @@ export async function donateCoins(input: DonateInput): Promise<DonateResult> {
         }
         await tx.revenueAllocation.createMany({ data: allocations });
 
-        const ledgerRows: LedgerEntryInput[] = [];
-        if (receiverMicro > 0) {
-          ledgerRows.push({
-            account: "BENEFICIARY_PAYABLE",
-            ownerType: "USER",
-            ownerId: input.receiverId,
-            direction: "CREDIT",
-            amount: receiverMicro,
-            currency: "USDT_MICRO",
-            sourceType: "DONATION",
-            sourceId: donation.id,
-            idempotencyKey: `donation:${donation.id}:receiver`,
-          });
+        await creditEarnings(
+          tx,
+          [{ ownerType: "USER", ownerId: input.receiverId, units: receiverUnits }],
+          { sourceType: "DONATION", sourceId: donation.id }
+        );
+
+        if (platformUnits > 0) {
+          await postLedgerEntries(tx, [
+            {
+              account: "PLATFORM_REVENUE",
+              ownerType: "PLATFORM",
+              ownerId: null,
+              direction: "CREDIT",
+              amount: platformUnits,
+              currency: "COIN_UNIT",
+              sourceType: "DONATION",
+              sourceId: donation.id,
+              idempotencyKey: `donation:${donation.id}:platform`,
+            },
+          ]);
         }
-        if (platformMicro > 0) {
-          ledgerRows.push({
-            account: "PLATFORM_REVENUE",
-            ownerType: "PLATFORM",
-            ownerId: null,
-            direction: "CREDIT",
-            amount: platformMicro,
-            currency: "USDT_MICRO",
-            sourceType: "DONATION",
-            sourceId: donation.id,
-            idempotencyKey: `donation:${donation.id}:platform`,
-          });
-        }
-        await postLedgerEntries(tx, ledgerRows);
 
         await tx.transaction.create({
           data: {

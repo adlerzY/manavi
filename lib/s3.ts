@@ -433,3 +433,30 @@ export async function deletePrefix(visibility: StorageVisibility, prefix: string
 
   return deleted;
 }
+
+export async function putPrivateObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  if (!key.startsWith("private/")) {
+    throw new Error("کلید فایل خصوصی باید با private/ شروع شود");
+  }
+  await getClient().send(
+    new PutObjectCommand({
+      Bucket: getPrivateBucket(),
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+      CacheControl: "private, no-store",
+    })
+  );
+}
+
+export async function createPrivateReadUrl(key: string, expiresInSec: number = 600): Promise<string> {
+  if (!key.startsWith("private/")) {
+    throw new Error("کلید فایل خصوصی باید با private/ شروع شود");
+  }
+  const command = new GetObjectCommand({
+    Bucket: getPrivateBucket(),
+    Key: key,
+    ResponseCacheControl: "private, no-store",
+  });
+  return getSignedUrl(getClient(), command, { expiresIn: expiresInSec });
+}

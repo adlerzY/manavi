@@ -9,7 +9,9 @@ export const AUDIT_GROUPS: { value: string; label: string }[] = [
   { value: "platformSettings", label: "تنظیمات سراسری" },
   { value: "publisherStaff", label: "تیم ناشر" },
   { value: "comicStaff", label: "دست‌اندرکاران اثر" },
-  { value: "settlement", label: "تسویه‌حساب" },
+  { value: "settlement", label: "تسویه‌حساب قدیمی" },
+  { value: "withdrawal", label: "درخواست‌های تسویه" },
+  { value: "payoutSettings", label: "تنظیمات تسویه" },
   { value: "report", label: "گزارش‌ها" },
 ];
 

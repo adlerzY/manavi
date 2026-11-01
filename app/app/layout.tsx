@@ -1,28 +1,40 @@
 import type { ReactNode } from "react";
-import type { Viewport } from "next";
-import { TelegramAuthProvider } from "@/components/providers/telegram-auth-provider";
-import { NativeAppShell } from "@/components/providers/native-app-shell";
-import { TelegramWebAppScript } from "@/components/telegram-web-app-script";
-import { AppTour } from "@/components/guide/app-tour";
-import { AuthStatusBanner } from "@/components/guide/auth-status-banner";
+import type { Metadata } from "next";
+import localFont from "next/font/local";
+import "./globals.css";
+import { SystemMessageProvider } from "@/components/ui/system-message";
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+const vazirFont = localFont({
+  src: "./fonts/Vazirmatn-Medium.woff2",
+  variable: "--font-vazir",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "ماناوی — پلتفرم خوانش مانهوا و مانگا",
+  description: "پلتفرم خوانش آنلاین مانهوا، مانگا و وبتون در تلگرام",
+  icons: {
+    icon: [
+      {
+        url: "/favicon.svg",
+        type: "image/svg+xml",
+      },
+    ],
+  },
 };
 
-export default function MiniAppLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <>
-      <TelegramWebAppScript />
-      <NativeAppShell />
-      <TelegramAuthProvider>
-        <AuthStatusBanner />
-        <AppTour />
-        {children}
-      </TelegramAuthProvider>
-    </>
+    <html
+      lang="fa"
+      dir="rtl"
+      className={vazirFont.variable}
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+    >
+      <body className="font-sans bg-background text-text-main antialiased">
+        <SystemMessageProvider>{children}</SystemMessageProvider>
+      </body>
+    </html>
   );
 }

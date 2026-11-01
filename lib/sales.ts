@@ -1,9 +1,10 @@
 import "server-only";
-import type { BeneficiaryType, StaffRole } from "@prisma/client";
+import type { StaffRole } from "@prisma/client";
 import { prisma } from "./prisma";
 import { isLicenseCurrentlyActive } from "./license";
 import { getChapterUnlockCoinCost, getCoinPriceUsdt } from "./platform-settings";
-import { applyWalletDelta, postLedgerEntries, InsufficientCoinsError, type LedgerEntryInput } from "./ledger";
+import { applyWalletDelta, postLedgerEntries, InsufficientCoinsError } from "./ledger";
+import { creditEarnings, type EarningsCredit } from "./earnings";
 import { allocateRevenue } from "./allocation";
 import { resolveLicenseTerm } from "./license-terms";
 import { coinsToUnits, unitsToUsdtMicro } from "./units";
@@ -169,7 +170,8 @@ export async function purchaseChapters(input: PurchaseInput): Promise<PurchaseRe
           staffByChapter.set(row.chapterId, list);
         }
 
-        const totals = new Map<string, { type: BeneficiaryType; id: string | null; micro: number }>();
+        const earnings: EarningsCredit[] = [];
+        let platformUnits = 0;
         const allocationRows = kept.flatMap((line) =>
           allocateRevenue({
             baseUnits: unitsAmount,
@@ -177,11 +179,15 @@ export async function purchaseChapters(input: PurchaseInput): Promise<PurchaseRe
             publisherId: edition.publisherId,
             staff: staffByChapter.get(line.chapterId) ?? [],
           }).map((allocation) => {
-            const micro = unitsToUsdtMicro(allocation.allocatedUnits, coinPriceUsdt);
-            const key = `${allocation.beneficiaryType}:${allocation.beneficiaryId ?? "platform"}`;
-            const current = totals.get(key) ?? { type: allocation.beneficiaryType, id: allocation.beneficiaryId, micro: 0 };
-            current.micro += micro;
-            totals.set(key, current);
+            if (allocation.beneficiaryType === "PLATFORM") {
+              platformUnits += allocation.allocatedUnits;
+            } else if (allocation.beneficiaryId) {
+              earnings.push({
+                ownerType: allocation.beneficiaryType,
+                ownerId: allocation.beneficiaryId,
+                units: allocation.allocatedUnits,
+              });
+            }
             return {
               saleLineId: line.id,
               beneficiaryType: allocation.beneficiaryType,
@@ -191,7 +197,7 @@ export async function purchaseChapters(input: PurchaseInput): Promise<PurchaseRe
               publisherBps: term.publisherBps,
               memberShareBps: allocation.memberShareBps,
               allocatedUnits: allocation.allocatedUnits,
-              usdtMicro: micro,
+              usdtMicro: unitsToUsdtMicro(allocation.allocatedUnits, coinPriceUsdt),
               licenseTermId: term.id,
             };
           })
@@ -208,22 +214,23 @@ export async function purchaseChapters(input: PurchaseInput): Promise<PurchaseRe
           idempotencyKey: `sale:${sale.id}:wallet`,
         });
 
-        const ledgerRows: LedgerEntryInput[] = [];
-        for (const [key, total] of totals) {
-          if (total.micro <= 0) continue;
-          ledgerRows.push({
-            account: total.type === "PLATFORM" ? "PLATFORM_REVENUE" : "BENEFICIARY_PAYABLE",
-            ownerType: total.type === "PLATFORM" ? "PLATFORM" : total.type === "PUBLISHER" ? "PUBLISHER" : "USER",
-            ownerId: total.id,
-            direction: "CREDIT",
-            amount: total.micro,
-            currency: "USDT_MICRO",
-            sourceType: "SALE",
-            sourceId: sale.id,
-            idempotencyKey: `sale:${sale.id}:${key}`,
-          });
+        await creditEarnings(tx, earnings, { sourceType: "SALE", sourceId: sale.id });
+
+        if (platformUnits > 0) {
+          await postLedgerEntries(tx, [
+            {
+              account: "PLATFORM_REVENUE",
+              ownerType: "PLATFORM",
+              ownerId: null,
+              direction: "CREDIT",
+              amount: platformUnits,
+              currency: "COIN_UNIT",
+              sourceType: "SALE",
+              sourceId: sale.id,
+              idempotencyKey: `sale:${sale.id}:platform`,
+            },
+          ]);
         }
-        await postLedgerEntries(tx, ledgerRows);
 
         await tx.sale.update({ where: { id: sale.id }, data: { totalCoins } });
 

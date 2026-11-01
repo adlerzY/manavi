@@ -108,6 +108,34 @@ export async function findWalletMismatches(limit = 100): Promise<WalletMismatch[
   return rows.map((row) => ({ userId: row.id, balanceUnits: Number(row.balance), ledgerUnits: Number(row.ledger) }));
 }
 
+export interface EarningsMismatch {
+  accountId: string;
+  ownerType: string;
+  ownerId: string;
+  balanceUnits: number;
+  ledgerUnits: number;
+}
+
+export async function findEarningsMismatches(limit = 100): Promise<EarningsMismatch[]> {
+  const rows = await prisma.$queryRaw<{ id: string; ownerType: string; ownerId: string; balance: bigint; ledger: bigint }[]>`
+    SELECT a."id", a."ownerType"::text AS "ownerType", a."ownerId", a."balanceUnits" AS balance,
+           COALESCE(SUM(CASE WHEN l."direction" = 'CREDIT' THEN l."amountUnits" ELSE -l."amountUnits" END), 0)::bigint AS ledger
+    FROM "EarningsAccount" a
+    LEFT JOIN "LedgerEntry" l
+      ON l."account" = 'BENEFICIARY_PAYABLE' AND l."currency" = 'COIN_UNIT'
+     AND l."ownerType" = a."ownerType" AND l."ownerId" = a."ownerId"
+    GROUP BY a."id", a."ownerType", a."ownerId", a."balanceUnits"
+    HAVING a."balanceUnits" <> COALESCE(SUM(CASE WHEN l."direction" = 'CREDIT' THEN l."amountUnits" ELSE -l."amountUnits" END), 0)
+    LIMIT ${limit}`;
+  return rows.map((row) => ({
+    accountId: row.id,
+    ownerType: row.ownerType,
+    ownerId: row.ownerId,
+    balanceUnits: Number(row.balance),
+    ledgerUnits: Number(row.ledger),
+  }));
+}
+
 export async function findAllocationDiscrepancies(limit = 100): Promise<string[]> {
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT sl."id"
@@ -118,6 +146,7 @@ export async function findAllocationDiscrepancies(limit = 100): Promise<string[]
     LIMIT ${limit}`;
   return rows.map((row) => row.id);
 }
+
 export async function findDonationDiscrepancies(limit = 100): Promise<string[]> {
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT d."id"

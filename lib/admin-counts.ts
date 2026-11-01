@@ -3,7 +3,6 @@ import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { PLATFORM_LICENSE_ID, PLATFORM_PUBLISHER_ID } from "@/lib/platform-license";
-import { microToUsdt } from "@/lib/units";
 
 export interface AdminNavCounts {
   approvals: number;
@@ -12,8 +11,8 @@ export interface AdminNavCounts {
   pendingComments: number;
   openReports: number;
   moderation: number;
-  disputedLines: number;
-  readyToPayLines: number;
+  openWithdrawals: number;
+  disputedWithdrawals: number;
   payouts: number;
 }
 
@@ -24,29 +23,20 @@ const ZERO_COUNTS: AdminNavCounts = {
   pendingComments: 0,
   openReports: 0,
   moderation: 0,
-  disputedLines: 0,
-  readyToPayLines: 0,
+  openWithdrawals: 0,
+  disputedWithdrawals: 0,
   payouts: 0,
 };
 
 export const getAdminNavCounts = cache(async (): Promise<AdminNavCounts> => {
   try {
-    const [
-      pendingChapters,
-      pendingComics,
-      pendingComments,
-      openReports,
-      disputedLines,
-      readyToPayLines,
-    ] = await Promise.all([
+    const [pendingChapters, pendingComics, pendingComments, openReports, openWithdrawals, disputedWithdrawals] = await Promise.all([
       prisma.chapter.count({ where: { status: "PENDING_APPROVAL" } }),
       prisma.comic.count({ where: { approvalStatus: "PENDING_APPROVAL" } }),
       prisma.comment.count({ where: { status: "PENDING" } }),
       prisma.contentReport.count({ where: { status: { in: ["OPEN", "UNDER_REVIEW"] } } }),
-      prisma.settlementLine.count({ where: { status: "DISPUTED" } }),
-      prisma.settlementLine.count({
-        where: { status: { in: ["APPROVED_FOR_PAYMENT", "PARTIALLY_PAID"] } },
-      }),
+      prisma.withdrawalRequest.count({ where: { status: { in: ["PENDING", "PROCESSING"] } } }),
+      prisma.withdrawalRequest.count({ where: { response: "DISPUTED", disputeResolvedAt: null } }),
     ]);
 
     return {
@@ -56,9 +46,9 @@ export const getAdminNavCounts = cache(async (): Promise<AdminNavCounts> => {
       pendingComments,
       openReports,
       moderation: pendingChapters + pendingComics + pendingComments + openReports,
-      disputedLines,
-      readyToPayLines,
-      payouts: disputedLines + readyToPayLines,
+      openWithdrawals,
+      disputedWithdrawals,
+      payouts: openWithdrawals + disputedWithdrawals,
     };
   } catch (err) {
     console.error("[admin-counts] nav counts failed", err);
@@ -76,7 +66,7 @@ export interface AdminDashboardExtras {
   publishedChapters: number;
   publisherCount: number;
   activeLicenses: number;
-  unsettledUsdt: number;
+  outstandingEarningsCoins: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -97,7 +87,7 @@ export const getAdminDashboardExtras = cache(async (): Promise<AdminDashboardExt
     publishedChapters,
     publisherCount,
     activeLicenses,
-    unsettled,
+    earnings,
   ] = await Promise.all([
     prisma.comic.count({ where: { approvalStatus: "NEEDS_CHANGES" } }),
     prisma.license.count({
@@ -119,10 +109,7 @@ export const getAdminDashboardExtras = cache(async (): Promise<AdminDashboardExt
     prisma.license.count({
       where: { status: "ACTIVE", terminatedAt: null, id: { not: PLATFORM_LICENSE_ID } },
     }),
-    prisma.revenueAllocation.aggregate({
-      where: { settlementLineId: null, beneficiaryType: { not: "PLATFORM" } },
-      _sum: { usdtMicro: true },
-    }),
+    prisma.earningsAccount.aggregate({ _sum: { balanceUnits: true } }),
   ]);
 
   return {
@@ -135,6 +122,6 @@ export const getAdminDashboardExtras = cache(async (): Promise<AdminDashboardExt
     publishedChapters,
     publisherCount,
     activeLicenses,
-    unsettledUsdt: microToUsdt(unsettled._sum.usdtMicro ?? 0),
+    outstandingEarningsCoins: Number(earnings._sum.balanceUnits ?? 0n) / 100,
   };
 });

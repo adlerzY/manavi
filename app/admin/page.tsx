@@ -3,7 +3,8 @@ import { requireAdmin } from "@/lib/auth";
 import { getAdminNavCounts, getAdminDashboardExtras } from "@/lib/admin-counts";
 import { searchAuditLog } from "@/lib/audit-log";
 import { auditGroupLabel } from "@/lib/audit-actions";
-import { formatUsdt } from "@/lib/settlement-labels";
+import { formatCoins } from "@/lib/withdrawal-types";
+import { formatDateTime } from "@/lib/format";
 
 interface ActionItem {
   key: string;
@@ -32,20 +33,23 @@ export default async function AdminDashboard() {
   ]);
 
   const actions: ActionItem[] = [];
-  if (nav.disputedLines > 0) {
-    actions.push({ key: "disputed", label: `${fa(nav.disputedLines)} ردیف تسویه با مغایرت ثبت‌شده`, href: "/admin/payouts", tone: "danger" });
+  if (nav.disputedWithdrawals > 0) {
+    actions.push({ key: "disputed", label: `${fa(nav.disputedWithdrawals)} مغایرت تسویه بدون پاسخ`, href: "/admin/payouts", tone: "danger" });
   }
   if (extras.failedTransactions24h > 0) {
     actions.push({ key: "failed-tx", label: `${fa(extras.failedTransactions24h)} تراکنش ناموفق در ۲۴ ساعت اخیر`, href: "/admin/transactions", tone: "danger" });
   }
+  if (nav.openWithdrawals > 0) {
+    actions.push({ key: "withdrawals", label: `${fa(nav.openWithdrawals)} درخواست تسویه‌حساب در انتظار رسیدگی`, href: "/admin/payouts", tone: "warning" });
+  }
   if (nav.pendingChapters > 0) {
-    actions.push({ key: "chapters", label: `${fa(nav.pendingChapters)} چپتر در انتظار تایید`, href: "/admin/chapter-approvals", tone: "warning" });
+    actions.push({ key: "chapters", label: `${fa(nav.pendingChapters)} چپتر در انتظار تایید`, href: "/admin/moderation", tone: "warning" });
   }
   if (nav.pendingComics > 0) {
-    actions.push({ key: "comics", label: `${fa(nav.pendingComics)} عنوان در انتظار تایید`, href: "/admin/chapter-approvals", tone: "warning" });
+    actions.push({ key: "comics", label: `${fa(nav.pendingComics)} عنوان در انتظار تایید`, href: "/admin/moderation", tone: "warning" });
   }
   if (nav.pendingComments > 0) {
-    actions.push({ key: "comments", label: `${fa(nav.pendingComments)} نظر در انتظار بررسی`, href: "/admin/comments?status=PENDING", tone: "warning" });
+    actions.push({ key: "comments", label: `${fa(nav.pendingComments)} نظر در انتظار بررسی`, href: "/admin/moderation?tab=comments&status=PENDING", tone: "warning" });
   }
   if (nav.openReports > 0) {
     actions.push({ key: "reports", label: `${fa(nav.openReports)} گزارش کاربران بررسی‌نشده`, href: "/admin/moderation?tab=reports", tone: "warning" });
@@ -56,11 +60,8 @@ export default async function AdminDashboard() {
   if (extras.pendingLicenses > 0) {
     actions.push({ key: "licenses", label: `${fa(extras.pendingLicenses)} لایسنس منتظر فعال‌سازی است`, href: "/admin/publishers?tab=licenses", tone: "info" });
   }
-  if (nav.readyToPayLines > 0) {
-    actions.push({ key: "ready", label: `${fa(nav.readyToPayLines)} ردیف تسویه آماده پرداخت`, href: "/admin/payouts", tone: "info" });
-  }
   if (extras.needsChangesComics > 0) {
-    actions.push({ key: "needs-changes", label: `${fa(extras.needsChangesComics)} عنوان منتظر اصلاح ناشر است`, href: "/admin/chapter-approvals", tone: "info" });
+    actions.push({ key: "needs-changes", label: `${fa(extras.needsChangesComics)} عنوان منتظر اصلاح ناشر است`, href: "/admin/moderation", tone: "info" });
   }
 
   const stats = [
@@ -69,7 +70,7 @@ export default async function AdminDashboard() {
     { label: "چپتر منتشرشده", value: fa(extras.publishedChapters), href: "/admin/comics" },
     { label: "ناشران", value: fa(extras.publisherCount), href: "/admin/publishers" },
     { label: "لایسنس فعال", value: fa(extras.activeLicenses), href: "/admin/publishers?tab=licenses" },
-    { label: "طلب تسویه‌نشده", value: formatUsdt(extras.unsettledUsdt), href: "/admin/payouts" },
+    { label: "موجودی تسویه‌نشده‌ی همکاران", value: `${formatCoins(extras.outstandingEarningsCoins)} سکه`, href: "/admin/payouts" },
   ];
 
   return (
@@ -98,11 +99,7 @@ export default async function AdminDashboard() {
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {stats.map((stat) => (
-          <Link
-            key={stat.label}
-            href={stat.href}
-            className="rounded-md border border-border bg-surface p-4 text-center hover:border-primary"
-          >
+          <Link key={stat.label} href={stat.href} className="rounded-md border border-border bg-surface p-4 text-center hover:border-primary">
             <p className="text-xl font-semibold text-primary">{stat.value}</p>
             <p className="mt-1 text-xs text-text-muted">{stat.label}</p>
           </Link>
@@ -124,9 +121,11 @@ export default async function AdminDashboard() {
                   {log.actorName ?? "—"}
                   {auditGroupLabel(log.action) && <span className="text-text-muted"> · {auditGroupLabel(log.action)}</span>}
                 </p>
-                <p dir="ltr" className="mt-0.5 text-start text-xs text-text-muted">{log.action}</p>
+                <p dir="ltr" className="mt-0.5 text-start text-xs text-text-muted">
+                  {log.action}
+                </p>
               </div>
-              <span className="text-xs text-text-muted">{new Date(log.createdAt).toLocaleString("fa-IR")}</span>
+              <span className="text-xs text-text-muted">{formatDateTime(log.createdAt)}</span>
             </div>
           ))}
           {recent.logs.length === 0 && <p className="px-4 py-3 text-sm text-text-muted">فعالیتی ثبت نشده است.</p>}

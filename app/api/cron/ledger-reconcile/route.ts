@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { findWalletMismatches, findAllocationDiscrepancies, findDonationDiscrepancies } from "@/lib/ledger";
+import { findWalletMismatches, findEarningsMismatches, findAllocationDiscrepancies, findDonationDiscrepancies } from "@/lib/ledger";
 import { notifyAdmin } from "@/lib/admin-alert";
 
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -17,8 +17,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [walletMismatches, allocationDiscrepancies, donationDiscrepancies, unledgeredPurchases] = await Promise.all([
+    const [walletMismatches, earningsMismatches, allocationDiscrepancies, donationDiscrepancies, unledgeredPurchases, heldMismatches] = await Promise.all([
       findWalletMismatches(50),
+      findEarningsMismatches(50),
       findAllocationDiscrepancies(50),
       findDonationDiscrepancies(50),
       prisma.$queryRaw<{ id: string }[]>`
@@ -27,11 +28,32 @@ export async function GET(req: NextRequest) {
           AND t."createdAt" > COALESCE((SELECT MAX(l."createdAt") FROM "LedgerEntry" l WHERE l."sourceType" = 'OPENING_BALANCE'), NOW())
           AND NOT EXISTS (SELECT 1 FROM "LedgerEntry" l WHERE l."sourceType" = 'COIN_PURCHASE' AND l."sourceId" = t."id")
         LIMIT 50`,
+      prisma.$queryRaw<{ id: string }[]>`
+        SELECT w."id" FROM "WithdrawalRequest" w
+        WHERE (
+          SELECT COUNT(*) FROM "LedgerEntry" l
+          WHERE l."sourceType" = 'WITHDRAWAL' AND l."sourceId" = w."id" AND l."account" = 'BENEFICIARY_PAYABLE' AND l."direction" = 'DEBIT'
+        ) <> 1
+        OR (w."status" IN ('REJECTED', 'CANCELLED') AND NOT EXISTS (
+          SELECT 1 FROM "LedgerEntry" l
+          WHERE l."sourceType" = 'WITHDRAWAL' AND l."sourceId" = w."id" AND l."account" = 'BENEFICIARY_PAYABLE' AND l."direction" = 'CREDIT'
+        ))
+        OR (w."status" = 'PAID' AND NOT EXISTS (
+          SELECT 1 FROM "LedgerEntry" l
+          WHERE l."sourceType" = 'WITHDRAWAL' AND l."sourceId" = w."id" AND l."account" = 'BENEFICIARY_PAID'
+        ))
+        LIMIT 50`,
     ]);
 
     const problems: string[] = [];
     if (walletMismatches.length > 0) {
       problems.push(`مغایرت موجودی کیف پول: ${walletMismatches.length} کاربر (نمونه: ${walletMismatches.slice(0, 3).map((m) => m.userId).join(", ")})`);
+    }
+    if (earningsMismatches.length > 0) {
+      problems.push(`مغایرت حساب درآمد با دفتر کل: ${earningsMismatches.length} حساب (نمونه: ${earningsMismatches.slice(0, 3).map((m) => m.accountId).join(", ")})`);
+    }
+    if (heldMismatches.length > 0) {
+      problems.push(`درخواست تسویه با ثبت مالی ناسازگار: ${heldMismatches.length} مورد (نمونه: ${heldMismatches.slice(0, 3).map((t) => t.id).join(", ")})`);
     }
     if (allocationDiscrepancies.length > 0) {
       problems.push(`فروش با تخصیص درآمد ناقص یا مازاد: ${allocationDiscrepancies.length} ردیف (نمونه: ${allocationDiscrepancies.slice(0, 3).join(", ")})`);
@@ -50,6 +72,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       walletMismatches: walletMismatches.length,
+      earningsMismatches: earningsMismatches.length,
+      withdrawalMismatches: heldMismatches.length,
       allocationDiscrepancies: allocationDiscrepancies.length,
       donationDiscrepancies: donationDiscrepancies.length,
       unledgeredPurchases: unledgeredPurchases.length,

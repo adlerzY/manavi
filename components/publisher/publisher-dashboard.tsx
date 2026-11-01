@@ -3,7 +3,7 @@ import { getPublisherDashboard } from "@/lib/publisher-dashboard";
 import { getRoyaltyDashboard } from "@/app/publisher/actions/royalty";
 import { CHAPTER_STATUS_LABELS } from "@/lib/labels";
 import { languageLabel } from "@/lib/languages";
-import { formatUsdt } from "@/lib/settlement-labels";
+import { formatCoins } from "@/lib/withdrawal-types";
 import type { ChapterStatus } from "@prisma/client";
 
 interface ActionItem {
@@ -33,10 +33,6 @@ function StatCard({ label, value, tone = "primary" }: { label: string; value: st
       <p className="mt-1 text-xs text-text-muted">{label}</p>
     </div>
   );
-}
-
-function formatCoins(value: number): string {
-  return value.toLocaleString("fa-IR", { maximumFractionDigits: 2 });
 }
 
 export async function PublisherDashboard({ publisherId }: { publisherId: string }) {
@@ -120,9 +116,18 @@ export async function PublisherDashboard({ publisherId }: { publisherId: string 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="چپتر منتشرشده" value={data.publishedChapters.toLocaleString("fa-IR")} />
         <StatCard label="چپتر در انتظار تایید" value={data.pendingChapters.toLocaleString("fa-IR")} tone="accent" />
-        <StatCard label="سهم ناشر در این ماه" value={formatUsdt(data.monthRevenueUsdt)} />
-        <StatCard label="طلب تسویه‌نشده" value={formatUsdt(data.outstandingUsdt)} tone="accent" />
+        <StatCard label="درآمد ناشر در این ماه (سکه)" value={formatCoins(data.monthRevenueCoins)} />
+        <StatCard label="موجودی قابل تسویه (سکه)" value={formatCoins(data.availableCoins)} tone="accent" />
       </section>
+
+      {data.heldCoins > 0 && (
+        <p className="rounded-md border border-border bg-surface px-4 py-3 text-xs leading-6 text-text-muted">
+          {formatCoins(data.heldCoins)} سکه در درخواست تسویه‌ی در جریان نگه‌داری شده است.{" "}
+          <Link href="/publisher/earnings" className="text-primary underline">
+            پیگیری درخواست
+          </Link>
+        </p>
+      )}
 
       <section className="space-y-2">
         <div className="flex items-center justify-between">
@@ -143,9 +148,7 @@ export async function PublisherDashboard({ publisherId }: { publisherId: string 
               </p>
             </div>
           ))}
-          {royalty.summaries.length === 0 && (
-            <p className="px-4 py-3 text-sm text-text-muted">در این ماه فروشی ثبت نشده است.</p>
-          )}
+          {royalty.summaries.length === 0 && <p className="px-4 py-3 text-sm text-text-muted">در این ماه فروشی ثبت نشده است.</p>}
         </div>
       </section>
 
@@ -162,7 +165,7 @@ export async function PublisherDashboard({ publisherId }: { publisherId: string 
                 <div className="min-w-0">
                   <p className="truncate text-sm text-text-main">{chapter.comic.title}</p>
                   <p className="mt-0.5 text-xs text-text-muted">
-                    چپتر {chapter.chapterNumber.toLocaleString("fa-IR")} · {chapter.createdAt.toLocaleDateString("fa-IR")}
+                    چپتر {chapter.chapterNumber.toLocaleString("fa-IR")} · {chapter.createdAt.toLocaleDateString("fa-IR", { timeZone: "Asia/Tehran" })}
                   </p>
                 </div>
                 <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs ${CHAPTER_BADGE_CLASSES[chapter.status]}`}>
@@ -194,6 +197,12 @@ export async function PublisherDashboard({ publisherId }: { publisherId: string 
           </div>
         </div>
       </section>
+
+      <p className="text-center text-xs text-text-muted">
+        <Link href="/publisher/profile" className="underline decoration-dotted">
+          ویرایش صفحه‌ی عمومی ناشر
+        </Link>
+      </p>
     </div>
   );
 }

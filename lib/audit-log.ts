@@ -19,7 +19,9 @@ export type AuditAction =
   | "publisherStaff.permissionChange"
   | "comicStaff.shareChange"
   | "settlement.createPeriod" | "settlement.recalculate" | "settlement.lockPeriod"
-  | "settlement.lineStatus" | "settlement.payout" | "settlement.note";
+  | "settlement.lineStatus" | "settlement.payout" | "settlement.note"
+  | "withdrawal.review" | "withdrawal.pay" | "withdrawal.reject" | "withdrawal.resolveDispute"
+  | "payoutSettings.update";
 
 interface LogAuditEventInput {
   actorId: string;
@@ -134,6 +136,8 @@ const PROTECTED_AUDIT_ACTION_PREFIXES = [
   "user.unban",
   "user.delete",
   "settlement.",
+  "withdrawal.",
+  "payoutSettings.",
   "license.",
   "platformSettings.",
   "publisher.",

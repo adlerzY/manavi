@@ -1,7 +1,6 @@
 import "server-only";
 import type { ChapterStatus } from "@prisma/client";
 import { prisma } from "./prisma";
-import { microToUsdt } from "./units";
 
 export interface DashboardChapter {
   id: string;
@@ -27,8 +26,9 @@ export interface PublisherDashboardData {
   draftChapters: number;
   needsChangesComics: number;
   pendingComics: number;
-  monthRevenueUsdt: number;
-  outstandingUsdt: number;
+  monthRevenueCoins: number;
+  availableCoins: number;
+  heldCoins: number;
   awaitingConfirmation: number;
   recentChapters: DashboardChapter[];
   recentComments: DashboardComment[];
@@ -45,7 +45,9 @@ export async function getPublisherDashboard(publisherId: string): Promise<Publis
     draftChapters,
     comicGroups,
     revenue,
-    lines,
+    account,
+    held,
+    awaitingConfirmation,
     recentChapters,
     recentComments,
   ] = await Promise.all([
@@ -59,20 +61,18 @@ export async function getPublisherDashboard(publisherId: string): Promise<Publis
     }),
     prisma.revenueAllocation.aggregate({
       where: { beneficiaryType: "PUBLISHER", beneficiaryId: publisherId, createdAt: { gte: monthStart } },
-      _sum: { usdtMicro: true },
+      _sum: { allocatedUnits: true },
     }),
-    prisma.settlementLine.findMany({
-      where: {
-        beneficiaryType: "PUBLISHER",
-        beneficiaryId: publisherId,
-        period: { status: "LOCKED" },
-        status: { not: "CANCELLED" },
-      },
-      select: {
-        owedMicro: true,
-        paidMicro: true,
-        payouts: { select: { confirmation: { select: { status: true } } } },
-      },
+    prisma.earningsAccount.findUnique({
+      where: { ownerType_ownerId: { ownerType: "PUBLISHER", ownerId: publisherId } },
+      select: { balanceUnits: true },
+    }),
+    prisma.withdrawalRequest.aggregate({
+      where: { ownerType: "PUBLISHER", ownerId: publisherId, status: { in: ["PENDING", "PROCESSING"] } },
+      _sum: { amountUnits: true },
+    }),
+    prisma.withdrawalRequest.count({
+      where: { ownerType: "PUBLISHER", ownerId: publisherId, status: "PAID", response: null },
     }),
     prisma.chapter.findMany({
       where: { edition: { publisherId } },
@@ -101,15 +101,6 @@ export async function getPublisherDashboard(publisherId: string): Promise<Publis
     }),
   ]);
 
-  let outstandingMicro = 0;
-  let awaitingConfirmation = 0;
-  for (const line of lines) {
-    outstandingMicro += Number(line.owedMicro) - Number(line.paidMicro);
-    for (const payout of line.payouts) {
-      if (!payout.confirmation) awaitingConfirmation += 1;
-    }
-  }
-
   const groupCount = (status: "PENDING_APPROVAL" | "NEEDS_CHANGES") =>
     comicGroups.find((group) => group.approvalStatus === status)?._count._all ?? 0;
 
@@ -119,8 +110,9 @@ export async function getPublisherDashboard(publisherId: string): Promise<Publis
     draftChapters,
     needsChangesComics: groupCount("NEEDS_CHANGES"),
     pendingComics: groupCount("PENDING_APPROVAL"),
-    monthRevenueUsdt: microToUsdt(revenue._sum.usdtMicro ?? 0),
-    outstandingUsdt: microToUsdt(outstandingMicro),
+    monthRevenueCoins: (revenue._sum.allocatedUnits ?? 0) / 100,
+    availableCoins: Number(account?.balanceUnits ?? 0n) / 100,
+    heldCoins: Number(held._sum.amountUnits ?? 0n) / 100,
     awaitingConfirmation,
     recentChapters,
     recentComments: recentComments.map((comment) => ({

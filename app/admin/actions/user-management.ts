@@ -294,6 +294,23 @@ export async function deleteUserAccount(userId: string, confirmValue: string): P
       return { success: false, error: "عبارت تایید مطابقت ندارد" };
     }
 
+    const [account, openWithdrawal] = await Promise.all([
+      prisma.earningsAccount.findUnique({
+        where: { ownerType_ownerId: { ownerType: "USER", ownerId: userId } },
+        select: { balanceUnits: true },
+      }),
+      prisma.withdrawalRequest.findFirst({
+        where: { requesterId: userId, status: { in: ["PENDING", "PROCESSING"] } },
+        select: { id: true },
+      }),
+    ]);
+    if (openWithdrawal) {
+      return { success: false, error: "این کاربر درخواست تسویه‌ی در جریان دارد — ابتدا آن را نهایی کنید" };
+    }
+    if (account && account.balanceUnits > 0n) {
+      return { success: false, error: "این کاربر موجودی تسویه‌نشده دارد — ابتدا موجودی او را تسویه کنید" };
+    }
+
     const now = new Date();
     await prisma.$transaction([
       prisma.user.update({
@@ -323,6 +340,7 @@ export async function deleteUserAccount(userId: string, confirmValue: string): P
       prisma.chapterStaff.deleteMany({ where: { userId } }),
       prisma.editionRequest.deleteMany({ where: { userId } }),
       prisma.notification.deleteMany({ where: { userId } }),
+      prisma.payoutCard.deleteMany({ where: { userId } }),
     ]);
 
     await invalidateSessionUserCache(userId);

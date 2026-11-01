@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
-import { getMyEarnings } from "@/app/actions/payouts";
 import { hasEarningsAccess } from "@/lib/roles";
+import { loadEarningsOverview } from "@/lib/withdrawals";
 import { EarningsPanel } from "@/components/earnings/earnings-panel";
 import { BackButton } from "@/components/navigation/back-button";
 
@@ -19,7 +19,7 @@ export default async function EarningsPage() {
     redirect("/app/profile");
   }
 
-  const overview = await getMyEarnings();
+  const overview = await loadEarningsOverview(user);
 
   return (
     <main className="min-h-screen bg-background px-4 py-8">
@@ -28,7 +28,7 @@ export default async function EarningsPage() {
           <BackButton fallbackHref="/app/profile" variant="plain" />
           <h1 className="text-lg font-semibold text-text-main">درآمد و تسویه‌حساب</h1>
         </div>
-        {overview && <EarningsPanel overview={overview} />}
+        <EarningsPanel overview={overview} />
       </div>
     </main>
   );

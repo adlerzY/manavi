@@ -637,6 +637,8 @@ model PlatformSettings {
   coinPriceUsdt            Decimal  @db.Decimal(20, 6) @default(0.002)
   tomanPerUsdt             Int      @default(0)
   referralRewardCoins      Int      @default(10)
+  payoutCoinValueToman     Int      @default(0)
+  payoutMinCoins           Int      @default(100)
   updatedAt                DateTime @updatedAt
 }
 
@@ -1112,4 +1114,111 @@ model Notification {
   @@index([userId, readAt])
   @@index([userId, createdAt])
   @@index([createdAt])
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PROCESSING
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+enum WithdrawalEventType {
+  CREATED
+  PROCESSING
+  PAID
+  REJECTED
+  CANCELLED
+  CONFIRMED
+  DISPUTED
+  DISPUTE_RESOLVED
+}
+
+enum WithdrawalResponseStatus {
+  CONFIRMED
+  DISPUTED
+}
+
+model EarningsAccount {
+  id                     String          @id @default(uuid())
+  ownerType              LedgerOwnerType
+  ownerId                String
+  balanceUnits           BigInt          @default(0)
+  lifetimeEarnedUnits    BigInt          @default(0)
+  lifetimeWithdrawnUnits BigInt          @default(0)
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  withdrawals WithdrawalRequest[]
+
+  @@unique([ownerType, ownerId])
+  @@index([ownerId])
+}
+
+model PayoutCard {
+  id         String   @id @default(uuid())
+  userId     String
+  holderName String
+  cardNumber String
+  iban       String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, cardNumber])
+  @@index([userId])
+}
+
+model WithdrawalRequest {
+  id                String                    @id @default(uuid())
+  code              String                    @unique
+  accountId         String
+  requesterId       String
+  ownerType         LedgerOwnerType
+  ownerId           String
+  amountUnits       BigInt
+  coinValueToman    Int
+  amountToman       BigInt
+  cardHolder        String
+  cardNumber        String
+  iban              String?
+  requesterNote     String?
+  status            WithdrawalStatus          @default(PENDING)
+  adminNote         String?
+  processedById     String?
+  processedAt       DateTime?
+  paidAt            DateTime?
+  paymentReference  String?
+  receiptKey        String?
+  response          WithdrawalResponseStatus?
+  responseNote      String?
+  respondedAt       DateTime?
+  disputeResolvedAt DateTime?
+  disputeResolution String?
+  idempotencyKey    String                    @unique
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  account EarningsAccount   @relation(fields: [accountId], references: [id])
+  events  WithdrawalEvent[]
+
+  @@index([accountId, status])
+  @@index([requesterId, createdAt])
+  @@index([status, createdAt])
+  @@index([ownerType, ownerId])
+}
+
+model WithdrawalEvent {
+  id           String              @id @default(uuid())
+  withdrawalId String
+  type         WithdrawalEventType
+  actorId      String?
+  actorRole    String?
+  note         String?
+  createdAt    DateTime            @default(now())
+
+  withdrawal WithdrawalRequest @relation(fields: [withdrawalId], references: [id], onDelete: Cascade)
+
+  @@index([withdrawalId, createdAt])
 }
