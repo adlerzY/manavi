@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, memo } from "react";
+import { useState, memo } from "react";
 import Image from "next/image";
 
 interface ProtectedImageProps {
@@ -16,11 +16,8 @@ interface ProtectedImageProps {
 }
 
 function ProtectedImageInner({ src, alt, priority, loading, sizes, fill, width, height, className }: ProtectedImageProps) {
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    setLoaded(false);
-  }, [src]);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const loaded = loadedSrc === src;
 
   return (
     <div
@@ -30,7 +27,7 @@ function ProtectedImageInner({ src, alt, priority, loading, sizes, fill, width, 
     >
       {!loaded && (
         <div
-          className="absolute inset-0 animate-pulse bg-white/5"
+          className="absolute inset-0 bg-white/5"
           style={!fill ? { aspectRatio: width && height ? `${width} / ${height}` : "2 / 3" } : undefined}
         />
       )}
@@ -44,9 +41,10 @@ function ProtectedImageInner({ src, alt, priority, loading, sizes, fill, width, 
         width={fill ? undefined : width}
         height={fill ? undefined : height}
         unoptimized
+        decoding="async"
         draggable={false}
         onDragStart={(e) => e.preventDefault()}
-        onLoad={() => setLoaded(true)}
+        onLoad={() => setLoadedSrc(src)}
         className={`pointer-events-none select-none transition-opacity duration-200 ${loaded ? "opacity-100" : "opacity-0"} ${className ?? ""}`}
       />
     </div>

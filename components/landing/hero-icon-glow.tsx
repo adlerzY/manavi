@@ -1,9 +1,10 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
+import { useStaticMotion } from "@/lib/client/use-static-motion";
 
 export function HeroIconGlow() {
-  const shouldReduceMotion = useReducedMotion();
+  const isStatic = useStaticMotion();
 
   return (
     <motion.div
@@ -12,8 +13,8 @@ export function HeroIconGlow() {
       style={{
         background: "radial-gradient(circle, rgba(0,220,100,0.55), transparent 70%)",
       }}
-      animate={shouldReduceMotion ? undefined : { scale: [1, 1.25, 1], opacity: [0.55, 0.9, 0.55] }}
-      transition={shouldReduceMotion ? undefined : { duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+      animate={isStatic ? undefined : { scale: [1, 1.25, 1], opacity: [0.55, 0.9, 0.55] }}
+      transition={isStatic ? undefined : { duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
     />
   );
 }

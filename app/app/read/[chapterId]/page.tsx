@@ -155,7 +155,11 @@ export default async function ReadChapterPage({ params }: PageProps) {
   const showAd = chapter.accessType === "FREE";
 
   if (chapter.accessType === "COIN") {
-    const hasAccess = await userHasChapterAccess(user?.id ?? null, chapterId, user?.role, chapter.accessType);
+    let hasAccess = await userHasChapterAccess(user?.id ?? null, chapterId, user?.role, chapter.accessType);
+    if (!hasAccess && user) {
+      const ownContext = await getPublisherContext(user);
+      hasAccess = ownContext?.publisherId === chapter.edition.publisherId;
+    }
     if (!hasAccess) {
       const [coinCost, editionRow] = await Promise.all([
         getChapterUnlockCoinCost(),

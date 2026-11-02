@@ -23,18 +23,18 @@ export function NewestPopularSection({ initialNewest, initialPopular, genres }: 
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    if (mode === "newest" && genreId === null) {
-      setComics(initialNewest);
+    if (genreId === null) {
+      setComics(mode === "newest" ? initialNewest : initialPopular);
       return;
     }
-    if (mode === "popular" && genreId === null) {
-      setComics(initialPopular);
-      return;
-    }
+    let cancelled = false;
     startTransition(async () => {
       const result = await getHomeFeedComics(mode, genreId);
-      setComics(result);
+      if (!cancelled) setComics(result);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [mode, genreId, initialNewest, initialPopular]);
 
   return (

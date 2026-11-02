@@ -3,6 +3,7 @@
 import { motion, useReducedMotion, useTransform } from "framer-motion";
 import { usePointerParallax } from "./pointer-parallax-provider";
 
+
 interface OrbConfig {
   id: string;
   size: number;

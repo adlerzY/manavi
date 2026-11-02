@@ -32,7 +32,7 @@ export function ComicDetailTabs({ preview, episodes, similar, episodeCount, read
 
   return (
     <div className={showCta ? "pb-24" : undefined}>
-      <div className="sticky top-[var(--tg-content-safe-area-top,0px)] z-10 -mx-4 flex border-b border-border bg-background/95 px-4 backdrop-blur-sm">
+      <div className="sticky top-[var(--tg-content-safe-area-top,0px)] z-10 -mx-4 flex border-b border-border bg-background px-4">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -58,7 +58,7 @@ export function ComicDetailTabs({ preview, episodes, similar, episodeCount, read
       {showCta && readingCta && (
         <div
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur-lg"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface"
         >
           <div className="mx-auto max-w-4xl px-4 py-3">
             <Link

@@ -26,26 +26,30 @@ export async function toggleChapterReaction(chapterId: string, emoji: string): P
   const allowed = await checkRateLimit(`reaction:${user.id}`, 30);
   if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است" };
 
-  const existing = await prisma.chapterReaction.findUnique({ where: { chapterId_userId: { chapterId, userId: user.id } } });
+  try {
+    const chapter = await prisma.chapter.findUnique({
+      where: { id: chapterId },
+      select: { publishedAt: true, isLocked: true },
+    });
+    if (!chapter || !chapter.publishedAt || chapter.isLocked) return { success: false, error: "چپتر یافت نشد" };
 
-  let userReaction: string | null;
+    const removed = await prisma.chapterReaction.deleteMany({ where: { chapterId, userId: user.id, emoji } });
+    let userReaction: string | null = null;
+    if (removed.count === 0) {
+      await prisma.chapterReaction.upsert({
+        where: { chapterId_userId: { chapterId, userId: user.id } },
+        update: { emoji },
+        create: { chapterId, userId: user.id, emoji },
+      });
+      userReaction = emoji;
+    }
 
-  if (existing && existing.emoji === emoji) {
-    await prisma.chapterReaction.delete({ where: { chapterId_userId: { chapterId, userId: user.id } } });
-    userReaction = null;
-  } else if (existing) {
-    await prisma.chapterReaction.update({ where: { chapterId_userId: { chapterId, userId: user.id } }, data: { emoji } });
-    userReaction = emoji;
-  } else {
-    await prisma.chapterReaction.create({ data: { chapterId, userId: user.id, emoji } });
-    userReaction = emoji;
+    const grouped = await prisma.chapterReaction.groupBy({ by: ["emoji"], where: { chapterId }, _count: { _all: true } });
+    return { success: true, summary: grouped.map((g) => ({ emoji: g.emoji, count: g._count._all })), userReaction };
+  } catch {
+    return { success: false, error: "ثبت واکنش ناموفق بود" };
   }
-
-  const grouped = await prisma.chapterReaction.groupBy({ by: ["emoji"], where: { chapterId }, _count: { _all: true } });
-
-  return { success: true, summary: grouped.map((g) => ({ emoji: g.emoji, count: g._count._all })), userReaction };
 }
-
 export async function getChapterReactionSummary(chapterId: string, userId: string | null): Promise<{ summary: ReactionSummary[]; userReaction: string | null }> {
   const [grouped, mine] = await Promise.all([
     prisma.chapterReaction.groupBy({ by: ["emoji"], where: { chapterId }, _count: { _all: true } }),

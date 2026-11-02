@@ -6,13 +6,12 @@ import { toggleBookmark, toggleBookmarkNotify } from "@/app/actions/bookmarks";
 
 interface BookmarkButtonProps {
   comicId: string;
-  comicSlug: string;
   authenticated: boolean;
   initialBookmarked: boolean;
   initialNotify?: boolean;
 }
 
-export function BookmarkButton({ comicId, comicSlug, authenticated, initialBookmarked, initialNotify = true }: BookmarkButtonProps) {
+export function BookmarkButton({ comicId, authenticated, initialBookmarked, initialNotify = true }: BookmarkButtonProps) {
   const [bookmarked, setBookmarked] = useState(initialBookmarked);
   const [notify, setNotify] = useState(initialNotify);
   const [pending, setPending] = useState(false);
@@ -25,7 +24,7 @@ export function BookmarkButton({ comicId, comicSlug, authenticated, initialBookm
     setPending(true);
     setError(null);
     try {
-      const result = await toggleBookmark(comicId, comicSlug);
+      const result = await toggleBookmark(comicId);
       setBookmarked(result.bookmarked);
     } catch {
       setBookmarked(previous);

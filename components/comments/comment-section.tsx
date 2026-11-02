@@ -120,13 +120,15 @@ export function CommentSection({ chapterId, initialComments, canReply }: { chapt
 
     if (!result.success || !result.comment) {
       setComments((prev) => prev.filter((c) => c.id !== optimisticComment.id));
+      setContent(optimisticComment.content);
+      setIsSpoiler(optimisticComment.isSpoiler);
       setError(result.error ?? "ثبت نظر با خطا مواجه شد");
     } else {
       const confirmed = result.comment;
       setComments((prev) => prev.map((c) => (c.id === optimisticComment.id ? { ...c, id: confirmed.id, replies: [] } : c)));
+      setIsSpoiler(false);
     }
 
-    setIsSpoiler(false);
     setPending(false);
   }
 

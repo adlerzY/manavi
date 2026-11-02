@@ -64,7 +64,7 @@ export function SkippableChapterAd({ onClose }: SkippableChapterAdProps) {
       <Script
         src="https://sad.adsgram.ai/js/sad.min.js"
         strategy="lazyOnload"
-        onLoad={() => setScriptLoaded(true)}
+        onReady={() => setScriptLoaded(true)}
         onError={() => setStatus("error")}
       />
 

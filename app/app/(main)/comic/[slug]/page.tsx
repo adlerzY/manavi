@@ -274,7 +274,7 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
         />
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <BookmarkButton comicId={comic.id} comicSlug={comic.slug} authenticated={Boolean(user)} initialBookmarked={bookmarked} />
+          <BookmarkButton comicId={comic.id} authenticated={Boolean(user)} initialBookmarked={bookmarked} />
           <ComicMoreSheet
             label={alternativeCount > 0 ? `${alternativeCount.toLocaleString("fa-IR")} ترجمه‌ی دیگر` : "بیشتر"}
             highlight={alternativeCount > 0}

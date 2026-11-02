@@ -46,7 +46,7 @@ export function HeroSection({ links }: HeroSectionProps) {
           <div className="mt-9 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row">
             {links ? (
               <div className="relative">
-                <div className="absolute -inset-1 animate-pulse rounded-xl bg-gradient-to-l from-primary/40 via-accent/30 to-primary/40 blur-md" />
+                <div className="absolute -inset-1 rounded-xl bg-gradient-to-l from-primary/30 via-accent/20 to-primary/30 opacity-70" />
                 <div className="relative">
                   <TelegramCta webLink={links.webLink} nativeLink={links.nativeLink} />
                 </div>

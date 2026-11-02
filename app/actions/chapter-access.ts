@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser, invalidateSessionUserCache } from "@/lib/auth";
-import { invalidateChapterUnlockCache } from "@/lib/chapters";
+import { invalidateChapterUnlockCaches } from "@/lib/chapters";
 import { checkRateLimit } from "@/lib/moderation";
 import { purchaseChapters, type PurchaseResult } from "@/lib/sales";
 import { ChapterAccessType } from "@prisma/client";
@@ -20,12 +20,8 @@ function scopedKey(userId: string, key?: string): string {
 
 async function finalizePurchase(userId: string, result: PurchaseResult): Promise<void> {
   const chapterIds = [...result.purchasedChapterIds, ...result.crossUnlockedChapterIds];
-  await Promise.all([
-    invalidateSessionUserCache(userId),
-    ...chapterIds.map((chapterId) => invalidateChapterUnlockCache(userId, chapterId)),
-  ]);
+  await Promise.all([invalidateSessionUserCache(userId), invalidateChapterUnlockCaches(userId, chapterIds)]);
   if (result.comicSlug) revalidatePath(`/app/comic/${result.comicSlug}`);
-  chapterIds.forEach((chapterId) => revalidatePath(`/app/read/${chapterId}`));
 }
 
 export async function unlockChapterWithCoins(chapterId: string, idempotencyKey?: string): Promise<UnlockResult> {

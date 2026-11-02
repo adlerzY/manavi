@@ -130,3 +130,10 @@ export async function getEditionUnlockPreview(userId: string | null, editionId: 
   const lockedCount = Math.max(0, total - owned);
   return { lockedCount, totalCost: lockedCount * cost, coinCost: cost };
 }
+export async function invalidateChapterUnlockCaches(userId: string, chapterIds: string[]): Promise<void> {
+  if (chapterIds.length === 0) return;
+  const keys = chapterIds.map((chapterId) => coinUnlockCacheKey(userId, chapterId));
+  for (let i = 0; i < keys.length; i += 500) {
+    await redis.del(...keys.slice(i, i + 500)).catch(() => {});
+  }
+}

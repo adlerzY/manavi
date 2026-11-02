@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SlidersHorizontal, X } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -73,6 +73,10 @@ export function ExploreSearchClient({ categories, genres, languages }: ExploreSe
   const lang = searchParams.get("lang");
   const sort = searchParams.get("sort") ?? "newest";
   const q = searchParams.get("q") ?? "";
+
+  useEffect(() => {
+    setQueryInput(q);
+  }, [q]);
 
   const activeFilterCount = (type ? 1 : 0) + genreIds.length + (status ? 1 : 0) + (access ? 1 : 0) + (lang ? 1 : 0);
 

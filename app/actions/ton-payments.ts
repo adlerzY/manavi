@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { randomUUID } from "crypto";
 import { getSessionUser, requireAdmin } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/moderation";
 import {
@@ -45,8 +46,11 @@ async function createPendingTransaction(input: {
   packageBonusCoins?: number;
   payoutPublisherId?: string;
 }) {
+  const id = randomUUID();
+  const comment = generateTonComment(id);
   const transaction = await prisma.transaction.create({
     data: {
+      id,
       type: input.type,
       status: "PENDING",
       amount: input.amountUsdt,
@@ -59,10 +63,9 @@ async function createPendingTransaction(input: {
       packageCoins: input.packageCoins,
       packageBonusCoins: input.packageBonusCoins,
       payoutPublisherId: input.payoutPublisherId,
+      tonComment: comment,
     },
   });
-  const comment = generateTonComment(transaction.id);
-  await prisma.transaction.update({ where: { id: transaction.id }, data: { tonComment: comment } });
   return { transaction, comment };
 }
 

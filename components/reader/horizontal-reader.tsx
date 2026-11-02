@@ -56,8 +56,16 @@ export function HorizontalReader({
 
   useEffect(() => {
     function handleKeydown(e: KeyboardEvent) {
-      if (e.key === "ArrowRight") isRtl ? goBackward() : goForward();
-      if (e.key === "ArrowLeft") isRtl ? goForward() : goBackward();
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) return;
+      if (e.key === "ArrowRight") {
+        if (isRtl) goBackward();
+        else goForward();
+      }
+      if (e.key === "ArrowLeft") {
+        if (isRtl) goForward();
+        else goBackward();
+      }
     }
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);

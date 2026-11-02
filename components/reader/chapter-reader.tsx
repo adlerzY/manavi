@@ -334,7 +334,7 @@ export function ChapterReader({
 
       <div
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))" }}
-        className={`fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-black/80 px-4 py-3 backdrop-blur-sm transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "translate-y-full"}`}
+        className={`fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-black/90 px-4 py-3 transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "translate-y-full"}`}
       >
         {prevChapterId ? (
           <Link replace href={chapterHref(prevChapterId)} aria-label="چپتر قبلی" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">

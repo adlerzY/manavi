@@ -75,33 +75,31 @@ export async function publishChapter(chapterId: string): Promise<PublishChapterR
     revalidatePath("/app");
     revalidatePath("/app/explore");
     invalidateChapterAccessList(chapter.comic.id);
-        after(() =>
-      notifyChapterPublishedInApp({
+
+    const comicInfo = chapter.comic;
+    after(async () => {
+      await notifyChapterPublishedInApp({
         chapterId,
-        comicId: chapter.comic.id,
-        comicTitle: chapter.comic.title,
-        comicSlug: chapter.comic.slug,
+        comicId: comicInfo.id,
+        comicTitle: comicInfo.title,
+        comicSlug: comicInfo.slug,
         chapterNumber: chapter.chapterNumber,
-      }).catch(() => {})
-    );
+      }).catch(() => {});
 
-    const bookmarks = await prisma.bookmark.findMany({
-      where: { comicId: chapter.comic.id, notifyOnNewChapter: true },
-      select: { user: { select: { telegramId: true } } },
+      const bookmarks = await prisma.bookmark.findMany({
+        where: { comicId: comicInfo.id, notifyOnNewChapter: true, user: { isBanned: false, deletedAt: null } },
+        select: { user: { select: { telegramId: true } } },
+      });
+      if (bookmarks.length === 0) return;
+
+      await notifyNewChapter({
+        telegramIds: bookmarks.map((b) => b.user.telegramId),
+        comicTitle: comicInfo.title,
+        comicSlug: comicInfo.slug,
+        chapterNumber: chapter.chapterNumber,
+        chapterId,
+      }).catch(() => {});
     });
-
-    if (bookmarks.length > 0) {
-      const telegramIds = bookmarks.map((b) => b.user.telegramId);
-      after(() =>
-        notifyNewChapter({
-          telegramIds,
-          comicTitle: chapter.comic.title,
-          comicSlug: chapter.comic.slug,
-          chapterNumber: chapter.chapterNumber,
-          chapterId,
-        }).catch(() => {})
-      );
-    }
 
     return { success: true, data: { status: "PUBLISHED" } };
   } catch (err) {

@@ -9,7 +9,7 @@ export interface SiteStats {
 
 export async function getSiteStats(): Promise<SiteStats> {
   const [readerCount, comicCount, chapterCount] = await Promise.all([
-    prisma.user.count(),
+    prisma.user.count({ where: { deletedAt: null } }),
     prisma.comic.count({
       where: { chapters: { some: { publishedAt: { not: null } } } },
     }),

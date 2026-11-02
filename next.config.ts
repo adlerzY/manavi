@@ -49,6 +49,8 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: buildRemotePatterns(),
     minimumCacheTTL: 60 * 60 * 24 * 30,
+    deviceSizes: [360, 480, 640, 828, 1080],
+    imageSizes: [36, 64, 96, 128, 200, 256],
   },
   experimental: {
     serverActions: {

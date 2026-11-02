@@ -45,7 +45,7 @@ export function HeroCarousel({ comics }: { comics: HeroComic[] }) {
   useEffect(() => {
     if (!autoplay) return;
     const timer = setInterval(() => {
-      setIndex((prev) => (prev + 1) % comics.length);
+      if (!document.hidden) setIndex((prev) => (prev + 1) % comics.length);
     }, ROTATE_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [autoplay, comics.length, index]);

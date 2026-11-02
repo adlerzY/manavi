@@ -1,29 +1,34 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/moderation";
 
-export async function toggleBookmark(comicId: string, comicSlug: string): Promise<{ bookmarked: boolean }> {
+async function requireActiveUser() {
   const user = await getSessionUser();
   if (!user) throw new Error("Not authenticated");
+  if (user.isBanned) throw new Error("Account is banned");
+  const allowed = await checkRateLimit(`bookmark:${user.id}`, 40);
+  if (!allowed) throw new Error("Too many requests");
+  return user;
+}
 
-  const existing = await prisma.bookmark.findUnique({ where: { userId_comicId: { userId: user.id, comicId } } });
+export async function toggleBookmark(comicId: string): Promise<{ bookmarked: boolean }> {
+  const user = await requireActiveUser();
 
-  if (existing) {
-    await prisma.bookmark.delete({ where: { userId_comicId: { userId: user.id, comicId } } });
-    revalidatePath(`/app/comic/${comicSlug}`);
-    return { bookmarked: false };
-  }
+  const removed = await prisma.bookmark.deleteMany({ where: { userId: user.id, comicId } });
+  if (removed.count > 0) return { bookmarked: false };
 
-  await prisma.bookmark.create({ data: { userId: user.id, comicId } });
-  revalidatePath(`/app/comic/${comicSlug}`);
+  await prisma.bookmark.upsert({
+    where: { userId_comicId: { userId: user.id, comicId } },
+    update: {},
+    create: { userId: user.id, comicId },
+  });
   return { bookmarked: true };
 }
 
 export async function toggleBookmarkNotify(comicId: string): Promise<{ notify: boolean }> {
-  const user = await getSessionUser();
-  if (!user) throw new Error("Not authenticated");
+  const user = await requireActiveUser();
 
   const bookmark = await prisma.bookmark.findUnique({ where: { userId_comicId: { userId: user.id, comicId } } });
   if (!bookmark) throw new Error("Bookmark not found");
