@@ -7,7 +7,8 @@ import { PublisherOwnerLink } from "@/components/admin/publisher-owner-link";
 import { PublisherVerificationPanel } from "@/components/admin/publisher-verification-panel";
 import { CreateLicenseForm } from "@/components/admin/create-license-form";
 import { LicenseRowActions } from "@/components/admin/license-row-actions";
-import { LICENSE_SCOPE_LABELS_FA, PublisherStatusPanel } from "@/lib/license";
+import { LICENSE_SCOPE_LABELS_FA } from "@/lib/license";
+import { PublisherStatusPanel } from "@/components/admin/publisher-status-panel";
 
 const PAGE_SIZE = 50;
 
