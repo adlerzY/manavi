@@ -90,10 +90,17 @@ export async function ingestChapter(input: IngestChapterInput): Promise<IngestCh
 
   const [sameId, sameNumber] = await Promise.all([
     prisma.chapter.findUnique({ where: { id: chapterId }, select: { id: true } }),
-    prisma.chapter.findFirst({ where: { editionId, chapterNumber: input.chapterNumber }, select: { id: true } }),
+    prisma.chapter.findFirst({ where: { editionId, chapterNumber: input.chapterNumber }, select: { id: true, deletedAt: true } }),
   ]);
   if (sameId) return { success: false, error: "این آپلود قبلاً ثبت شده است — صفحه را رفرش و دوباره آپلود کنید" };
-  if (sameNumber) return { success: false, error: `چپتر ${input.chapterNumber} قبلاً برای این نسخه ثبت شده است` };
+  if (sameNumber) {
+    return {
+      success: false,
+      error: sameNumber.deletedAt
+        ? `چپتر ${input.chapterNumber} در سطل بازیافت است — از مدیریت بخواهید آن را بازگرداند`
+        : `چپتر ${input.chapterNumber} قبلاً برای این نسخه ثبت شده است`,
+    };
+  }
 
   let sizes: Map<string, number>;
   try {

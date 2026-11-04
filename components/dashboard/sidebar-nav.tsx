@@ -25,13 +25,15 @@ import {
   Home,
   User,
   Menu,
+  ShieldCheck,
+  Gift,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard, Building2, FileSignature, BookOpen, Users, Receipt,
-  BarChart3, Wallet, Megaphone, Tags, Layers, UserCircle, MessageSquare, Gem, Coins, CheckCircle2, ScrollText, Settings,
+  BarChart3, Wallet, Megaphone, Tags, Layers, UserCircle, MessageSquare, Gem, Coins, CheckCircle2, ScrollText, Settings, ShieldCheck, Gift,
 };
 
 export interface SidebarNavItem {

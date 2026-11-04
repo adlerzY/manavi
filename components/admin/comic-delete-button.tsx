@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { deleteComic } from "@/app/admin/actions/catalog-actions";
+import { trashComic } from "@/app/admin/actions/trash";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
 export function ComicDeleteButton({ comicId, comicTitle }: { comicId: string; comicTitle: string }) {
@@ -9,11 +9,11 @@ export function ComicDeleteButton({ comicId, comicTitle }: { comicId: string; co
 
   return (
     <DeleteConfirmDialog
-      triggerLabel="حذف عنوان"
+      triggerLabel="انتقال به سطل بازیافت"
       confirmTitle={`حذف «${comicTitle}»`}
-      confirmDescription="این عمل غیرقابل بازگشت است و تمام چپترها، نظرات، بوکمارک‌ها و فایل‌های مرتبط با این عنوان حذف می‌شوند."
+      confirmDescription="عنوان از دید کاربران پنهان می‌شود اما چپترها، فایل‌ها، نظرات، خریدها و درآمدها حفظ می‌شوند. از بخش «عملیات حساس و بازیابی» می‌توانید آن را بازگردانید."
       confirmValue={comicTitle}
-      onConfirm={() => deleteComic(comicId)}
+      onConfirm={() => trashComic(comicId)}
       onDeleted={() => router.push("/admin/comics")}
     />
   );

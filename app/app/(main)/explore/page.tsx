@@ -12,6 +12,7 @@ import { getAllGenres, getPopularGenres } from "@/lib/genres";
 import { getActiveEditionLanguages } from "@/lib/active-languages";
 import { resolveExploreWhere, fetchExploreComics, parseExploreSort, type ExploreAccess } from "@/lib/explore";
 import { languageLabel } from "@/lib/languages";
+import { getLanguageLabels } from "@/lib/language-registry";
 import { averageScore } from "@/lib/rating";
 import { recordSearchTerm, getTopSearchTerms } from "@/app/actions/search";
 import { after } from "next/server";
@@ -65,7 +66,7 @@ export default async function ExplorePage({ searchParams }: PageProps) {
     ? await resolveExploreWhere({ q, categorySlug: type, genreIds, status, access, language })
     : null;
 
-  const [categories, allGenres, languageCodes, popularGenres, topSearches, comics, total] = await Promise.all([
+  const [categories, allGenres, languageCodes, popularGenres, topSearches, comics, total, languageLabels] = await Promise.all([
     getAllCategories(),
     getAllGenres(),
     getActiveEditionLanguages(),
@@ -73,6 +74,7 @@ export default async function ExplorePage({ searchParams }: PageProps) {
     showingResults ? Promise.resolve([]) : getTopSearchTerms(10),
     exploreWhere ? fetchExploreComics(exploreWhere, sort, page, PAGE_SIZE) : Promise.resolve([]),
     exploreWhere ? prisma.comic.count({ where: exploreWhere }) : Promise.resolve(0),
+    getLanguageLabels(),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -93,7 +95,7 @@ export default async function ExplorePage({ searchParams }: PageProps) {
 
   const categoryFilterOptions = categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
   const genreFilterOptions = allGenres.map((g) => ({ id: g.id, name: g.name }));
-  const languageFilterOptions = languageCodes.map((code) => ({ code, label: languageLabel(code) }));
+  const languageFilterOptions = languageCodes.map((code) => ({ code, label: languageLabel(code, languageLabels) }));
 
   return (
     <main className="min-h-screen bg-background px-4 py-8">

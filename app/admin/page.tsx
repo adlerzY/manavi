@@ -48,11 +48,17 @@ export default async function AdminDashboard() {
   if (nav.pendingComics > 0) {
     actions.push({ key: "comics", label: `${fa(nav.pendingComics)} عنوان در انتظار تایید`, href: "/admin/moderation", tone: "warning" });
   }
+    if (nav.pendingEditions > 0) {
+    actions.push({ key: "editions", label: `${fa(nav.pendingEditions)} نسخه در انتظار تایید`, href: "/admin/moderation", tone: "warning" });
+  }
   if (nav.pendingComments > 0) {
     actions.push({ key: "comments", label: `${fa(nav.pendingComments)} نظر در انتظار بررسی`, href: "/admin/moderation?tab=comments&status=PENDING", tone: "warning" });
   }
   if (nav.openReports > 0) {
     actions.push({ key: "reports", label: `${fa(nav.openReports)} گزارش کاربران بررسی‌نشده`, href: "/admin/moderation?tab=reports", tone: "warning" });
+  }
+  if (nav.operations > 0) {
+    actions.push({ key: "operations", label: `${fa(nav.operations)} درخواست تأیید عملیات حساس`, href: "/admin/operations", tone: "warning" });
   }
   if (extras.expiringLicenses > 0) {
     actions.push({ key: "expiring", label: `${fa(extras.expiringLicenses)} لایسنس تا ۳۰ روز آینده منقضی می‌شود`, href: "/admin/publishers?tab=licenses", tone: "warning" });

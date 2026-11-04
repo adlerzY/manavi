@@ -23,7 +23,10 @@ export interface PendingComicRow {
 export async function listPendingComics(): Promise<PendingComicRow[]> {
   await requireAdmin();
   const comics = await prisma.comic.findMany({
-    where: { approvalStatus: { in: ["PENDING_APPROVAL", "NEEDS_CHANGES"] } },
+    where: {
+  approvalStatus: { in: ["PENDING_APPROVAL", "NEEDS_CHANGES"] },
+  deletedAt: null,
+},
     orderBy: { createdAt: "asc" },
     select: {
       id: true, title: true, slug: true, coverImage: true, createdAt: true, rejectionNote: true,

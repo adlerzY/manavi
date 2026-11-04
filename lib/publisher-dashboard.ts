@@ -51,12 +51,12 @@ export async function getPublisherDashboard(publisherId: string): Promise<Publis
     recentChapters,
     recentComments,
   ] = await Promise.all([
-    prisma.chapter.count({ where: { status: "PUBLISHED", edition: { publisherId } } }),
-    prisma.chapter.count({ where: { status: "PENDING_APPROVAL", edition: { publisherId } } }),
-    prisma.chapter.count({ where: { status: { in: ["DRAFT", "SCHEDULED"] }, edition: { publisherId } } }),
+    prisma.chapter.count({ where: { status: "PUBLISHED", deletedAt: null, edition: { publisherId } } }),
+    prisma.chapter.count({ where: { status: "PENDING_APPROVAL", deletedAt: null, edition: { publisherId } } }),
+    prisma.chapter.count({ where: { status: { in: ["DRAFT", "SCHEDULED"] }, deletedAt: null, edition: { publisherId } } }),
     prisma.comic.groupBy({
       by: ["approvalStatus"],
-      where: { license: { publisherId }, approvalStatus: { not: "APPROVED" } },
+      where: { license: { publisherId }, approvalStatus: { not: "APPROVED" }, deletedAt: null },
       _count: { _all: true },
     }),
     prisma.revenueAllocation.aggregate({
@@ -75,7 +75,7 @@ export async function getPublisherDashboard(publisherId: string): Promise<Publis
       where: { ownerType: "PUBLISHER", ownerId: publisherId, status: "PAID", response: null },
     }),
     prisma.chapter.findMany({
-      where: { edition: { publisherId } },
+      where: { deletedAt: null, edition: { publisherId } },
       orderBy: { createdAt: "desc" },
       take: 6,
       select: {

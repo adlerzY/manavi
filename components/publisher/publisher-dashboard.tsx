@@ -3,6 +3,7 @@ import { getPublisherDashboard } from "@/lib/publisher-dashboard";
 import { getRoyaltyDashboard } from "@/app/publisher/actions/royalty";
 import { CHAPTER_STATUS_LABELS } from "@/lib/labels";
 import { languageLabel } from "@/lib/languages";
+import { getLanguageLabels } from "@/lib/language-registry";
 import { formatCoins } from "@/lib/withdrawal-types";
 import type { ChapterStatus } from "@prisma/client";
 
@@ -36,7 +37,11 @@ function StatCard({ label, value, tone = "primary" }: { label: string; value: st
 }
 
 export async function PublisherDashboard({ publisherId }: { publisherId: string }) {
-  const [data, royalty] = await Promise.all([getPublisherDashboard(publisherId), getRoyaltyDashboard()]);
+  const [data, royalty, labels] = await Promise.all([
+    getPublisherDashboard(publisherId),
+    getRoyaltyDashboard(),
+    getLanguageLabels(),
+  ]);
 
   const actions: ActionItem[] = [];
   if (data.needsChangesComics > 0) {
@@ -140,7 +145,7 @@ export async function PublisherDashboard({ publisherId }: { publisherId: string 
           {royalty.summaries.map((summary) => (
             <div key={summary.editionId} className="px-4 py-3">
               <p className="text-sm text-text-main">
-                {summary.workTitle} — {languageLabel(summary.language)}
+                {summary.workTitle} — {languageLabel(summary.language, labels)}
               </p>
               <p className="mt-1 text-xs leading-6 text-text-muted">
                 سکه خرج‌شده: {formatCoins(summary.grossCoins)} · سهم ناشر و اعضا: {formatCoins(summary.publisherShareCoins)} · باقی‌مانده نزد ناشر:{" "}

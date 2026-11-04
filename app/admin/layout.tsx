@@ -22,10 +22,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     { href: "/admin/categories", label: "دسته‌بندی و ژانر", icon: "Layers", group: "مدیریت محتوا" },
     { href: "/admin/users", label: "کاربران", icon: "Users", group: "کاربران و ناشران" },
     { href: "/admin/publishers", label: "ناشران و لایسنس‌ها", icon: "Building2", group: "کاربران و ناشران" },
+        { href: "/admin/gifts", label: "هدیه‌ی دسترسی", icon: "Gift", group: "کاربران و ناشران" },
     { href: "/admin/transactions", label: "تراکنش‌ها", icon: "Receipt", group: "مالی و گزارش‌ها" },
     { href: "/admin/payouts", label: "تسویه‌حساب ناشران", icon: "Wallet", group: "مالی و گزارش‌ها", badge: counts.payouts },
     { href: "/admin/analytics", label: "آمار و تحلیل", icon: "BarChart3", group: "مالی و گزارش‌ها" },
     { href: "/admin/settings", label: "تنظیمات و سکه", icon: "Settings", group: "سیستم" },
+    { href: "/admin/operations", label: "عملیات حساس و بازیابی", icon: "ShieldCheck", group: "سیستم", badge: counts.operations },
     { href: "/admin/notices", label: "اعلان همگانی", icon: "Megaphone", group: "سیستم" },
     { href: "/admin/logs", label: "لاگ سیستم", icon: "ScrollText", group: "سیستم" },
   ];

@@ -3,7 +3,9 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, requireUploadAccess, invalidateSessionUserCache } from "@/lib/auth";
+import { requireAdmin, requireChapterAccess, requireEditionAccess, invalidateSessionUserCache } from "@/lib/auth";
+import { ensureComicAccess } from "@/lib/access";
+import { checkOperation } from "@/lib/operation-guard";
 import { invalidateChapterAccessList } from "@/lib/chapters";
 import { safeError } from "@/lib/errors";
 import { isAllowedImageUrl } from "@/lib/image-url";
@@ -11,7 +13,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { LICENSE_STATUS_LABELS_FA } from "@/lib/license";
 import { PLATFORM_LICENSE_ID, PLATFORM_PUBLISHER_ID, ensurePlatformLicense } from "@/lib/platform-license";
 import { ENTITY_ID_PATTERN } from "@/lib/asset-kinds";
-import { LicenseStatus, ChapterAccessType } from "@prisma/client";
+import { LicenseStatus, LicenseScope, ChapterAccessType } from "@prisma/client";
 import type { Prisma, ReadingMode } from "@prisma/client";
 
 interface ActionResult<T = undefined> {
@@ -95,6 +97,7 @@ export async function createLicense(input: {
   startDate: string;
   endDate?: string;
   contractReference?: string;
+  scope?: LicenseScope;
 }): Promise<ActionResult<{ id: string }>> {
   try {
     const admin = await requireAdmin();
@@ -117,6 +120,11 @@ export async function createLicense(input: {
       return { success: false, error: "درصد رویالتی باید بین ۰ تا ۱۰۰ باشد" };
     }
     const royaltyPercentage = Math.round(royalty * 100) / 100;
+
+    const scope = input.scope ?? LicenseScope.STANDARD;
+    if (!Object.values(LicenseScope).includes(scope)) {
+      return { success: false, error: "نوع لایسنس نامعتبر است" };
+    }
 
     const startDate = new Date(input.startDate);
     if (Number.isNaN(startDate.getTime())) {
@@ -143,6 +151,7 @@ export async function createLicense(input: {
         startDate,
         endDate,
         contractReference: input.contractReference?.trim() || null,
+        scope,
         status: LicenseStatus.PENDING,
         terms: {
           create: { royaltyPercentage, validFrom: new Date(), createdById: admin.id },
@@ -305,6 +314,7 @@ export async function createComic(input: {
         bannerImage: input.bannerImage || null,
         dominantColor,
         licenseId,
+        accessMode: license.scope === "PERSONAL" ? "PERSONAL" : "OPEN",
         ageRating: input.ageRating,
         categoryId: input.categoryId,
         readingMode: input.readingMode,
@@ -314,6 +324,14 @@ export async function createComic(input: {
           ? { create: input.genreIds.map((genreId) => ({ genreId })) }
           : undefined,
       },
+    });
+
+    await ensureComicAccess(prisma, {
+      comicId: comic.id,
+      publisherId: license.publisherId,
+      isOwner: true,
+      source: "LICENSE",
+      grantedById: admin.id,
     });
 
     after(() =>
@@ -406,9 +424,11 @@ export async function updateComic(
       }
 
       if (existing.licenseId !== licenseId) {
-        await tx.edition.updateMany({
-          where: { workId: comicId, licenseId: existing.licenseId },
-          data: { licenseId, publisherId: targetLicense.publisherId },
+        await ensureComicAccess(tx, {
+          comicId,
+          publisherId: targetLicense.publisherId,
+          source: "LICENSE",
+          grantedById: admin.id,
         });
       }
 
@@ -472,10 +492,10 @@ export async function updateChapter(
       return { success: false, error: "شماره چپتر نامعتبر است" };
     }
 
-    const existing = await prisma.chapter.findUnique({ where: { id: chapterId }, select: { comicId: true } });
-    if (!existing) return { success: false, error: "چپتر یافت نشد" };
+    const existing = await prisma.chapter.findUnique({ where: { id: chapterId }, select: { comicId: true, deletedAt: true } });
+    if (!existing || existing.deletedAt) return { success: false, error: "چپتر یافت نشد" };
 
-    const actor = await requireUploadAccess(existing.comicId);
+    const actor = await requireChapterAccess(chapterId, "edit");
 
     const chapter = await prisma.chapter.update({
       where: { id: chapterId },
@@ -514,21 +534,31 @@ export async function updateChapter(
 
 export async function removeChapterPage(chapterId: string, pageIndex: number): Promise<ActionResult> {
   try {
-    const chapter = await prisma.chapter.findUnique({ where: { id: chapterId }, select: { pages: true, comicId: true } });
-    if (!chapter) return { success: false, error: "چپتر یافت نشد" };
+    const chapter = await prisma.chapter.findUnique({
+      where: { id: chapterId },
+      select: { pages: true, comicId: true, deletedAt: true, edition: { select: { publisherId: true } } },
+    });
+    if (!chapter || chapter.deletedAt) return { success: false, error: "چپتر یافت نشد" };
 
-    const actor = await requireUploadAccess(chapter.comicId);
+    const actor = await requireChapterAccess(chapterId, "delete");
 
     if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= chapter.pages.length) {
       return { success: false, error: "صفحه یافت نشد" };
     }
 
-    const removedKey = chapter.pages[pageIndex];
-    const nextPages = chapter.pages.filter((_, i) => i !== pageIndex);
+    const gate = await checkOperation({
+      actor,
+      operation: "chapter.pageRemove",
+      targetType: "Chapter",
+      targetId: chapterId,
+      summary: `حذف صفحه ${pageIndex + 1} از یک چپتر`,
+      publisherId: chapter.edition.publisherId,
+      comicId: chapter.comicId,
+    });
+    if (!gate.ok) return { success: false, error: gate.message };
 
+    const nextPages = chapter.pages.filter((_, i) => i !== pageIndex);
     await prisma.chapter.update({ where: { id: chapterId }, data: { pages: nextPages } });
-    const { deleteObject } = await import("@/lib/s3");
-    await deleteObject(removedKey).catch(() => {});
 
     after(() =>
       logAuditEvent({
@@ -537,7 +567,7 @@ export async function removeChapterPage(chapterId: string, pageIndex: number): P
         action: "chapter.pageRemove",
         targetType: "Chapter",
         targetId: chapterId,
-        metadata: { pageIndex },
+        metadata: { pageIndex, removedKey: chapter.pages[pageIndex] },
       })
     );
 
@@ -558,12 +588,17 @@ export async function deleteComic(comicId: string): Promise<ActionResult> {
       select: {
         title: true,
         slug: true,
+        deletedAt: true,
         coverImage: true,
         bannerImage: true,
         chapters: { select: { id: true, pages: true, _count: { select: { saleLines: true } } } },
       },
     });
     if (!comic) return { success: false, error: "عنوان یافت نشد" };
+
+    if (!comic.deletedAt) {
+      return { success: false, error: "ابتدا عنوان را به سطل بازیافت منتقل کنید" };
+    }
 
     if (comic.chapters.some((chapter) => chapter._count.saleLines > 0)) {
       return {
@@ -778,13 +813,15 @@ export async function bulkUpdateChapterAccessType(
     }
 
     const chapters = await prisma.chapter.findMany({
-      where: { id: { in: chapterIds } },
-      select: { id: true, comicId: true },
+      where: { id: { in: chapterIds }, deletedAt: null },
+      select: { id: true, comicId: true, editionId: true },
     });
     if (chapters.length === 0) return { success: false, error: "چپتری یافت نشد" };
 
     const comicIds = [...new Set(chapters.map((c) => c.comicId))];
-    const actors = await Promise.all(comicIds.map((comicId) => requireUploadAccess(comicId)));
+    const actors = await Promise.all(
+      [...new Set(chapters.map((c) => c.editionId))].map((editionId) => requireEditionAccess(editionId, "edit"))
+    );
     const actor = actors[0];
 
     const result = await prisma.chapter.updateMany({

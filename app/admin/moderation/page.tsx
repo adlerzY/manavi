@@ -3,6 +3,8 @@ import { getAdminNavCounts } from "@/lib/admin-counts";
 import { listPendingChapters } from "@/app/admin/actions/chapter-approval";
 import { listPendingComics } from "@/app/admin/actions/comic-approval";
 import { listReports } from "@/app/admin/actions/reports";
+import Link from "next/link";
+import { listPendingEditions } from "@/app/admin/actions/editions";
 import {
   listCommentsAdmin,
   setCommentStatusAdmin,
@@ -26,13 +28,27 @@ function badge(count: number): string {
 }
 
 async function ApprovalsTab() {
-  const [chapters, comics] = await Promise.all([listPendingChapters(), listPendingComics()]);
+  const [chapters, comics, editions] = await Promise.all([listPendingChapters(), listPendingComics(), listPendingEditions()]);
   return (
     <div className="space-y-10">
-      <p className="text-sm text-text-muted">عناوین و چپترهایی که توسط اعضای تیم بدون تیک آبی ارسال شده‌اند.</p>
+      <p className="text-sm text-text-muted">عناوین، نسخه‌ها و چپترهایی که توسط اعضای تیم یا ناشران بدون تیک آبی ارسال شده‌اند.</p>
       <div>
         <h2 className="mb-3 text-lg font-medium text-text-main">عناوین در انتظار تایید</h2>
         <ComicApprovalQueue initialComics={comics} />
+      </div>
+      <div>
+        <h2 className="mb-3 text-lg font-medium text-text-main">نسخه‌ها در انتظار تایید</h2>
+        <div className="divide-y divide-border rounded-md border border-border">
+          {editions.map((edition) => (
+            <Link key={edition.id} href={`/admin/comics/${edition.workId}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface">
+              <span className="text-sm text-text-main">
+                {edition.workTitle} — {edition.publisherName}
+              </span>
+              <span className="text-xs text-text-muted">{edition.languageLabel}</span>
+            </Link>
+          ))}
+          {editions.length === 0 && <p className="px-4 py-3 text-sm text-text-muted">نسخه‌ای در انتظار تایید نیست.</p>}
+        </div>
       </div>
       <div>
         <h2 className="mb-3 text-lg font-medium text-text-main">چپترها در انتظار تایید</h2>

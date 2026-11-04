@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser, getPublisherContext, requireComicManageAccess } from "@/lib/auth";
 import { isLicenseCurrentlyActive } from "@/lib/license";
+import { ensureComicAccess } from "@/lib/access";
 import { resolveComicApprovalStatus } from "@/lib/comic-approval";
 import { safeError } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/audit-log";
@@ -71,7 +72,9 @@ export async function createComicAsPublisher(input: {
       where: { publisherId: context.publisherId },
       orderBy: { createdAt: "desc" },
     });
-    const license = licenses.find((candidate) => isLicenseCurrentlyActive(candidate));
+    const license =
+      licenses.find((candidate) => candidate.scope !== "GLOBAL" && isLicenseCurrentlyActive(candidate)) ??
+      licenses.find((candidate) => isLicenseCurrentlyActive(candidate));
     if (!license) {
       return { success: false, error: "لایسنس فعالی برای این ناشر یافت نشد — با پشتیبانی تماس بگیرید" };
     }
@@ -94,6 +97,7 @@ export async function createComicAsPublisher(input: {
         bannerImage: input.bannerImage || null,
         dominantColor,
         licenseId: license.id,
+        accessMode: license.scope === "PERSONAL" ? "PERSONAL" : "OPEN",
         ageRating: input.ageRating,
         categoryId: input.categoryId,
         readingMode: input.readingMode,
@@ -103,6 +107,14 @@ export async function createComicAsPublisher(input: {
           ? { create: input.genreIds.map((genreId) => ({ genreId })) }
           : undefined,
       },
+    });
+
+    await ensureComicAccess(prisma, {
+      comicId: comic.id,
+      publisherId: context.publisherId,
+      isOwner: true,
+      source: "LICENSE",
+      grantedById: user.id,
     });
 
     after(() =>

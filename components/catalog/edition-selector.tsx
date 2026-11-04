@@ -11,6 +11,7 @@ interface EditionSelectorProps {
   slug: string;
   editions: EditionOption[];
   selectedId: string;
+  labels: Record<string, string>;
 }
 
 function Meta({ label, value }: { label: string; value: string }) {
@@ -22,7 +23,7 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function EditionSelector({ slug, editions, selectedId }: EditionSelectorProps) {
+export function EditionSelector({ slug, editions, selectedId, labels }: EditionSelectorProps) {
   const selected = editions.find((edition) => edition.id === selectedId) ?? editions[0];
   if (!selected) return null;
 
@@ -47,7 +48,7 @@ export function EditionSelector({ slug, editions, selectedId }: EditionSelectorP
                 language === selected.language ? "bg-primary text-primary-foreground" : "bg-background text-text-muted"
               }`}
             >
-              {languageLabel(language)}
+              {languageLabel(language, labels)}
             </Link>
           ))}
         </div>
@@ -81,7 +82,7 @@ export function EditionSelector({ slug, editions, selectedId }: EditionSelectorP
               </div>
 
               <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Meta label="زبان ترجمه" value={languageLabel(edition.language)} />
+                <Meta label="زبان ترجمه" value={languageLabel(edition.language, labels)} />
                 <Meta
                   label="کیفیت ترجمه"
                   value={

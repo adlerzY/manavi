@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/moderation";
 import { safeError } from "@/lib/errors";
-import { LANGUAGE_LABELS } from "@/lib/languages";
+import { isValidLanguage } from "@/lib/language-registry";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -17,7 +17,7 @@ export async function requestEdition(workId: string, language: string, reason?: 
     const user = await getSessionUser();
     if (!user) return { success: false, error: "برای ثبت درخواست باید وارد شوید" };
     if (user.isBanned) return { success: false, error: "حساب شما مسدود شده است" };
-    if (!(language in LANGUAGE_LABELS)) return { success: false, error: "زبان نامعتبر است" };
+    if (!(await isValidLanguage(language))) return { success: false, error: "زبان نامعتبر است" };
 
     const allowed = await checkRateLimit(`edition-request:${user.id}`, 5);
     if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است" };

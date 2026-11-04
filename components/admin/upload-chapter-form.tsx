@@ -15,6 +15,11 @@ interface ComicOption {
   title: string;
 }
 
+interface EditionOption {
+  id: string;
+  label: string;
+}
+
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function itemStatusLabel(item: UploadItem): string {
@@ -24,11 +29,20 @@ function itemStatusLabel(item: UploadItem): string {
   return "در صف آپلود";
 }
 
-export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: ComicOption[]; restrictAccessTypes?: boolean }) {
+export function UploadChapterForm({
+  comics,
+  editions,
+  restrictAccessTypes,
+}: {
+  comics: ComicOption[];
+  editions?: EditionOption[];
+  restrictAccessTypes?: boolean;
+}) {
   const accessOptions = restrictAccessTypes ? PUBLISHER_CHAPTER_ACCESS_TYPE_OPTIONS : CHAPTER_ACCESS_TYPE_OPTIONS;
   const router = useRouter();
   const close = useCollapsibleClose();
   const [comicId, setComicId] = useState(comics[0]?.id ?? "");
+  const [editionId, setEditionId] = useState(editions?.[0]?.id ?? "");
   const [chapterNumber, setChapterNumber] = useState("");
   const [title, setTitle] = useState("");
   const [accessType, setAccessType] = useState<ChapterAccessType>("FREE");
@@ -46,13 +60,17 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
       setError("ابتدا یک عنوان انتخاب کنید");
       return;
     }
+    if (editions && !editionId) {
+      setStatus("error");
+      setError("ابتدا نسخه‌ی مقصد را انتخاب کنید");
+      return;
+    }
 
     setStatus("extracting");
     setError(null);
 
     const files = Array.from(fileList);
     let images: { name: string; contentType: string; blob: Blob }[] = [];
-
     try {
       if (files.length === 1 && files[0].name.toLowerCase().endsWith(".zip")) {
         const extracted = await extractImagesFromZip(files[0]);
@@ -91,7 +109,7 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
     }
 
     setStatus("idle");
-    const failure = await queue.addFiles(comicId, images);
+    const failure = await queue.addFiles(comicId, images, editionId || undefined);
     if (failure) {
       setStatus("error");
       setError(failure);
@@ -140,7 +158,6 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
       accessType,
       pageKeys: keys,
     });
-
     if (result.success) {
       setStatus("done");
       setStep("edit");
@@ -166,6 +183,14 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
     return <div className="rounded-md border border-border bg-surface p-6 text-sm text-text-muted">عنوانی موجود نیست — ابتدا یک عنوان بسازید.</div>;
   }
 
+  if (editions && editions.length === 0) {
+    return (
+      <div className="rounded-md border border-border bg-surface p-6 text-sm text-text-muted">
+        برای آپلود چپتر ابتدا یک نسخه (زبان) بسازید یا منتظر تأیید نسخه‌ی خود بمانید.
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleOpenReview} className="space-y-4 rounded-md border border-border bg-surface p-6">
       <h2 className="text-lg font-medium text-text-main">آپلود چپتر</h2>
@@ -186,6 +211,24 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
         </select>
         {items.length > 0 && <p className="text-xs text-text-muted">برای تغییر عنوان، ابتدا صفحات آپلودشده را پاک کنید.</p>}
       </div>
+
+      {editions && (
+        <div className="space-y-1">
+          <label className="text-sm text-text-muted" htmlFor="chapter-edition">نسخه و زبان</label>
+          <select
+            id="chapter-edition"
+            value={editionId}
+            onChange={(e) => setEditionId(e.target.value)}
+            disabled={items.length > 0}
+            required
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-text-main outline-none focus:border-primary disabled:opacity-60"
+          >
+            {editions.map((edition) => (
+              <option key={edition.id} value={edition.id}>{edition.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
@@ -227,7 +270,6 @@ export function UploadChapterForm({ comics, restrictAccessTypes }: { comics: Com
           }}
           className="block w-full text-xs text-text-muted file:ml-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2.5 file:text-xs file:font-medium file:text-primary-foreground disabled:opacity-50"
         />
-
         {status === "extracting" && <p className="text-xs text-text-muted">در حال استخراج فایل ZIP…</p>}
 
         {items.length > 0 && (

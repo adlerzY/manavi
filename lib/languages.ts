@@ -1,12 +1,8 @@
-export const LANGUAGE_LABELS: Record<string, string> = {
-  fa: "فارسی",
-  en: "انگلیسی",
-  ar: "عربی",
-  tr: "ترکی",
-  ja: "ژاپنی",
-  ko: "کره‌ای",
-};
+export interface LanguageOption {
+  code: string;
+  label: string;
+}
 
-export function languageLabel(code: string): string {
-  return LANGUAGE_LABELS[code] ?? code.toUpperCase();
+export function languageLabel(code: string, labels?: Record<string, string>): string {
+  return labels?.[code] ?? code.toUpperCase();
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getSessionUser, getPublisherContext } from "@/lib/auth";
+import { resolvePublisherComicAccess } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { getAllGenres } from "@/lib/genres";
 import { averageScore } from "@/lib/rating";
@@ -14,9 +15,16 @@ import { ComicStaffManager } from "@/components/admin/comic-staff-manager";
 import { PublisherEditComicForm } from "@/components/publisher/edit-comic-form";
 import { ComicManageTabs } from "@/components/publisher/comic-manage-tabs";
 import { listComicStaff } from "@/app/admin/actions/comic-staff";
+import { ensureDefaultEdition } from "@/lib/editions";
+import { getActiveLanguages, getLanguageLabels } from "@/lib/language-registry";
+import { languageLabel } from "@/lib/languages";
+import { listComicEditions } from "@/app/admin/actions/editions";
+import { getBonusOverview } from "@/app/admin/actions/bonuses";
+import { EditionManager } from "@/components/admin/edition-manager";
+import { BonusManager } from "@/components/admin/bonus-manager";
 import type { ChapterStatus } from "@prisma/client";
 
-type TabId = "overview" | "chapters" | "staff" | "settings";
+type TabId = "overview" | "chapters" | "editions" | "staff" | "settings";
 
 interface PageProps {
   params: Promise<{ comicId: string }>;
@@ -51,6 +59,8 @@ export default async function PublisherComicDetailPage({ params, searchParams }:
     where: { id: comicId },
     select: {
       id: true,
+      accessMode: true,
+      deletedAt: true,
       title: true,
       slug: true,
       description: true,
@@ -66,17 +76,41 @@ export default async function PublisherComicDetailPage({ params, searchParams }:
       genres: { select: { genreId: true } },
     },
   });
-  if (!comic) notFound();
-  if (comic.license.publisherId !== context.publisherId) redirect("/publisher/comics");
+  if (!comic || comic.deletedAt) notFound();
 
-  const availableTabs: TabId[] = context.canManageComics
-    ? ["overview", "chapters", "staff", "settings"]
-    : ["overview", "chapters"];
+  const comicAccess = await resolvePublisherComicAccess(
+    { id: comic.id, accessMode: comic.accessMode },
+    context.publisherId,
+  );
+  if (!comicAccess.allowed) redirect("/publisher/comics");
+
+  const canEditComic = context.canManageComics && !comicAccess.readOnly && comicAccess.via === "EXPLICIT";
+
+  if (comic.license.publisherId === context.publisherId) await ensureDefaultEdition(comic.id);
+
+  const canManageEditions = context.permissions.manageEditions && !comicAccess.readOnly;
+  const availableTabs: TabId[] = ["overview", "chapters"];
+  if (canManageEditions) availableTabs.push("editions");
+  if (canEditComic) availableTabs.push("staff", "settings");
   const tab: TabId = availableTabs.includes(tabParam as TabId) ? (tabParam as TabId) : "overview";
+
+  const needsEditions = tab === "chapters" || tab === "editions";
+  const [editionRows, activeLanguages, languageLabels, publisherRow] = await Promise.all([
+    needsEditions ? listComicEditions(comicId) : Promise.resolve([]),
+    tab === "editions" ? getActiveLanguages() : Promise.resolve([]),
+    getLanguageLabels(),
+    tab === "editions"
+      ? prisma.publisher.findUnique({ where: { id: context.publisherId }, select: { isVerified: true } })
+      : Promise.resolve(null),
+  ]);
+
+  const bonusOverview = tab === "editions" && canManageEditions ? await getBonusOverview(comicId) : null;
+
+  const chapterScope = { comicId, deletedAt: null, edition: { publisherId: context.publisherId } };
 
   const statusGroups = await prisma.chapter.groupBy({
     by: ["status"],
-    where: { comicId },
+    where: chapterScope,
     _count: { _all: true },
   });
   const countByStatus = new Map(statusGroups.map((group) => [group.status, group._count._all]));
@@ -85,10 +119,10 @@ export default async function PublisherComicDetailPage({ params, searchParams }:
   const [viewAggregate, bookmarkCount, recentChapters] =
     tab === "overview"
       ? await Promise.all([
-          prisma.chapter.aggregate({ where: { comicId }, _sum: { viewCount: true } }),
+          prisma.chapter.aggregate({ where: chapterScope, _sum: { viewCount: true } }),
           prisma.bookmark.count({ where: { comicId } }),
           prisma.chapter.findMany({
-            where: { comicId },
+            where: chapterScope,
             orderBy: { createdAt: "desc" },
             take: 5,
             select: { id: true, chapterNumber: true, title: true, status: true, createdAt: true },
@@ -99,7 +133,7 @@ export default async function PublisherComicDetailPage({ params, searchParams }:
   const chapters =
     tab === "chapters"
       ? await prisma.chapter.findMany({
-          where: { comicId },
+          where: chapterScope,
           orderBy: { chapterNumber: "desc" },
           select: {
             id: true,
@@ -109,17 +143,19 @@ export default async function PublisherComicDetailPage({ params, searchParams }:
             scheduledAt: true,
             isLocked: true,
             accessType: true,
+            edition: { select: { language: true } },
           },
         })
       : [];
 
-  const comicStaff = tab === "staff" && context.canManageComics ? await listComicStaff(comicId) : [];
-  const genres = tab === "settings" && context.canManageComics ? await getAllGenres() : [];
+  const comicStaff = tab === "staff" && canEditComic ? await listComicStaff(comicId) : [];
+  const genres = tab === "settings" && canEditComic ? await getAllGenres() : [];
 
   const base = `/publisher/comics/${comicId}`;
   const tabLabels: Record<TabId, { label: string; href: string }> = {
     overview: { label: "نمای کلی", href: base },
     chapters: { label: `چپترها (${totalChapters.toLocaleString("fa-IR")})`, href: `${base}?tab=chapters` },
+    editions: { label: "نسخه‌ها و زبان‌ها", href: `${base}?tab=editions` },
     staff: { label: "دست‌اندرکاران", href: `${base}?tab=staff` },
     settings: { label: "اطلاعات و تنظیمات", href: `${base}?tab=settings` },
   };
@@ -146,6 +182,12 @@ export default async function PublisherComicDetailPage({ params, searchParams }:
         active={tab}
         tabs={availableTabs.map((id) => ({ id, label: tabLabels[id].label, href: tabLabels[id].href }))}
       />
+
+      {comicAccess.readOnly && (
+        <p className="rounded-md border border-accent bg-accent/10 px-4 py-3 text-sm text-accent">
+          دسترسی شما به این اثر فقط‌مشاهده است.
+        </p>
+      )}
 
       {tab === "overview" && (
         <div className="space-y-6">
@@ -176,7 +218,7 @@ export default async function PublisherComicDetailPage({ params, searchParams }:
                     مشاهده در اپ
                   </Link>
                 )}
-                {context.canManageComics && (
+                {canEditComic && (
                   <Link href={`${base}?tab=settings`} className="flex min-h-11 items-center rounded-md border border-border px-3 text-xs text-text-main hover:border-primary">
                     ویرایش اطلاعات
                   </Link>
@@ -227,7 +269,13 @@ export default async function PublisherComicDetailPage({ params, searchParams }:
       {tab === "chapters" && (
         <div className="space-y-6">
           <CollapsibleSection key={upload === "1" ? "upload-open" : "upload-closed"} triggerLabel="آپلود چپتر جدید" defaultOpen={upload === "1"}>
-            <UploadChapterForm comics={[{ id: comic.id, title: comic.title }]} restrictAccessTypes />
+            <UploadChapterForm
+              comics={[{ id: comic.id, title: comic.title }]}
+              editions={editionRows
+                .filter((item) => item.status !== "SUSPENDED" && item.status !== "ARCHIVED")
+                .map((item) => ({ id: item.id, label: `${item.languageLabel}${item.title ? ` — ${item.title}` : ""}` }))}
+              restrictAccessTypes
+            />
           </CollapsibleSection>
 
           <ChapterListManager
@@ -240,19 +288,33 @@ export default async function PublisherComicDetailPage({ params, searchParams }:
               scheduledAt: ch.scheduledAt ? ch.scheduledAt.toISOString() : null,
               isLocked: ch.isLocked,
               accessType: ch.accessType,
+              editionLabel: languageLabel(ch.edition.language, languageLabels),
             }))}
           />
         </div>
       )}
 
-      {tab === "staff" && context.canManageComics && <ComicStaffManager comicId={comic.id} initialStaff={comicStaff} />}
+      {tab === "staff" && canEditComic && <ComicStaffManager comicId={comic.id} initialStaff={comicStaff} />}
 
-      {tab === "settings" && context.canManageComics && (
+      {tab === "settings" && canEditComic && (
         <PublisherEditComicForm
           comic={comic}
           genres={genres.map((g) => ({ id: g.id, name: g.name }))}
           initialGenreIds={comic.genres.map((g) => g.genreId)}
         />
+      )}
+
+      {tab === "editions" && canManageEditions && (
+        <div className="space-y-6">
+          <EditionManager
+            comicId={comic.id}
+            editions={editionRows}
+            languages={activeLanguages.map((item) => ({ code: item.code, label: item.label }))}
+            isAdmin={false}
+            autoApprove={Boolean(publisherRow?.isVerified)}
+          />
+          {bonusOverview && <BonusManager comicId={comic.id} overview={bonusOverview} isAdmin={false} />}
+        </div>
       )}
     </div>
   );

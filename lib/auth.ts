@@ -3,6 +3,13 @@ import { cookies } from "next/headers";
 import { prisma } from "./prisma";
 import { verifySessionToken } from "./session";
 import { redis } from "./redis";
+import {
+  AccessDeniedError,
+  assertComicPermission,
+  assertEditionPermission,
+  getMemberships,
+} from "./access";
+import type { PermissionSet, StaffPermission } from "./permissions";
 import type { User, Publisher } from "@prisma/client";
 
 export type SessionUser = User & { publisherProfile: Publisher | null };
@@ -11,6 +18,7 @@ export interface PublisherContext {
   publisherId: string;
   isOwner: boolean;
   canManageComics: boolean;
+  permissions: PermissionSet;
 }
 
 const SESSION_CACHE_TTL_SECONDS = 45;
@@ -19,6 +27,7 @@ const sessionCacheKey = (userId: string) => `session-user:${userId}`;
 interface SerializedSessionUser extends Omit<SessionUser, "telegramId"> {
   telegramId: string;
 }
+
 function toStorable(user: SessionUser): SerializedSessionUser {
   return { ...user, telegramId: user.telegramId.toString() };
 }
@@ -32,7 +41,11 @@ function fromStorable(raw: SerializedSessionUser): SessionUser {
     createdAt: new Date(raw.createdAt),
     updatedAt: new Date(raw.updatedAt),
     publisherProfile: raw.publisherProfile
-      ? { ...raw.publisherProfile, createdAt: new Date(raw.publisherProfile.createdAt) }
+      ? {
+          ...raw.publisherProfile,
+          createdAt: new Date(raw.publisherProfile.createdAt),
+          suspendedAt: raw.publisherProfile.suspendedAt ? new Date(raw.publisherProfile.suspendedAt) : null,
+        }
       : null,
   } as SessionUser;
 }
@@ -43,8 +56,7 @@ async function fetchSessionUser(userId: string): Promise<SessionUser | null> {
   try {
     const cached = await redis.get<SerializedSessionUser>(cacheKey);
     if (cached) return fromStorable(cached);
-  } catch {
-  }
+  } catch {}
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -84,116 +96,90 @@ export async function requireAdmin(): Promise<SessionUser> {
   return user;
 }
 
-export async function requireUploadAccess(comicId: string): Promise<SessionUser> {
+async function requireActiveUser(): Promise<SessionUser> {
   const user = await getSessionUser();
-  if (!user) {
-    throw new Error("Not authenticated");
-  }
-  if (user.isBanned) {
-    throw new Error("Account is banned");
-  }
-  if (user.role === "ADMIN") {
-    return user;
-  }
+  if (!user) throw new AccessDeniedError("برای این عملیات باید وارد شوید");
+  if (user.isBanned) throw new AccessDeniedError("حساب شما مسدود شده است");
+  return user;
+}
 
-  const comic = await prisma.comic.findUnique({
-    where: { id: comicId },
-    select: { license: { select: { publisherId: true } } },
-  });
-  if (!comic) {
-    throw new Error("Comic not found");
-  }
+export async function requireUploadAccess(comicId: string, permission: StaffPermission = "upload"): Promise<SessionUser> {
+  const user = await requireActiveUser();
+  await assertComicPermission(user, comicId, permission);
+  return user;
+}
 
-  if (user.publisherProfile?.id === comic.license.publisherId) {
-    return user;
-  }
+export async function requireEditionAccess(
+  editionId: string,
+  permission: StaffPermission,
+  expectedComicId?: string
+): Promise<SessionUser> {
+  const user = await requireActiveUser();
+  await assertEditionPermission(user, editionId, permission, expectedComicId);
+  return user;
+}
 
-  const staffLink = await prisma.publisherStaff.findFirst({
-    where: { userId: user.id, publisherId: comic.license.publisherId, canUpload: true },
-  });
-  if (staffLink) {
-    return user;
-  }
-
-  throw new Error("Not authorized to upload for this comic");
+export async function requireChapterAccess(chapterId: string, permission: StaffPermission): Promise<SessionUser> {
+  const user = await requireActiveUser();
+  const chapter = await prisma.chapter.findUnique({ where: { id: chapterId }, select: { editionId: true } });
+  if (!chapter) throw new AccessDeniedError("چپتر یافت نشد");
+  await assertEditionPermission(user, chapter.editionId, permission);
+  return user;
 }
 
 export async function requireComicManageAccess(publisherId: string): Promise<SessionUser> {
-  const user = await getSessionUser();
-  if (!user) throw new Error("Not authenticated");
-  if (user.isBanned) throw new Error("Account is banned");
+  const user = await requireActiveUser();
   if (user.role === "ADMIN") return user;
-  if (user.publisherProfile?.id === publisherId) return user;
-
-  const staffLink = await prisma.publisherStaff.findFirst({
-    where: { userId: user.id, publisherId, canManageComics: true },
-  });
-  if (staffLink) return user;
-
-  throw new Error("Not authorized to manage comics for this publisher");
+  const membership = (await getMemberships(user.id)).find((item) => item.publisherId === publisherId);
+  if (!membership || !membership.permissions.manageComics) throw new AccessDeniedError();
+  return user;
 }
 
 export async function requireComicManageAccessByComicId(comicId: string): Promise<SessionUser> {
-  const comic = await prisma.comic.findUnique({
-    where: { id: comicId },
-    select: { license: { select: { publisherId: true } } },
-  });
-  if (!comic) throw new Error("Comic not found");
-  return requireComicManageAccess(comic.license.publisherId);
+  const user = await requireActiveUser();
+  await assertComicPermission(user, comicId, "manageComics");
+  return user;
 }
 
 export const getPublisherContext = cache(async (user: SessionUser | null): Promise<PublisherContext | null> => {
   if (!user) return null;
 
-  if (user.publisherProfile) {
-    return { publisherId: user.publisherProfile.id, isOwner: true, canManageComics: true };
-  }
+  const memberships = await getMemberships(user.id);
+  if (memberships.length === 0) return null;
 
-  const staffLink = await prisma.publisherStaff.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: { publisherId: true, canManageComics: true },
-  });
-  if (staffLink) {
-    return { publisherId: staffLink.publisherId, isOwner: false, canManageComics: staffLink.canManageComics };
-  }
-
-  return null;
+  const picked = memberships.find((item) => item.isOwner) ?? memberships[0];
+  return {
+    publisherId: picked.publisherId,
+    isOwner: picked.isOwner,
+    canManageComics: picked.permissions.manageComics,
+    permissions: picked.permissions,
+  };
 });
 
-export async function getUploaderVerification(userId: string, comicId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, role: true, publisherProfile: { select: { id: true } } },
-  });
+export async function getUploaderVerification(userId: string, comicId: string, publisherIdHint?: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
   if (!user) return false;
   if (user.role === "ADMIN") return true;
 
-  const comic = await prisma.comic.findUnique({
-    where: { id: comicId },
-    select: { license: { select: { publisherId: true } } },
-  });
-  if (!comic) return false;
-
-  const publisherId = comic.license.publisherId;
-
-  if (user.publisherProfile?.id === publisherId) {
-    const publisher = await prisma.publisher.findUnique({ where: { id: publisherId }, select: { isVerified: true } });
-    return Boolean(publisher?.isVerified);
+  let publisherId = publisherIdHint;
+  if (!publisherId) {
+    const comic = await prisma.comic.findUnique({
+      where: { id: comicId },
+      select: { license: { select: { publisherId: true } } },
+    });
+    if (!comic) return false;
+    publisherId = comic.license.publisherId;
   }
 
-  const verifiedStaffLink = await prisma.publisherStaff.findFirst({
-    where: { userId: user.id, publisherId, isVerified: true },
-    select: { id: true },
+  const publisher = await prisma.publisher.findUnique({
+    where: { id: publisherId },
+    select: { isVerified: true, contractUserId: true },
   });
-  if (verifiedStaffLink) return true;
+  if (!publisher) return false;
+  if (publisher.contractUserId === userId) return publisher.isVerified;
 
-  const anyStaffLink = await prisma.publisherStaff.findFirst({
-    where: { userId: user.id, publisherId },
-    select: { id: true },
-  });
-  if (!anyStaffLink) return false;
-
-  const publisher = await prisma.publisher.findUnique({ where: { id: publisherId }, select: { isVerified: true } });
-  return Boolean(publisher?.isVerified);
+  const staffRows = await prisma.publisherStaff.findMany({ where: { userId, publisherId }, select: { isVerified: true } });
+  if (staffRows.length === 0) return false;
+  if (staffRows.some((row) => row.isVerified)) return true;
+  return publisher.isVerified;
 }

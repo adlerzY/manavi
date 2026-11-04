@@ -3,11 +3,12 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUploaderVerification, requireUploadAccess } from "@/lib/auth";
-import { assertLicenseActive, LicenseInactiveError } from "@/lib/license";
+import { getUploaderVerification, requireChapterAccess } from "@/lib/auth";
+import { assertEditionLicenseActive, LicenseInactiveError } from "@/lib/license";
 import { notifyNewChapter } from "@/lib/telegram-bot";
 import { invalidateChapterAccessList } from "@/lib/chapters";
 import { notifyChapterPublishedInApp } from "@/lib/notifications";
+import { grantAutomaticAccessForChapters } from "@/lib/bonus";
 import { safeError } from "@/lib/errors";
 
 interface PublishChapterResult {
@@ -25,16 +26,19 @@ export async function publishChapter(chapterId: string): Promise<PublishChapterR
         chapterNumber: true,
         publishedAt: true,
         status: true,
+        editionId: true,
+        deletedAt: true,
+        edition: { select: { publisherId: true } },
         comic: { select: { id: true, slug: true, title: true } },
       },
     });
 
-    if (!chapter) {
+    if (!chapter || chapter.deletedAt) {
       return { success: false, error: "چپتر یافت نشد" };
     }
 
-    const user = await requireUploadAccess(chapter.comic.id);
-    await assertLicenseActive(chapter.comic.id);
+    const user = await requireChapterAccess(chapterId, "publish");
+    await assertEditionLicenseActive(chapter.editionId);
 
     if (chapter.status === "PENDING_APPROVAL") {
       return { success: false, error: "این چپتر در انتظار تایید ادمین است" };
@@ -43,7 +47,7 @@ export async function publishChapter(chapterId: string): Promise<PublishChapterR
       return { success: false, error: "این چپتر قبلاً منتشر شده است" };
     }
 
-    const isVerified = await getUploaderVerification(user.id, chapter.comic.id);
+    const isVerified = await getUploaderVerification(user.id, chapter.comic.id, chapter.edition.publisherId);
 
     if (!isVerified) {
       const updated = await prisma.chapter.updateMany({
@@ -78,6 +82,8 @@ export async function publishChapter(chapterId: string): Promise<PublishChapterR
 
     const comicInfo = chapter.comic;
     after(async () => {
+      await grantAutomaticAccessForChapters([chapterId]).catch(() => {});
+
       await notifyChapterPublishedInApp({
         chapterId,
         comicId: comicInfo.id,

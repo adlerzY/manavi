@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { getSessionUser, getPublisherContext, requireComicManageAccess, type SessionUser } from "@/lib/auth";
+import { getSessionUser, getPublisherContext, requireComicManageAccessByComicId, type SessionUser } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/moderation";
 import {
   ASSET_KIND_SPECS,
@@ -51,13 +51,10 @@ async function canUpload(kind: AssetKind, ownerId: string, user: SessionUser): P
   if (user.role === "ADMIN") return true;
   if (kind === "category-image" || kind === "genre-image") return false;
 
-  const comic = await prisma.comic.findUnique({
-    where: { id: ownerId },
-    select: { license: { select: { publisherId: true } } },
-  });
+  const comic = await prisma.comic.findUnique({ where: { id: ownerId }, select: { id: true } });
   if (comic) {
     try {
-      await requireComicManageAccess(comic.license.publisherId);
+      await requireComicManageAccessByComicId(ownerId);
       return true;
     } catch {
       return false;

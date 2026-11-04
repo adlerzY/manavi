@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./prisma";
-import { LicenseStatus, type License } from "@prisma/client";
+import { LicenseStatus, type License, type LicenseScope } from "@prisma/client";
 
 export const LICENSE_STATUS_LABELS_FA: Record<LicenseStatus, string> = {
   PENDING: "در انتظار",
@@ -78,4 +78,24 @@ export function isLicenseCurrentlyActive(license: LicenseActivityFields): boolea
   if (license.startDate > now) return false;
   if (license.endDate && license.endDate < now) return false;
   return true;
+}
+export const LICENSE_SCOPE_LABELS_FA: Record<LicenseScope, string> = {
+  STANDARD: "عادی",
+  GLOBAL: "سراسری",
+  PERSONAL: "شخصی",
+};
+
+export async function assertEditionLicenseActive(editionId: string): Promise<License> {
+  const edition = await prisma.edition.findUnique({ where: { id: editionId }, select: { license: true } });
+  if (!edition) throw new ComicNotFoundError(editionId);
+
+  const license = edition.license;
+  const now = new Date();
+
+  if (license.terminatedAt) throw new LicenseInactiveError("TERMINATED", license.id);
+  if (license.status !== LicenseStatus.ACTIVE) throw new LicenseInactiveError("STATUS_NOT_ACTIVE", license.id);
+  if (license.startDate > now) throw new LicenseInactiveError("NOT_STARTED", license.id);
+  if (license.endDate && license.endDate < now) throw new LicenseInactiveError("EXPIRED", license.id);
+
+  return license;
 }

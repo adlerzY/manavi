@@ -2,8 +2,7 @@ import "server-only";
 import type { EditionStatus, LicenseStatus } from "@prisma/client";
 import { prisma } from "./prisma";
 import { adjustedScore, requiredReadChapters } from "./rating";
-
-const DEFAULT_LANGUAGE = "fa";
+import { getDefaultLanguageCode } from "./language-registry";
 
 export interface EditionSummary {
   id: string;
@@ -32,13 +31,14 @@ export async function ensureDefaultEdition(workId: string): Promise<void> {
     select: { licenseId: true, license: { select: { publisherId: true } } },
   });
   if (!comic) return;
+  const language = await getDefaultLanguageCode();
 
   await prisma.edition.upsert({
     where: {
-      workId_publisherId_language: { workId, publisherId: comic.license.publisherId, language: DEFAULT_LANGUAGE },
+      workId_publisherId_language: { workId, publisherId: comic.license.publisherId, language },
     },
     update: {},
-    create: { workId, publisherId: comic.license.publisherId, licenseId: comic.licenseId, language: DEFAULT_LANGUAGE },
+    create: { workId, publisherId: comic.license.publisherId, licenseId: comic.licenseId, language },
   });
 }
 
@@ -48,7 +48,7 @@ export async function getPrimaryEditionId(workId: string): Promise<string | null
 
   const findMatching = () =>
     prisma.edition.findFirst({
-      where: { workId, licenseId: comic.licenseId },
+      where: { workId, licenseId: comic.licenseId, deletedAt: null },
       orderBy: { createdAt: "asc" },
       select: { id: true },
     });
@@ -61,14 +61,14 @@ export async function getPrimaryEditionId(workId: string): Promise<string | null
   matching = await findMatching();
   if (matching) return matching.id;
 
-  const any = await prisma.edition.findFirst({ where: { workId }, orderBy: { createdAt: "asc" }, select: { id: true } });
+  const any = await prisma.edition.findFirst({ where: { workId, deletedAt: null }, orderBy: { createdAt: "asc" }, select: { id: true } });
   return any?.id ?? null;
 }
 
 export async function getWorkEditions(workId: string): Promise<EditionSummary[]> {
   const loadRows = () =>
     prisma.edition.findMany({
-      where: { workId, status: { in: ["ACTIVE", "ARCHIVED"] } },
+      where: { workId, deletedAt: null, status: { in: ["ACTIVE", "ARCHIVED"] } },
       select: {
         id: true,
         workId: true,

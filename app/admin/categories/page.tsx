@@ -5,10 +5,13 @@ import { CreateCategoryForm } from "@/components/admin/create-category-form";
 import { CategoryManager, type CategoryRow } from "@/components/admin/category-manager";
 import { CreateGenreForm } from "@/components/admin/create-genre-form";
 import { GenreManager } from "@/components/admin/genre-manager";
+import { listLanguages } from "@/app/admin/actions/languages";
+import { LanguageManager } from "@/components/admin/language-manager";
 
 const TABS = [
   { id: "categories", label: "دسته‌بندی اصلی", href: "/admin/categories" },
   { id: "genres", label: "ژانرها", href: "/admin/categories?tab=genres" },
+  { id: "languages", label: "زبان‌ها", href: "/admin/categories?tab=languages" },
 ];
 
 interface PageProps {
@@ -84,15 +87,27 @@ async function GenresTab() {
   );
 }
 
+async function LanguagesTab() {
+  const languages = await listLanguages();
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-text-muted">
+        زبان‌ها قبل از ساخت هر نسخه انتخاب می‌شوند. تعداد زبان‌ها و ترجمه‌ها محدود نیست و غیرفعال‌کردن یک زبان فقط جلوی ساخت نسخه‌ی جدید را می‌گیرد.
+      </p>
+      <LanguageManager languages={languages} />
+    </div>
+  );
+}
+
 export default async function AdminCategoriesPage({ searchParams }: PageProps) {
   const { tab: tabParam } = await searchParams;
-  const tab = tabParam === "genres" ? "genres" : "categories";
+  const tab = tabParam === "genres" ? "genres" : tabParam === "languages" ? "languages" : "categories";
 
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-text-main">دسته‌بندی‌ها</h1>
       <PageTabs tabs={TABS} active={tab} />
-      {tab === "genres" ? <GenresTab /> : <CategoriesTab />}
+      {tab === "genres" ? <GenresTab /> : tab === "languages" ? <LanguagesTab /> : <CategoriesTab />}
     </div>
   );
 }

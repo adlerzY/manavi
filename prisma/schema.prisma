@@ -103,7 +103,13 @@ model Publisher {
   payoutRequests     PayoutRequest[]
   payoutTransactions Transaction[]    @relation("PublisherPayoutTransactions")
   editions            Edition[]
+  status           PublisherStatus @default(ACTIVE)
+  suspendedAt      DateTime?
+  suspendedById    String?
+  suspensionReason String?
+  comicAccesses    ComicAccess[]
 
+  @@index([status])
   @@index([isVerified])
 }
 
@@ -116,6 +122,12 @@ model PublisherStaff {
   canManageComics Boolean   @default(false)
   isVerified     Boolean   @default(false)
   createdAt      DateTime  @default(now())
+  canPublish        Boolean   @default(true)
+  canEdit           Boolean   @default(true)
+  canDelete         Boolean   @default(false)
+  canManageEditions Boolean   @default(false)
+  canManageMembers  Boolean   @default(false)
+  canSensitive      Boolean   @default(false)
 
   publisher Publisher @relation(fields: [publisherId], references: [id])
   user      User      @relation(fields: [userId], references: [id])
@@ -144,7 +156,7 @@ model License {
   contractReference String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
-
+  scope             LicenseScope  @default(STANDARD)
   comics      Comic[]
   settlements RoyaltySettlement[]
   editions    Edition[]
@@ -222,6 +234,14 @@ model Comic {
   genres          ComicGenre[]
   readHistory     ReadHistory[]
   readMarks       ChapterReadMark[]
+  accessMode      ComicAccessMode @default(OPEN)
+  emergencyLocked Boolean         @default(false)
+  deletedAt       DateTime?
+  deletedById     String?
+  deletedState    Json?
+  accesses        ComicAccess[]
+
+  @@index([deletedAt])
 
   @@index([categoryId])
   @@index([licenseId])
@@ -335,6 +355,11 @@ model Chapter {
   readMarks    ChapterReadMark[]
   entitlements Entitlement[]
   saleLines    SaleLine[]
+  deletedAt    DateTime?
+  deletedById  String?
+  deletedState Json?
+
+  @@index([deletedAt])
 
   @@index([comicId, publishedAt])
   @@unique([editionId, chapterNumber])
@@ -797,6 +822,13 @@ model Edition {
   ratingTotal        Int           @default(0)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+  emergencyLocked Boolean   @default(false)
+  deletedAt       DateTime?
+  deletedById     String?
+  deletedState    Json?
+  bonusesAsSource EditionBonus[]      @relation("BonusSource")
+  bonusesAsTarget EditionBonus[]      @relation("BonusTarget")
+  giftLinks       AccessGiftEdition[]
 
   work      Comic           @relation(fields: [workId], references: [id])
   publisher Publisher       @relation(fields: [publisherId], references: [id])
@@ -837,6 +869,13 @@ model Entitlement {
   user     User      @relation(fields: [userId], references: [id])
   chapter  Chapter   @relation(fields: [chapterId], references: [id])
   saleLine SaleLine? @relation(fields: [saleLineId], references: [id])
+  bonusId String?
+  giftId  String?
+  bonus   EditionBonus? @relation(fields: [bonusId], references: [id], onDelete: SetNull)
+  gift    AccessGift?   @relation(fields: [giftId], references: [id], onDelete: SetNull)
+
+  @@index([bonusId])
+  @@index([giftId])
 
   @@unique([userId, chapterId])
   @@index([chapterId])
@@ -1221,4 +1260,197 @@ model WithdrawalEvent {
   withdrawal WithdrawalRequest @relation(fields: [withdrawalId], references: [id], onDelete: Cascade)
 
   @@index([withdrawalId, createdAt])
+}
+enum LicenseScope {
+  STANDARD
+  GLOBAL
+  PERSONAL
+}
+
+enum ComicAccessMode {
+  OPEN
+  PERSONAL
+}
+
+enum AccessSource {
+  MIGRATION
+  LICENSE
+  GLOBAL
+  ADMIN
+  RECOVERY
+}
+
+enum PublisherStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CONSUMED
+}
+
+model ComicAccess {
+  id          String       @id @default(uuid())
+  comicId     String
+  publisherId String
+  isOwner     Boolean      @default(false)
+  readOnly    Boolean      @default(false)
+  source      AccessSource @default(ADMIN)
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  revokedById String?
+  grantedById String?
+  note        String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  comic     Comic     @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  publisher Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+
+  @@unique([comicId, publisherId])
+  @@index([publisherId])
+}
+
+model OperationPolicy {
+  operation   String   @id
+  maxUnits    Int
+  windowHours Int      @default(24)
+  isEnabled   Boolean  @default(true)
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+model OperationLog {
+  id          String   @id @default(uuid())
+  operation   String
+  actorId     String
+  publisherId String?
+  comicId     String?
+  units       Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  @@index([operation, actorId, createdAt])
+  @@index([operation, publisherId, createdAt])
+  @@index([operation, comicId, createdAt])
+}
+
+model OperationApproval {
+  id           String                @id @default(uuid())
+  operation    String
+  actorId      String
+  publisherId  String?
+  comicId      String?
+  targetType   String
+  targetId     String
+  summary      String
+  units        Int                   @default(1)
+  status       ApprovalRequestStatus @default(PENDING)
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  expiresAt    DateTime?
+  consumedAt   DateTime?
+  createdAt    DateTime              @default(now())
+
+  @@index([status, createdAt])
+  @@index([actorId, operation, targetId, status])
+}
+model Language {
+  code      String   @id
+  label     String
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+enum BonusTrigger {
+  PER_CHAPTER
+  ANY_PURCHASE
+  FULL_SET
+}
+
+enum GiftAudience {
+  USERS
+  EDITION_BUYERS
+  COMIC_BOOKMARKS
+}
+
+model EditionBonus {
+  id              String       @id @default(uuid())
+  sourceEditionId String
+  targetEditionId String
+  trigger         BonusTrigger @default(PER_CHAPTER)
+  isActive        Boolean      @default(true)
+  name            String?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  note            String?
+  createdById     String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  source       Edition       @relation("BonusSource", fields: [sourceEditionId], references: [id], onDelete: Cascade)
+  target       Edition       @relation("BonusTarget", fields: [targetEditionId], references: [id], onDelete: Cascade)
+  grants       BonusGrant[]
+  entitlements Entitlement[]
+
+  @@index([sourceEditionId, isActive])
+  @@index([targetEditionId, isActive])
+}
+
+model BonusGrant {
+  bonusId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  bonus EditionBonus @relation(fields: [bonusId], references: [id], onDelete: Cascade)
+
+  @@id([bonusId, userId])
+  @@index([userId])
+}
+
+model AccessGift {
+  id             String       @id @default(uuid())
+  reason         String
+  audience       GiftAudience
+  audienceRef    String?
+  includeFuture  Boolean      @default(true)
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  revokedById    String?
+  createdById    String
+  recipientCount Int          @default(0)
+  grantedCount   Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  editions     AccessGiftEdition[]
+  recipients   AccessGiftRecipient[]
+  entitlements Entitlement[]
+
+  @@index([createdAt])
+}
+
+model AccessGiftEdition {
+  giftId    String
+  editionId String
+
+  gift    AccessGift @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  edition Edition    @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, editionId])
+  @@index([editionId])
+}
+
+model AccessGiftRecipient {
+  giftId String
+  userId String
+
+  gift AccessGift @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, userId])
+  @@index([userId])
 }

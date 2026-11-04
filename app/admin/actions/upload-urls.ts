@@ -1,8 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireUploadAccess } from "@/lib/auth";
-import { assertLicenseActive, LicenseInactiveError } from "@/lib/license";
+import { requireEditionAccess } from "@/lib/auth";
+import { assertEditionLicenseActive, LicenseInactiveError } from "@/lib/license";
 import {
   buildPrivatePageKey,
   createPagePresignedPutUrl,
@@ -34,9 +34,9 @@ export interface PageUploadUrl {
 
 const URL_REQUESTS_PER_MINUTE = 120;
 
-
 export async function requestPageUploadUrls(input: {
   comicId: string;
+  editionId?: string;
   uploadId: string;
   files: RequestedFile[];
 }): Promise<ActionResult<{ items: PageUploadUrl[] }>> {
@@ -52,14 +52,14 @@ export async function requestPageUploadUrls(input: {
       return { success: false, error: `چپتر نمی‌تواند بیش از ${MAX_CHAPTER_PAGES} صفحه داشته باشد` };
     }
 
-    const user = await requireUploadAccess(input.comicId);
-    await assertLicenseActive(input.comicId);
+    const editionId = input.editionId ?? (await getPrimaryEditionId(input.comicId));
+    if (!editionId) return { success: false, error: "عنوان یافت نشد" };
+
+    const user = await requireEditionAccess(editionId, "upload", input.comicId);
+    await assertEditionLicenseActive(editionId);
 
     const allowed = await checkRateLimit(`page-upload-urls:${user.id}`, URL_REQUESTS_PER_MINUTE);
     if (!allowed) return { success: false, error: "تعداد درخواست‌ها بیش از حد مجاز است — کمی صبر کنید" };
-
-    const editionId = await getPrimaryEditionId(input.comicId);
-    if (!editionId) return { success: false, error: "عنوان یافت نشد" };
 
     const [edition, existingChapter] = await Promise.all([
       prisma.edition.findUnique({ where: { id: editionId }, select: { workId: true, status: true } }),

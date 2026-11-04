@@ -13,6 +13,12 @@ export const AUDIT_GROUPS: { value: string; label: string }[] = [
   { value: "withdrawal", label: "درخواست‌های تسویه" },
   { value: "payoutSettings", label: "تنظیمات تسویه" },
   { value: "report", label: "گزارش‌ها" },
+  { value: "access", label: "دسترسی و مالکیت" },
+  { value: "security", label: "امنیت" },
+  { value: "operation", label: "عملیات حساس" },
+  { value: "trash", label: "حذف و بازیابی" },
+  { value: "edition", label: "نسخه‌ها" },
+  { value: "language", label: "زبان‌ها" },
 ];
 
 export function auditGroupLabel(action: string): string | null {

@@ -23,7 +23,7 @@ export default async function PublisherLayout({ children }: { children: ReactNod
     { href: "/publisher/earnings", label: "درآمد و تسویه", icon: "Wallet" },
   ];
 
-  if (!context || context.isOwner) {
+  if (!context || context.permissions.manageMembers) {
     NAV.push({ href: "/publisher/team", label: "تیم", icon: "Users" });
   }
 

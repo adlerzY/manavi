@@ -5,6 +5,7 @@ import { cleanupOldAuditLogs } from "@/lib/audit-log";
 import { cleanupOldFailedTransactions } from "@/lib/transaction-cleanup";
 import { cleanupOldNotifications } from "@/lib/notifications";
 import { notifyAdmin } from "@/lib/admin-alert";
+import { cleanupOperationData } from "@/lib/operation-cleanup";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 const AUDIT_LOG_RETENTION_DAYS = Number(process.env.AUDIT_LOG_RETENTION_DAYS ?? 180);
@@ -21,13 +22,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [viewCounts, scheduledPublish, auditLogsDeleted, failedTransactionsDeleted, notificationsDeleted] =
+    const [viewCounts, scheduledPublish, auditLogsDeleted, failedTransactionsDeleted, notificationsDeleted, operationDataDeleted] =
       await Promise.all([
         flushBufferedViewCounts(),
         executeScheduledPublish(),
         cleanupOldAuditLogs(AUDIT_LOG_RETENTION_DAYS).catch(() => 0),
         cleanupOldFailedTransactions().catch(() => 0),
         cleanupOldNotifications().catch(() => 0),
+        cleanupOperationData().catch(() => 0),
       ]);
 
     return NextResponse.json({

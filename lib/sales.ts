@@ -8,6 +8,7 @@ import { creditEarnings, type EarningsCredit } from "./earnings";
 import { allocateRevenue } from "./allocation";
 import { resolveLicenseTerm } from "./license-terms";
 import { coinsToUnits, unitsToUsdtMicro } from "./units";
+import { applyPurchaseBonuses } from "./bonus";
 
 export interface PurchaseInput {
   buyerId: string;
@@ -157,7 +158,6 @@ export async function purchaseChapters(input: PurchaseInput): Promise<PurchaseRe
         }
 
         const keptChapterIds = kept.map((line) => line.chapterId);
-        const episodeByChapter = new Map(candidates.map((candidate) => [candidate.id, candidate.episodeId]));
 
         const staffRows = await tx.chapterStaff.findMany({
           where: { chapterId: { in: keptChapterIds } },
@@ -246,29 +246,12 @@ export async function purchaseChapters(input: PurchaseInput): Promise<PurchaseRe
           },
         });
 
-        const episodeIds = keptChapterIds.map((id) => episodeByChapter.get(id)).filter((id): id is string => Boolean(id));
-        let crossUnlockedChapterIds: string[] = [];
-        if (episodeIds.length > 0) {
-          const targets = await tx.chapter.findMany({
-            where: {
-              episodeId: { in: episodeIds },
-              editionId: { not: edition.id },
-              status: "PUBLISHED",
-              isLocked: false,
-              accessType: "COIN",
-              edition: { workId: edition.work.id, status: "ACTIVE", crossUnlockEnabled: true },
-            },
-            select: { id: true },
-          });
-          if (targets.length > 0) {
-            const created = await tx.entitlement.createManyAndReturn({
-              data: targets.map((target) => ({ userId: input.buyerId, chapterId: target.id, type: "CROSS_UNLOCK" as const })),
-              skipDuplicates: true,
-              select: { chapterId: true },
-            });
-            crossUnlockedChapterIds = created.map((entry) => entry.chapterId);
-          }
-        }
+        const crossUnlockedChapterIds = await applyPurchaseBonuses(tx, {
+          userId: input.buyerId,
+          editionId: edition.id,
+          workId: edition.work.id,
+          purchasedChapterIds: keptChapterIds,
+        });
 
         return { saleId: sale.id, purchasedChapterIds: keptChapterIds, crossUnlockedChapterIds, totalCoins };
       },

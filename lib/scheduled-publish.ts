@@ -6,6 +6,7 @@ import { notifyNewChapter } from "./telegram-bot";
 import { invalidateChapterAccessList } from "./chapters";
 import { redis, isRedisConfigured } from "./redis";
 import { notifyChapterPublishedInApp } from "./notifications";
+import { grantAutomaticAccessForChapters } from "./bonus";
 
 const THROTTLE_KEY = "scheduled-publish:lock";
 const THROTTLE_SECONDS = 90;
@@ -16,7 +17,13 @@ export interface ScheduledPublishResult {
 
 export async function executeScheduledPublish(): Promise<ScheduledPublishResult> {
   const due = await prisma.chapter.findMany({
-    where: { status: "SCHEDULED", scheduledAt: { lte: new Date() } },
+    where: {
+      status: "SCHEDULED",
+      scheduledAt: { lte: new Date() },
+      deletedAt: null,
+      edition: { deletedAt: null },
+      comic: { deletedAt: null },
+    },
     select: {
       id: true,
       chapterNumber: true,
@@ -46,6 +53,10 @@ export async function executeScheduledPublish(): Promise<ScheduledPublishResult>
   const publishedChapters = eligible.filter((chapter) => justPublishedIds.has(chapter.id));
 
   if (publishedChapters.length > 0) {
+    await grantAutomaticAccessForChapters(publishedChapters.map((chapter) => chapter.id)).catch(() => {});
+  }
+
+  if (publishedChapters.length > 0) {
     const comicIds = [...new Set(publishedChapters.map((c) => c.comic.id))];
     const bookmarks = await prisma.bookmark.findMany({
       where: { comicId: { in: comicIds }, notifyOnNewChapter: true },
@@ -72,14 +83,13 @@ export async function executeScheduledPublish(): Promise<ScheduledPublishResult>
       }
       revalidatePath(`/app/comic/${chapter.comic.slug}`);
       revalidatePath(`/app/read/${chapter.id}`);
-            await notifyChapterPublishedInApp({
+      await notifyChapterPublishedInApp({
         chapterId: chapter.id,
         comicId: chapter.comic.id,
         comicTitle: chapter.comic.title,
         comicSlug: chapter.comic.slug,
         chapterNumber: chapter.chapterNumber,
       }).catch(() => {});
-      
     }
 
     comicIds.forEach((comicId) => invalidateChapterAccessList(comicId));

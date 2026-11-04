@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import { cancelEditionRequest, requestEdition } from "@/app/actions/edition-requests";
-import { LANGUAGE_LABELS } from "@/lib/languages";
+import type { LanguageOption } from "@/lib/languages";
 
 interface RequestEditionCardProps {
   workId: string;
   authenticated: boolean;
   activeLanguage: string | null;
+  languages: LanguageOption[];
 }
 
-export function RequestEditionCard({ workId, authenticated, activeLanguage: initialLanguage }: RequestEditionCardProps) {
+export function RequestEditionCard({ workId, authenticated, activeLanguage: initialLanguage, languages }: RequestEditionCardProps) {
   const [activeLanguage, setActiveLanguage] = useState(initialLanguage);
-  const [language, setLanguage] = useState(initialLanguage ?? "fa");
+  const [language, setLanguage] = useState(initialLanguage ?? languages[0]?.code ?? "");
   const [reason, setReason] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export function RequestEditionCard({ workId, authenticated, activeLanguage: init
         <p className="text-xs text-text-muted">برای ثبت درخواست از داخل تلگرام وارد شوید.</p>
       ) : activeLanguage ? (
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-primary">درخواست شما برای «{LANGUAGE_LABELS[activeLanguage] ?? activeLanguage}» ثبت شده است.</p>
+          <p className="text-xs text-primary">درخواست شما برای «{languages.find((item) => item.code === activeLanguage)?.label ?? activeLanguage}» ثبت شده است.</p>
           <button type="button" onClick={handleCancel} disabled={pending} className="text-xs text-red-400 disabled:opacity-50">
             لغو درخواست
           </button>
@@ -64,8 +65,8 @@ export function RequestEditionCard({ workId, authenticated, activeLanguage: init
             onChange={(e) => setLanguage(e.target.value)}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-main"
           >
-            {Object.entries(LANGUAGE_LABELS).map(([code, label]) => (
-              <option key={code} value={code}>{label}</option>
+            {languages.map((item) => (
+              <option key={item.code} value={item.code}>{item.label}</option>
             ))}
           </select>
           <input
@@ -78,7 +79,7 @@ export function RequestEditionCard({ workId, authenticated, activeLanguage: init
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={pending}
+            disabled={pending || !language}
             className="w-full rounded-md border border-primary px-4 py-2 text-sm text-primary disabled:opacity-50"
           >
             {pending ? "در حال ثبت…" : "ثبت درخواست"}

@@ -72,17 +72,11 @@ function decodeXml(value: string): string {
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, "&")
     .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n: string) =>
-      String.fromCodePoint(parseInt(n, 16))
-    );
+    .replace(/&#x([0-9a-f]+);/gi, (_, n: string) => String.fromCodePoint(parseInt(n, 16)));
 }
 
 function readXmlTag(xml: string, tag: string): string | undefined {
-  const match = new RegExp(
-    `<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`,
-    "i"
-  ).exec(xml);
-
+  const match = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "i").exec(xml);
   return match?.[1] ? decodeXml(match[1]).trim().slice(0, 400) : undefined;
 }
 
@@ -222,20 +216,14 @@ function putWithProgress(
       statusText: xhr.statusText || "",
       uploadedBytes,
       totalBytes: blob.size,
-      progress:
-        blob.size > 0
-          ? Math.min(100, Math.round((uploadedBytes / blob.size) * 100))
-          : 0,
+      progress: blob.size > 0 ? Math.min(100, Math.round((uploadedBytes / blob.size) * 100)) : 0,
       elapsedMs: Date.now() - startedAt,
       readyState: xhr.readyState,
       online: typeof navigator !== "undefined" ? navigator.onLine : null,
       timeoutStage,
     });
 
-    const arm = (
-      ms: number,
-      stage: NonNullable<PutFailureDetails["timeoutStage"]>
-    ) => {
+    const arm = (ms: number, stage: NonNullable<PutFailureDetails["timeoutStage"]>) => {
       clear();
       timer = setTimeout(() => {
         finish(() => reject(new PutError(snapshot("timeout", stage))));
@@ -291,6 +279,7 @@ function putWithProgress(
             if (typeof json.message === "string") responseMessage ??= json.message;
             if (typeof json.Message === "string") responseMessage ??= json.Message;
           } catch {
+            // Ignore malformed storage error bodies.
           }
         }
 
@@ -310,11 +299,7 @@ function putWithProgress(
 
     xhr.ontimeout = () => {
       const stage =
-        phase === "waiting_response"
-          ? "response"
-          : phase === "uploading"
-            ? "upload"
-            : "connect";
+        phase === "waiting_response" ? "response" : phase === "uploading" ? "upload" : "connect";
       finish(() => reject(new PutError(snapshot("timeout", stage))));
     };
 
@@ -326,6 +311,7 @@ function putWithProgress(
     xhr.send(blob);
   });
 }
+
 export function useChapterUploadQueue() {
   const [state, setState] = useState<QueueState>({
     items: [],
@@ -334,6 +320,7 @@ export function useChapterUploadQueue() {
   });
   const uploadIdRef = useRef<string | null>(null);
   const comicIdRef = useRef<string | null>(null);
+  const editionIdRef = useRef<string | null>(null);
   const runIdRef = useRef(0);
   const nextIndexRef = useRef(0);
   const removedRef = useRef<Set<number>>(new Set());
@@ -354,9 +341,7 @@ export function useChapterUploadQueue() {
       if (runIdRef.current !== runId) return;
       setState((prev) => ({
         ...prev,
-        items: prev.items.map((item) =>
-          item.index === index ? { ...item, ...patch } : item
-        ),
+        items: prev.items.map((item) => (item.index === index ? { ...item, ...patch } : item)),
       }));
     },
     []
@@ -366,6 +351,7 @@ export function useChapterUploadQueue() {
     runIdRef.current += 1;
     uploadIdRef.current = null;
     comicIdRef.current = null;
+    editionIdRef.current = null;
     nextIndexRef.current = 0;
     removedRef.current.clear();
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -391,6 +377,7 @@ export function useChapterUploadQueue() {
             const refreshed = await requestPageUploadUrls({
               comicId,
               uploadId,
+              editionId: editionIdRef.current ?? undefined,
               files: [{ index: item.index, contentType: item.contentType }],
             });
             const next = refreshed.data?.items[0];
@@ -476,9 +463,7 @@ export function useChapterUploadQueue() {
         }
       };
 
-      await Promise.all(
-        Array.from({ length: Math.min(CONCURRENCY, list.length) }, () => worker())
-      );
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, list.length) }, () => worker()));
     },
     [isCurrent, uploadItem]
   );
@@ -486,12 +471,16 @@ export function useChapterUploadQueue() {
   const addFiles = useCallback(
     async (
       comicId: string,
-      files: { name: string; contentType: string; blob: Blob }[]
+      files: { name: string; contentType: string; blob: Blob }[],
+      editionId?: string
     ): Promise<string | null> => {
       if (files.length === 0) return null;
 
       if (comicIdRef.current && comicIdRef.current !== comicId) {
         return "عنوان را بعد از شروع آپلود نمی‌توان تغییر داد";
+      }
+      if (editionIdRef.current && editionId && editionIdRef.current !== editionId) {
+        return "نسخه را بعد از شروع آپلود نمی‌توان تغییر داد";
       }
       if (state.items.length + files.length > MAX_CHAPTER_PAGES) {
         return `چپتر نمی‌تواند بیش از ${MAX_CHAPTER_PAGES.toLocaleString("fa-IR")} صفحه داشته باشد`;
@@ -502,6 +491,7 @@ export function useChapterUploadQueue() {
 
       if (!uploadIdRef.current) uploadIdRef.current = crypto.randomUUID();
       comicIdRef.current = comicId;
+      if (editionId) editionIdRef.current = editionId;
       const uploadId = uploadIdRef.current;
       const runId = ++runIdRef.current;
 
@@ -536,6 +526,7 @@ export function useChapterUploadQueue() {
         urlResult = await requestPageUploadUrls({
           comicId,
           uploadId,
+          editionId: editionIdRef.current ?? undefined,
           files: added.map((item) => ({
             index: item.index,
             contentType: item.contentType,
@@ -564,10 +555,7 @@ export function useChapterUploadQueue() {
       }
 
       const targets = new Map(
-        urlResult.data.items.map((item) => [
-          item.index,
-          { key: item.key, uploadUrl: item.uploadUrl },
-        ])
+        urlResult.data.items.map((item) => [item.index, { key: item.key, uploadUrl: item.uploadUrl }])
       );
 
       await runPool(runId, added, targets, comicId, uploadId);

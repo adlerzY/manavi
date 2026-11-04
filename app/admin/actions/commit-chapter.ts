@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUploadAccess } from "@/lib/auth";
+import { requireEditionAccess } from "@/lib/auth";
 import { ingestChapter, MAX_CHAPTER_PAGES } from "@/lib/chapter-ingest";
 import { parsePrivatePageKey } from "@/lib/s3";
 import { safeError } from "@/lib/errors";
@@ -34,10 +34,11 @@ export async function commitUploadedChapter(input: {
       return { success: false, error: "کلید صفحات نامعتبر است — آپلود را دوباره انجام دهید" };
     }
 
-    const user = await requireUploadAccess(input.comicId);
+    const user = await requireEditionAccess(firstKey.editionId, "upload", input.comicId);
 
     const result = await ingestChapter({
       comicId: input.comicId,
+      editionId: firstKey.editionId,
       chapterId: firstKey.chapterId,
       chapterNumber: input.chapterNumber,
       title: input.title?.slice(0, 200) ?? null,

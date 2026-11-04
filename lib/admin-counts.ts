@@ -8,46 +8,63 @@ export interface AdminNavCounts {
   approvals: number;
   pendingChapters: number;
   pendingComics: number;
+  pendingEditions: number;
   pendingComments: number;
   openReports: number;
   moderation: number;
   openWithdrawals: number;
   disputedWithdrawals: number;
   payouts: number;
+  operations: number;
 }
 
 const ZERO_COUNTS: AdminNavCounts = {
   approvals: 0,
   pendingChapters: 0,
   pendingComics: 0,
+  pendingEditions: 0,
   pendingComments: 0,
   openReports: 0,
   moderation: 0,
   openWithdrawals: 0,
   disputedWithdrawals: 0,
   payouts: 0,
+  operations: 0,
 };
 
 export const getAdminNavCounts = cache(async (): Promise<AdminNavCounts> => {
   try {
-    const [pendingChapters, pendingComics, pendingComments, openReports, openWithdrawals, disputedWithdrawals] = await Promise.all([
+    const [
+      pendingChapters,
+      pendingComics,
+      pendingEditions,
+      pendingComments,
+      openReports,
+      openWithdrawals,
+      disputedWithdrawals,
+      pendingOperations,
+    ] = await Promise.all([
       prisma.chapter.count({ where: { status: "PENDING_APPROVAL" } }),
-      prisma.comic.count({ where: { approvalStatus: "PENDING_APPROVAL" } }),
+      prisma.comic.count({ where: { approvalStatus: "PENDING_APPROVAL", deletedAt: null } }),
+      prisma.edition.count({ where: { status: "PENDING_REVIEW", deletedAt: null } }),
       prisma.comment.count({ where: { status: "PENDING" } }),
       prisma.contentReport.count({ where: { status: { in: ["OPEN", "UNDER_REVIEW"] } } }),
       prisma.withdrawalRequest.count({ where: { status: { in: ["PENDING", "PROCESSING"] } } }),
       prisma.withdrawalRequest.count({ where: { response: "DISPUTED", disputeResolvedAt: null } }),
+      prisma.operationApproval.count({ where: { status: "PENDING" } }),
     ]);
 
     return {
-      approvals: pendingChapters + pendingComics,
+      approvals: pendingChapters + pendingComics + pendingEditions,
       pendingChapters,
       pendingComics,
+      pendingEditions,
       pendingComments,
       openReports,
-      moderation: pendingChapters + pendingComics + pendingComments + openReports,
+      moderation: pendingChapters + pendingComics + pendingComments + openReports + pendingEditions,
       openWithdrawals,
       disputedWithdrawals,
+      operations: pendingOperations,
       payouts: openWithdrawals + disputedWithdrawals,
     };
   } catch (err) {

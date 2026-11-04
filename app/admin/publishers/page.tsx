@@ -7,6 +7,7 @@ import { PublisherOwnerLink } from "@/components/admin/publisher-owner-link";
 import { PublisherVerificationPanel } from "@/components/admin/publisher-verification-panel";
 import { CreateLicenseForm } from "@/components/admin/create-license-form";
 import { LicenseRowActions } from "@/components/admin/license-row-actions";
+import { LICENSE_SCOPE_LABELS_FA, PublisherStatusPanel } from "@/lib/license";
 
 const PAGE_SIZE = 50;
 
@@ -52,6 +53,7 @@ async function PublishersTab({ page }: { page: number }) {
         name: true,
         contactEmail: true,
         isVerified: true,
+        status: true,
         licenses: { select: { id: true } },
         contractUser: { select: { username: true } },
       },
@@ -86,6 +88,7 @@ async function PublishersTab({ page }: { page: number }) {
               </div>
             </div>
             <PublisherVerificationPanel publisherId={p.id} initialIsVerified={p.isVerified} />
+            <PublisherStatusPanel publisherId={p.id} initialStatus={p.status} />
           </div>
         ))}
         {publishers.length === 0 && <p className="px-4 py-3 text-sm text-text-muted">هنوز ناشری ثبت نشده است.</p>}
@@ -157,7 +160,7 @@ async function LicensesTab({ page, query }: { page: number; query?: string }) {
                 {l.publisher.name} — {l.territory.join("/")}
               </p>
               <p className="text-xs text-text-muted">
-                {l.status} · شروع: {l.startDate.toLocaleDateString("fa-IR")}
+                {l.status} · {LICENSE_SCOPE_LABELS_FA[l.scope]} · شروع: {l.startDate.toLocaleDateString("fa-IR")}
                 {l.endDate ? ` · پایان: ${l.endDate.toLocaleDateString("fa-IR")}` : ""}
                 {l.contractReference ? ` · قرارداد: ${l.contractReference}` : ""}
               </p>

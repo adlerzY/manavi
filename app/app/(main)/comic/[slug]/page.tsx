@@ -27,6 +27,7 @@ import { getWorkEditions, pickEdition, getUserRatingContext, getUserEditionReque
 import { averageScore, requiredReadChapters } from "@/lib/rating";
 import { getAllowedAgeRatings } from "@/lib/content-filter";
 import { COMIC_STATUS_LABELS } from "@/lib/labels";
+import { getActiveLanguages, getLanguageLabels } from "@/lib/language-registry";
 import { getSimilarComics, recordComicView } from "@/lib/recommendations";
 
 export const revalidate = 300;
@@ -58,6 +59,7 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
       ageRating: true,
       status: true,
       approvalStatus: true,
+      deletedAt: true,
       createdById: true,
       rejectionNote: true,
       ratingCount: true,
@@ -76,7 +78,7 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
     },
   });
 
-  if (!comic) {
+  if (!comic || comic.deletedAt) {
     notFound();
   }
 
@@ -100,7 +102,12 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
   const selected = pickEdition(editions, editionParam, langParam);
   const licenseActive = Boolean(selected && selected.status === "ACTIVE" && selected.licenseStatus === "ACTIVE");
 
-  const [allowedRatings, defaultPrice] = await Promise.all([getAllowedAgeRatings(), getChapterUnlockCoinCost()]);
+  const [allowedRatings, defaultPrice, activeLanguages, languageLabels] = await Promise.all([
+    getAllowedAgeRatings(),
+    getChapterUnlockCoinCost(),
+    getActiveLanguages(),
+    getLanguageLabels(),
+  ]);
   const chapterAccess = selected ? await getChapterAccessList(comic.id, selected.id) : [];
 
   const sortedChapters = [...chapterAccess].sort((a, b) => a.chapterNumber - b.chapterNumber);
@@ -280,7 +287,7 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
             highlight={alternativeCount > 0}
             editions={
               alternativeCount > 0 && selected ? (
-                <EditionSelector slug={comic.slug} editions={editionOptions} selectedId={selected.id} />
+                <EditionSelector slug={comic.slug} editions={editionOptions} selectedId={selected.id} labels={languageLabels} />
               ) : null
             }
             rating={
@@ -306,7 +313,12 @@ export default async function ComicDetailPage({ params, searchParams }: PageProp
               ) : null
             }
             request={
-              <RequestEditionCard workId={comic.id} authenticated={Boolean(user)} activeLanguage={editionRequest?.language ?? null} />
+              <RequestEditionCard
+                  workId={comic.id}
+                  authenticated={Boolean(user)}
+                  activeLanguage={editionRequest?.language ?? null}
+                  languages={activeLanguages.map((item) => ({ code: item.code, label: item.label }))}
+                />
             }
             report={
               user ? (

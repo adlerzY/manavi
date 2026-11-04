@@ -21,7 +21,14 @@ export type AuditAction =
   | "settlement.createPeriod" | "settlement.recalculate" | "settlement.lockPeriod"
   | "settlement.lineStatus" | "settlement.payout" | "settlement.note"
   | "withdrawal.review" | "withdrawal.pay" | "withdrawal.reject" | "withdrawal.resolveDispute"
-  | "payoutSettings.update";
+  | "payoutSettings.update"  | "publisher.suspend"
+  | "publisher.unsuspend"
+  | `access.${string}`
+  | `security.${string}`
+  | `operation.${string}`
+  | `trash.${string}`
+  | `edition.${string}`
+  | `language.${string}`;
 
 interface LogAuditEventInput {
   actorId: string;
@@ -141,6 +148,11 @@ const PROTECTED_AUDIT_ACTION_PREFIXES = [
   "license.",
   "platformSettings.",
   "publisher.",
+  "access.",
+  "security.",
+  "operation.",
+  "trash.",
+  "edition.",
 ];
 
 export async function cleanupOldAuditLogs(days: number): Promise<number> {

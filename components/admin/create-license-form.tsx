@@ -13,6 +13,7 @@ export function CreateLicenseForm({ publishers, onCreated }: { publishers: Publi
   const router = useRouter();
   const [publisherId, setPublisherId] = useState(publishers[0]?.id ?? "");
   const [territory, setTerritory] = useState("");
+  const [scope, setScope] = useState<"STANDARD" | "GLOBAL" | "PERSONAL">("STANDARD");
   const [royaltyPercentage, setRoyaltyPercentage] = useState("50");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -29,6 +30,7 @@ export function CreateLicenseForm({ publishers, onCreated }: { publishers: Publi
       const result = await createLicense({
         publisherId,
         territory: territory.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean),
+        scope,
         royaltyPercentage: Number(royaltyPercentage),
         startDate,
         endDate: endDate || undefined,
@@ -118,6 +120,15 @@ export function CreateLicenseForm({ publishers, onCreated }: { publishers: Publi
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-text-main outline-none focus:border-primary"
           />
         </div>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm text-text-muted" htmlFor="license-scope">نوع لایسنس</label>
+        <select id="license-scope" value={scope} onChange={(e) => setScope(e.target.value as typeof scope)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-text-main outline-none focus:border-primary">
+          <option value="STANDARD">عادی — فقط آثار متصل به همین لایسنس</option>
+          <option value="GLOBAL">سراسری — ساخت نسخه روی همه‌ی آثار عمومی</option>
+          <option value="PERSONAL">شخصی — آثار اختصاصی، بدون دسترسی خودکار دیگران</option>
+        </select>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

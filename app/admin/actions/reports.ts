@@ -10,6 +10,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { createNotifications } from "@/lib/notifications";
 import { invalidateChapterAccessList } from "@/lib/chapters";
 import { languageLabel } from "@/lib/languages";
+import { getLanguageLabels } from "@/lib/language-registry";
 import { REPORT_STATUS_LABELS } from "@/lib/report-labels";
 
 interface ActionResult<T = undefined> {
@@ -52,6 +53,7 @@ function displayName(user: { firstName: string; username: string | null }): stri
 
 async function loadTargets(rows: { targetType: ReportTargetType; targetId: string }[]): Promise<Map<string, ReportTargetInfo>> {
   const idsOf = (type: ReportTargetType) => [...new Set(rows.filter((row) => row.targetType === type).map((row) => row.targetId))];
+  const labels = await getLanguageLabels();
 
   const [chapters, comments, editions, works] = await Promise.all([
     prisma.chapter.findMany({
@@ -87,7 +89,7 @@ async function loadTargets(rows: { targetType: ReportTargetType; targetId: strin
   for (const chapter of chapters) {
     map.set(`EDITION_CHAPTER:${chapter.id}`, {
       title: `${chapter.comic.title} — چپتر ${chapter.chapterNumber.toLocaleString("fa-IR")}`,
-      subtitle: `زبان ${languageLabel(chapter.edition.language)}`,
+      subtitle: `زبان ${languageLabel(chapter.edition.language, labels)}`,
       excerpt: null,
       href: `/app/read/${chapter.id}`,
       actioned: chapter.isLocked,
@@ -105,7 +107,7 @@ async function loadTargets(rows: { targetType: ReportTargetType; targetId: strin
   for (const edition of editions) {
     map.set(`EDITION:${edition.id}`, {
       title: `${edition.work.title} — ${edition.publisher.name}`,
-      subtitle: `زبان ${languageLabel(edition.language)}`,
+      subtitle: `زبان ${languageLabel(edition.language, labels)}`,
       excerpt: null,
       href: `/app/comic/${edition.work.slug}?edition=${edition.id}`,
       actioned: edition.status === "SUSPENDED",

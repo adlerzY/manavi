@@ -18,6 +18,7 @@ export interface ChapterListRow {
   scheduledAt: string | null;
   isLocked: boolean;
   accessType: ChapterAccessType;
+  editionLabel?: string | null;
 }
 
 interface ChapterListManagerProps {
@@ -101,6 +102,11 @@ export function ChapterListManager({ chapters, restrictAccessTypes, pageSize = D
                   <span className="truncate text-sm text-text-main">
                     {chapterLabel}
                     {chapter.isLocked && <span className="mr-2 text-xs text-accent">(قفل دستی)</span>}
+                    {chapter.editionLabel && (
+                      <span className="mr-2 rounded-full bg-background px-2 py-0.5 text-[10px] text-text-muted">
+                        {chapter.editionLabel}
+                      </span>
+                    )}
                   </span>
                 </label>
                 <ChapterStatusPanel

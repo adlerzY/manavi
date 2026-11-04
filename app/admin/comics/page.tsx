@@ -25,6 +25,7 @@ export default async function AdminComicsPage({ searchParams }: PageProps) {
   ) as ComicStatus | undefined;
 
   const where: Prisma.ComicWhereInput = {
+    deletedAt: null,
     ...(query
       ? {
           OR: [

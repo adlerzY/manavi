@@ -46,19 +46,26 @@ export default async function PublisherComicsPage({ searchParams }: PageProps) {
   ) as ComicStatus | undefined;
   const approval = APPROVAL_VALUES.find((value) => value === approvalParam);
 
-  const where: Prisma.ComicWhereInput = {
-    license: { publisherId: context.publisherId },
-    ...(query
-      ? {
-          OR: [
-            { title: { contains: query, mode: "insensitive" as const } },
-            { slug: { contains: query, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
-    ...(status ? { status } : {}),
-    ...(approval ? { approvalStatus: approval } : {}),
-  };
+const where: Prisma.ComicWhereInput = {
+  deletedAt: null,
+  accesses: {
+    some: {
+      publisherId: context.publisherId,
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+  },
+  ...(query
+    ? {
+        OR: [
+          { title: { contains: query, mode: "insensitive" as const } },
+          { slug: { contains: query, mode: "insensitive" as const } },
+        ],
+      }
+    : {}),
+  ...(status ? { status } : {}),
+  ...(approval ? { approvalStatus: approval } : {}),
+};
 
   const [comics, total, genres, categories] = await Promise.all([
     prisma.comic.findMany({
@@ -85,7 +92,7 @@ export default async function PublisherComicsPage({ searchParams }: PageProps) {
   const chapterGroups = comicIds.length
     ? await prisma.chapter.groupBy({
         by: ["comicId", "status"],
-        where: { comicId: { in: comicIds } },
+        where: { comicId: { in: comicIds }, deletedAt: null, edition: { publisherId: context.publisherId } },
         _count: { _all: true },
         _max: { publishedAt: true },
       })
