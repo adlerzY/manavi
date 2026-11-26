@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { getAdminNavCounts } from "@/lib/admin-counts";
 import { SidebarNav, type SidebarNavItem } from "@/components/dashboard/sidebar-nav";
-import { TelegramWebAppScript } from "@/components/telegram-web-app-script";
 import { TelegramPanelViewport } from "@/components/dashboard/telegram-panel-viewport";
 import { SystemMessageProvider } from "@/components/ui/system-message";
 
@@ -35,7 +34,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <SystemMessageProvider>
       <div className="min-h-screen bg-background sm:pr-[68px]">
-        <TelegramWebAppScript />
         <TelegramPanelViewport />
         <SidebarNav items={nav} title="مدیریت ماناوی" />
         <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>

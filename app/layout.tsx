@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { TelegramWebAppScript } from "@/components/telegram-web-app-script";
 
 const vazirFont = localFont({
   src: "./fonts/Vazirmatn-Medium.woff2",
@@ -29,16 +30,9 @@ export const metadata: Metadata = {
     title: "ماناوی",
     statusBarStyle: "black-translucent",
   },
-  formatDetection: {
-    telephone: false,
-  },
+  formatDetection: { telephone: false },
   icons: {
-    icon: [
-      {
-        url: "/favicon.svg",
-        type: "image/svg+xml",
-      },
-    ],
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
   },
 };
 
@@ -58,6 +52,7 @@ export default function RootLayout({
       <body className="font-sans bg-background text-text-main antialiased">
         {children}
       </body>
+      <TelegramWebAppScript />
     </html>
   );
 }
