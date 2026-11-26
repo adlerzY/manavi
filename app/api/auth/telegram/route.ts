@@ -1,90 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
+import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
-  validateTelegramInitData,
-  peekTelegramUserId,
   InvalidInitDataError,
+  peekTelegramUser,
   sanitizeTelegramPhotoUrl,
+  validateTelegramInitData,
+  type TelegramUser,
 } from "@/lib/telegram";
-import { createSessionToken, sessionCookieOptions, verifySessionToken } from "@/lib/session";
-import { generateReferralCode } from "@/lib/referral";
+import { SESSION_COOKIE_NAME, createSessionToken, sessionCookieOptions, verifySessionToken } from "@/lib/session";
 import { checkRateLimit } from "@/lib/moderation";
-import { invalidateSessionUserCache } from "@/lib/auth";
-import type { Role } from "@prisma/client";
+import { AccountDeletedError, findOrCreateTelegramUser } from "@/lib/telegram-user";
 
-function getBootstrapAdminTelegramIds(): Set<string> {
-  const raw = process.env.ADMIN_BOOTSTRAP_TELEGRAM_IDS ?? "";
-  return new Set(
-    raw
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean)
-  );
+export const dynamic = "force-dynamic";
+
+const MAX_INIT_DATA_LENGTH = 4096;
+
+function json(body: Record<string, unknown>, status = 200) {
+  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-function prismaErrorCode(err: unknown): string | undefined {
-  return err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
-}
-
-function prismaErrorTarget(err: unknown): string[] | undefined {
-  if (!err || typeof err !== "object" || !("meta" in err)) return undefined;
-  const meta = (err as { meta?: { target?: string[] | string } }).meta;
-  if (!meta?.target) return undefined;
-  return Array.isArray(meta.target) ? meta.target : [meta.target];
-}
-
-async function createUserWithReferral(input: {
-  telegramId: bigint;
-  firstName: string;
-  lastName: string | null;
-  username: string | null;
-  telegramPhotoUrl: string | null;
-  referrerId: string | null;
-  role: Role;
-}) {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const referralCode = generateReferralCode();
-    try {
-      return await prisma.user.create({
-        data: {
-          telegramId: input.telegramId,
-          firstName: input.firstName,
-          lastName: input.lastName,
-          username: input.username,
-          telegramPhotoUrl: input.telegramPhotoUrl,
-          role: input.role,
-          referralCode,
-          referredById: input.referrerId,
-        },
-      });
-    } catch (err) {
-      const code = prismaErrorCode(err);
-      const target = prismaErrorTarget(err);
-
-      if (code === "P2002" && target?.includes("telegramId")) {
-        const existing = await prisma.user.findUnique({ where: { telegramId: input.telegramId } });
-        if (existing) return existing;
-      }
-
-      if (code === "P2002" && target?.includes("referralCode") && attempt < 4) {
-        continue;
-      }
-
-      throw err;
-    }
-  }
-  throw new Error("Failed to allocate a unique referral code");
-}
-
-function publicUserPayload(user: {
-  id: string;
-  firstName: string;
-  lastName: string | null;
-  username: string | null;
-  role: Role;
-  activeTitle: string | null;
-}) {
+function publicUserPayload(user: User) {
   return {
     id: user.id,
     firstName: user.firstName,
@@ -95,107 +32,70 @@ function publicUserPayload(user: {
   };
 }
 
+function identityOf(user: TelegramUser, startParam?: string) {
+  return {
+    telegramId: BigInt(user.id),
+    firstName: user.first_name,
+    lastName: user.last_name ?? null,
+    username: user.username ?? null,
+    photoUrl: sanitizeTelegramPhotoUrl(user.photo_url),
+    startParam: startParam ?? null,
+  };
+}
+
 export async function POST(req: NextRequest) {
   let initData: unknown;
   try {
-    const body = await req.json();
-    initData = body.initData;
+    initData = (await req.json()).initData;
   } catch {
-    return NextResponse.json({ error: "invalid request body" }, { status: 400 });
+    return json({ error: "درخواست نامعتبر است" }, 400);
   }
 
-  if (!initData || typeof initData !== "string") {
-    return NextResponse.json({ error: "initData is required" }, { status: 400 });
+  if (!initData || typeof initData !== "string" || initData.length > MAX_INIT_DATA_LENGTH) {
+    return json({ error: "اطلاعات تلگرام ارسال نشده است" }, 400);
+  }
+
+  const peeked = peekTelegramUser(initData);
+  if (!peeked) {
+    return json({ error: "نشست تلگرام نامعتبر است — ماناوی را دوباره از داخل تلگرام باز کن" }, 401);
   }
 
   const cookieStore = await cookies();
-  const existingToken = cookieStore.get("session")?.value;
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const session = token ? verifySessionToken(token) : null;
 
-  if (existingToken) {
-    const existingSession = verifySessionToken(existingToken);
-    if (existingSession) {
-      const existingUser = await prisma.user.findUnique({ where: { id: existingSession.userId } });
-      if (existingUser && !existingUser.deletedAt) {
-        const peekedTelegramId = peekTelegramUserId(initData);
-        if (peekedTelegramId === null) {
-          return NextResponse.json({ error: "invalid initData" }, { status: 401 });
-        }
-
-        if (peekedTelegramId === String(existingUser.telegramId)) {
-          const bootstrapAdmins = getBootstrapAdminTelegramIds();
-          if (existingUser.role !== "ADMIN" && bootstrapAdmins.has(String(existingUser.telegramId))) {
-            const promoted = await prisma.user.update({ where: { id: existingUser.id }, data: { role: "ADMIN" } });
-            await invalidateSessionUserCache(promoted.id);
-            return NextResponse.json({ user: publicUserPayload(promoted) });
-          }
-          return NextResponse.json({ user: publicUserPayload(existingUser) });
-        }
-      }
+  if (session) {
+    const current = await prisma.user.findUnique({ where: { id: session.userId } });
+    if (current && !current.deletedAt && current.telegramId === BigInt(peeked.id)) {
+      const user = await findOrCreateTelegramUser(identityOf(peeked));
+      cookieStore.set(SESSION_COOKIE_NAME, createSessionToken(user.id), sessionCookieOptions());
+      return json({ user: publicUserPayload(user), fresh: false });
     }
   }
 
   const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const allowed = await checkRateLimit(`auth-telegram:${ip}`, 20);
-  if (!allowed) {
-    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  if (!(await checkRateLimit(`auth-telegram:${ip}`, 20))) {
+    return json({ error: "تعداد درخواست‌ها زیاد است، کمی صبر کن" }, 429);
   }
 
   let validated;
   try {
-    validated = await validateTelegramInitData(initData);
+    validated = validateTelegramInitData(initData);
   } catch (err) {
     if (err instanceof InvalidInitDataError) {
-      return NextResponse.json({ error: err.message }, { status: 401 });
+      return json({ error: "نشست تلگرام منقضی شده — ماناوی را دوباره از داخل تلگرام باز کن" }, 401);
     }
     throw err;
   }
 
-  const { user, startParam } = validated;
-  const telegramPhotoUrl = sanitizeTelegramPhotoUrl(user.photo_url);
-
-  const existing = await prisma.user.findUnique({ where: { telegramId: BigInt(user.id) } });
-  if (existing?.deletedAt) {
-    return NextResponse.json({ error: "account deleted" }, { status: 403 });
+  let user: User;
+  try {
+    user = await findOrCreateTelegramUser(identityOf(validated.user, validated.startParam));
+  } catch (err) {
+    if (err instanceof AccountDeletedError) return json({ error: "این حساب حذف شده است" }, 403);
+    throw err;
   }
 
-  const bootstrapAdmins = getBootstrapAdminTelegramIds();
-
-  let dbUser;
-  if (existing) {
-    const shouldPromote = existing.role !== "ADMIN" && bootstrapAdmins.has(String(user.id));
-
-    dbUser = await prisma.user.update({
-      where: { id: existing.id },
-      data: {
-        firstName: user.first_name,
-        lastName: user.last_name ?? null,
-        username: user.username ?? null,
-        telegramPhotoUrl,
-        ...(shouldPromote ? { role: "ADMIN" as Role } : {}),
-      },
-    });
-
-    await invalidateSessionUserCache(dbUser.id);
-  } else {
-    const referrer = startParam
-      ? await prisma.user.findUnique({ where: { referralCode: startParam } })
-      : null;
-
-    const role: Role = bootstrapAdmins.has(String(user.id)) ? "ADMIN" : "USER";
-
-    dbUser = await createUserWithReferral({
-      telegramId: BigInt(user.id),
-      firstName: user.first_name,
-      lastName: user.last_name ?? null,
-      username: user.username ?? null,
-      telegramPhotoUrl,
-      referrerId: referrer?.id ?? null,
-      role,
-    });
-  }
-
-  const sessionToken = createSessionToken(dbUser.id);
-  cookieStore.set("session", sessionToken, sessionCookieOptions());
-
-  return NextResponse.json({ user: publicUserPayload(dbUser) });
+  cookieStore.set(SESSION_COOKIE_NAME, createSessionToken(user.id), sessionCookieOptions());
+  return json({ user: publicUserPayload(user), fresh: true });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { applySafeAreaCssVars, waitForTelegramWebApp, SAFE_AREA_EVENTS } from "@/lib/client/telegram-viewport";
+import { initTelegramShell, waitForTelegramWebApp } from "@/lib/client/telegram-viewport";
 
 export function TelegramPanelViewport() {
   useEffect(() => {
@@ -10,37 +10,7 @@ export function TelegramPanelViewport() {
 
     waitForTelegramWebApp().then((webApp) => {
       if (!webApp || cancelled) return;
-
-      try {
-        webApp.ready();
-        webApp.expand();
-      } catch {}
-
-      const syncSafeArea = () => applySafeAreaCssVars(webApp);
-      const leaveFullscreen = () => {
-        if (webApp.isFullscreen) {
-          try {
-            webApp.exitFullscreen?.();
-          } catch {}
-        }
-        syncSafeArea();
-      };
-
-      leaveFullscreen();
-
-      SAFE_AREA_EVENTS.forEach((eventName) => {
-        try {
-          webApp.onEvent(eventName, eventName === "fullscreenChanged" ? leaveFullscreen : syncSafeArea);
-        } catch {}
-      });
-
-      cleanup = () => {
-        SAFE_AREA_EVENTS.forEach((eventName) => {
-          try {
-            webApp.offEvent(eventName, eventName === "fullscreenChanged" ? leaveFullscreen : syncSafeArea);
-          } catch {}
-        });
-      };
+      cleanup = initTelegramShell(webApp, { fullscreen: false });
     });
 
     return () => {

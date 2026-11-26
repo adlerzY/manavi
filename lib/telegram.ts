@@ -1,9 +1,7 @@
 import "server-only";
 import crypto from "crypto";
-import { redis, isRedisConfigured } from "./redis";
 
-const MAX_AUTH_AGE_SECONDS = 60 * 60;
-const REPLAY_GUARD_PREFIX = "telegram-initdata-used";
+const MAX_AUTH_AGE_SECONDS = 24 * 60 * 60;
 const MAX_PHOTO_URL_LENGTH = 500;
 
 export interface TelegramUser {
@@ -30,13 +28,6 @@ export class InvalidInitDataError extends Error {
   }
 }
 
-export class ReplayedInitDataError extends InvalidInitDataError {
-  constructor() {
-    super("این initData قبلاً استفاده شده است (احتمال حملهٔ replay)");
-    this.name = "ReplayedInitDataError";
-  }
-}
-
 export function sanitizeTelegramPhotoUrl(url: string | undefined): string | null {
   if (!url) return null;
   if (url.length > MAX_PHOTO_URL_LENGTH) return null;
@@ -56,37 +47,7 @@ function getBotToken(): string {
   return token;
 }
 
-interface MemoryReplayEntry {
-  expiresAt: number;
-}
-
-function getMemoryReplayCache(): Map<string, MemoryReplayEntry> {
-  const g = globalThis as unknown as { __telegramReplayCache?: Map<string, MemoryReplayEntry> };
-  if (!g.__telegramReplayCache) {
-    g.__telegramReplayCache = new Map();
-  }
-  return g.__telegramReplayCache;
-}
-
-function claimReplayGuardInMemory(hash: string, ttlSeconds: number): boolean {
-  const cache = getMemoryReplayCache();
-  const now = Date.now();
-
-  for (const [key, entry] of cache) {
-    if (entry.expiresAt < now) cache.delete(key);
-  }
-
-  if (cache.has(hash)) return false;
-  cache.set(hash, { expiresAt: now + ttlSeconds * 1000 });
-  return true;
-}
-
-interface SignedPayload {
-  params: URLSearchParams;
-  hash: string;
-}
-
-function verifySignature(initData: string): SignedPayload {
+function verifySignature(initData: string): URLSearchParams {
   const params = new URLSearchParams(initData);
 
   const hash = params.get("hash");
@@ -96,24 +57,22 @@ function verifySignature(initData: string): SignedPayload {
   params.delete("hash");
 
   const dataCheckString = [...params.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([key, value]) => `${key}=${value}`)
     .join("\n");
 
   const secretKey = crypto.createHmac("sha256", "WebAppData").update(getBotToken()).digest();
-
   const computedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
 
   const hashBuffer = Buffer.from(hash, "hex");
   const computedBuffer = Buffer.from(computedHash, "hex");
-  const validSignature =
-    hashBuffer.length === computedBuffer.length && crypto.timingSafeEqual(hashBuffer, computedBuffer);
+  const valid = hashBuffer.length === computedBuffer.length && crypto.timingSafeEqual(hashBuffer, computedBuffer);
 
-  if (!validSignature) {
-    throw new InvalidInitDataError("hash mismatch — data was not signed by this bot");
+  if (!valid) {
+    throw new InvalidInitDataError("hash mismatch");
   }
 
-  return { params, hash };
+  return params;
 }
 
 function parseUser(params: URLSearchParams): TelegramUser {
@@ -135,17 +94,16 @@ function parseUser(params: URLSearchParams): TelegramUser {
   return user;
 }
 
-export function peekTelegramUserId(initData: string): string | null {
+export function peekTelegramUser(initData: string): TelegramUser | null {
   try {
-    const { params } = verifySignature(initData);
-    return String(parseUser(params).id);
+    return parseUser(verifySignature(initData));
   } catch {
     return null;
   }
 }
 
-export async function validateTelegramInitData(initData: string): Promise<ValidatedInitData> {
-  const { params, hash } = verifySignature(initData);
+export function validateTelegramInitData(initData: string): ValidatedInitData {
+  const params = verifySignature(initData);
 
   const authDateRaw = params.get("auth_date");
   if (!authDateRaw) {
@@ -155,39 +113,14 @@ export async function validateTelegramInitData(initData: string): Promise<Valida
   const ageSeconds = (Date.now() - authDate.getTime()) / 1000;
 
   if (!Number.isFinite(ageSeconds) || ageSeconds > MAX_AUTH_AGE_SECONDS) {
-    throw new InvalidInitDataError("auth_date is too old — possible replay");
+    throw new InvalidInitDataError("auth_date is too old");
   }
   if (ageSeconds < -60) {
     throw new InvalidInitDataError("auth_date is in the future");
   }
 
-  const remainingTtl = Math.max(1, Math.ceil(MAX_AUTH_AGE_SECONDS - ageSeconds));
-
-  if (isRedisConfigured) {
-    try {
-      const claimed = await redis.set(`${REPLAY_GUARD_PREFIX}:${hash}`, "1", {
-        ex: remainingTtl,
-        nx: true,
-      });
-      if (!claimed) {
-        throw new ReplayedInitDataError();
-      }
-    } catch (err) {
-      if (err instanceof ReplayedInitDataError) throw err;
-      if (!claimReplayGuardInMemory(hash, remainingTtl)) {
-        throw new ReplayedInitDataError();
-      }
-    }
-  } else {
-    if (!claimReplayGuardInMemory(hash, remainingTtl)) {
-      throw new ReplayedInitDataError();
-    }
-  }
-
-  const user = parseUser(params);
-
   return {
-    user,
+    user: parseUser(params),
     authDate,
     queryId: params.get("query_id") ?? undefined,
     startParam: params.get("start_param") ?? undefined,

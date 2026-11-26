@@ -2,7 +2,7 @@ export type GuideId = "app-tour" | "reader";
 
 export const GUIDE_EVENT = "manavi:open-guide";
 
-const GUIDE_VERSIONS: Record<GuideId, number> = { "app-tour": 1, reader: 2 };
+const GUIDE_VERSIONS: Record<GuideId, number> = { "app-tour": 1, reader: 3 };
 const seenInMemory = new Set<string>();
 
 function storageKey(id: GuideId): string {

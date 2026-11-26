@@ -1,6 +1,7 @@
 import "server-only";
 import crypto from "crypto";
 
+export const SESSION_COOKIE_NAME = "session";
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 interface SessionPayload {
@@ -24,9 +25,10 @@ export function sessionCookieOptions() {
   const isProd = process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
-    secure: isProd,                     
+    secure: isProd,
     sameSite: isProd ? ("none" as const) : ("lax" as const),
-    maxAge: 30 * 24 * 60 * 60,
+    partitioned: isProd,
+    maxAge: SESSION_MAX_AGE_SECONDS,
     path: "/",
   };
 }
@@ -37,29 +39,22 @@ export function createSessionToken(userId: string): string {
     exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
   };
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = sign(payloadB64);
-  return `${payloadB64}.${signature}`;
+  return `${payloadB64}.${sign(payloadB64)}`;
 }
 
 export function verifySessionToken(token: string): { userId: string } | null {
   const [payloadB64, signature] = token.split(".");
   if (!payloadB64 || !signature) return null;
 
-  const expectedSignature = sign(payloadB64);
   const sigBuffer = Buffer.from(signature, "hex");
-  const expectedBuffer = Buffer.from(expectedSignature, "hex");
+  const expectedBuffer = Buffer.from(sign(payloadB64), "hex");
 
-  if (
-    sigBuffer.length !== expectedBuffer.length ||
-    !crypto.timingSafeEqual(sigBuffer, expectedBuffer)
-  ) {
+  if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
     return null;
   }
 
   try {
-    const payload: SessionPayload = JSON.parse(
-      Buffer.from(payloadB64, "base64url").toString()
-    );
+    const payload: SessionPayload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
     if (payload.exp < Math.floor(Date.now() / 1000)) return null;
     return { userId: payload.userId };
   } catch {

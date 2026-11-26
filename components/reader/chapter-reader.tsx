@@ -49,10 +49,18 @@ interface ChapterReaderProps {
 }
 
 const DESKTOP_BREAKPOINT_PX = 768;
-const SCROLL_HIDE_THRESHOLD_PX = 8;
-const SCROLL_TOP_SAFE_ZONE_PX = 60;
+const TOUCH_HIDE_THRESHOLD_PX = 10;
+const WHEEL_HIDE_THRESHOLD_PX = 4;
 const HORIZONTAL_PERSIST_DELAY_MS = 2000;
-const READER_AREA_STYLE = { height: "calc(100dvh - var(--tg-content-safe-area-top, 0px) - 3.5rem)" };
+const READER_AREA_STYLE = { height: "100dvh" };
+const HEADER_SPACE_STYLE = { height: "calc(3.5rem + var(--tg-content-safe-area-top, 0px))" };
+const SCROLL_KEYS = new Set(["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "]);
+
+function panelClass(visible: boolean, hiddenTransform: string): string {
+  return `transition-[transform,opacity] duration-300 ease-out ${
+    visible ? "translate-y-0 opacity-100" : `${hiddenTransform} pointer-events-none opacity-0`
+  }`;
+}
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false);
@@ -73,18 +81,6 @@ function useImmersiveReading() {
       webApp?.expand?.();
       webApp?.disableVerticalSwipes?.();
     } catch {}
-
-    const root = document.documentElement;
-    const canRequestFullscreen = !webApp && typeof root.requestFullscreen === "function";
-    if (canRequestFullscreen) {
-      root.requestFullscreen().catch(() => {});
-    }
-
-    return () => {
-      if (canRequestFullscreen && document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
-    };
   }, []);
 }
 
@@ -95,6 +91,7 @@ export function ChapterReader({
 }: ChapterReaderProps) {
   const isDesktop = useIsDesktop();
   const direction = readingDirection;
+  const isRtlReading = direction === "rtl";
   const { chapterHref, goToChapter, exitToComic } = useReaderNav(comicSlug);
 
   useImmersiveReading();
@@ -104,7 +101,6 @@ export function ChapterReader({
   const [horizontalPage, setHorizontalPage] = useState(initialPage);
   const [endOpen, setEndOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  const lastScrollYRef = useRef(0);
   const prefetchedForRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -118,6 +114,7 @@ export function ChapterReader({
 
   useEffect(() => {
     setEndOpen(false);
+    setControlsVisible(true);
   }, [chapterId]);
 
   useEffect(() => {
@@ -126,31 +123,40 @@ export function ChapterReader({
   }, [comicId]);
 
   useEffect(() => {
-    lastScrollYRef.current = window.scrollY;
-    let ticking = false;
+    let startY: number | null = null;
 
-    function handleScroll() {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        const currentY = window.scrollY;
-        const delta = currentY - lastScrollYRef.current;
-
-        if (currentY <= SCROLL_TOP_SAFE_ZONE_PX) {
-          setControlsVisible(true);
-        } else if (delta > SCROLL_HIDE_THRESHOLD_PX) {
-          setControlsVisible(false);
-        } else if (delta < -SCROLL_HIDE_THRESHOLD_PX) {
-          setControlsVisible(true);
-        }
-
-        lastScrollYRef.current = currentY;
-        ticking = false;
-      });
+    function hide() {
+      setControlsVisible(false);
+    }
+    function onTouchStart(event: TouchEvent) {
+      startY = event.touches[0]?.clientY ?? null;
+    }
+    function onTouchMove(event: TouchEvent) {
+      if (startY === null) return;
+      const y = event.touches[0]?.clientY ?? startY;
+      if (Math.abs(y - startY) > TOUCH_HIDE_THRESHOLD_PX) {
+        startY = null;
+        hide();
+      }
+    }
+    function onWheel(event: WheelEvent) {
+      if (Math.abs(event.deltaY) > WHEEL_HIDE_THRESHOLD_PX) hide();
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (SCROLL_KEYS.has(event.key)) hide();
     }
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("wheel", onWheel, { passive: true });
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, []);
 
   const renderMode: ReadingMode = effectiveMode === "DOUBLE_PAGE" && !isDesktop ? "HORIZONTAL" : effectiveMode;
@@ -180,6 +186,11 @@ export function ChapterReader({
   }, [renderMode, horizontalPage, prefetchNextChapter]);
 
   const toggleControls = useCallback(() => setControlsVisible((prev) => !prev), []);
+
+  const handlePageChange = useCallback((page: number) => {
+    setHorizontalPage(page);
+    setControlsVisible(false);
+  }, []);
 
   function handleModeChange(mode: ReadingMode) {
     setEffectiveMode(mode);
@@ -216,6 +227,32 @@ export function ChapterReader({
     [chapterOptions]
   );
 
+  const prevControl = prevChapterId ? (
+    <Link
+      replace
+      href={chapterHref(prevChapterId)}
+      aria-label="چپتر قبلی"
+      className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white"
+    >
+      {isRtlReading ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+    </Link>
+  ) : (
+    <div className="w-11 flex-shrink-0" />
+  );
+
+  const nextControl = nextChapterId ? (
+    <Link
+      replace
+      href={chapterHref(nextChapterId)}
+      aria-label="چپتر بعدی"
+      className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white"
+    >
+      {isRtlReading ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+    </Link>
+  ) : (
+    <div className="w-11 flex-shrink-0" />
+  );
+
   return (
     <div className="relative min-h-screen bg-black overscroll-none">
       <WatermarkOverlay label={watermarkLabel} />
@@ -224,7 +261,7 @@ export function ChapterReader({
 
       <header
         style={{ paddingTop: "var(--tg-content-safe-area-top, 0px)" }}
-        className="relative z-30 border-b border-white/5 bg-black"
+        className={`fixed inset-x-0 top-0 z-40 border-b border-white/5 bg-black/90 backdrop-blur-sm ${panelClass(controlsVisible, "-translate-y-full")}`}
       >
         <div className="flex h-14 items-center justify-between gap-2 px-2">
           <BackButton fallbackHref={`/app/comic/${comicSlug}`} variant="reader" onBack={exitToComic} />
@@ -246,6 +283,8 @@ export function ChapterReader({
         </div>
       </header>
 
+      {renderMode === "VERTICAL" && <div aria-hidden style={HEADER_SPACE_STYLE} />}
+
       {renderMode === "VERTICAL" && (
         <VerticalReader
           pages={pages}
@@ -265,7 +304,7 @@ export function ChapterReader({
             pages={pages}
             currentPage={horizontalPage}
             direction={direction}
-            onPageChange={setHorizontalPage}
+            onPageChange={handlePageChange}
             onRequestPrevChapter={onRequestPrevChapter}
             onRequestNextChapter={onRequestEnd}
             hasPrevChapter={Boolean(prevChapterId)}
@@ -281,7 +320,7 @@ export function ChapterReader({
             pages={pages}
             currentPage={horizontalPage}
             direction={direction}
-            onPageChange={setHorizontalPage}
+            onPageChange={handlePageChange}
             onRequestPrevChapter={onRequestPrevChapter}
             onRequestNextChapter={onRequestEnd}
             hasPrevChapter={Boolean(prevChapterId)}
@@ -333,25 +372,10 @@ export function ChapterReader({
       )}
 
       <div
+        dir="ltr"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))" }}
-        className={`fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-black/90 px-4 py-3 transition-transform duration-200 ${controlsVisible ? "translate-y-0" : "translate-y-full"}`}
+        className={`fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-black/90 px-4 py-3 backdrop-blur-sm ${panelClass(controlsVisible, "translate-y-full")}`}
       >
-        {prevChapterId ? (
-          <Link replace href={chapterHref(prevChapterId)} aria-label="چپتر قبلی" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
-            <ChevronRight size={20} />
-          </Link>
-        ) : <div className="w-11 flex-shrink-0" />}
-
-        <select value={chapterId} onChange={(e) => goToChapter(e.target.value)} className="h-11 min-w-0 flex-1 rounded-md bg-white/10 px-3 text-sm text-white">
-          {chapterOptionNodes}
-        </select>
-
-        {nextChapterId ? (
-          <Link replace href={chapterHref(nextChapterId)} aria-label="چپتر بعدی" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
-            <ChevronLeft size={20} />
-          </Link>
-        ) : <div className="w-11 flex-shrink-0" />}
-
         <button
           type="button"
           onClick={exitToComic}
@@ -360,6 +384,19 @@ export function ChapterReader({
         >
           <BookOpen size={20} />
         </button>
+
+        {isRtlReading ? nextControl : prevControl}
+
+        <select
+          dir="rtl"
+          value={chapterId}
+          onChange={(e) => goToChapter(e.target.value)}
+          className="h-11 min-w-0 flex-1 rounded-md bg-white/10 px-3 text-sm text-white"
+        >
+          {chapterOptionNodes}
+        </select>
+
+        {isRtlReading ? prevControl : nextControl}
       </div>
     </div>
   );

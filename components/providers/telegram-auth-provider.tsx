@@ -1,13 +1,8 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
-import { applySafeAreaCssVars, waitForTelegramWebApp, SAFE_AREA_EVENTS } from "@/lib/client/telegram-viewport";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { initTelegramShell, waitForTelegramWebApp } from "@/lib/client/telegram-viewport";
 
 interface AuthUser {
   id: string;
@@ -18,92 +13,84 @@ interface AuthUser {
   activeTitle: string | null;
 }
 
-interface TelegramAuthState {
-  status: "loading" | "ready" | "error";
+export type AuthStatus = "loading" | "ready" | "guest" | "error";
+export type AuthErrorReason = "cookies-blocked" | "failed" | null;
+
+interface AuthSnapshot {
+  status: AuthStatus;
   user: AuthUser | null;
   error: string | null;
+  reason: AuthErrorReason;
 }
 
-const TelegramAuthContext = createContext<TelegramAuthState>({
-  status: "loading",
-  user: null,
-  error: null,
-});
+interface TelegramAuthState extends AuthSnapshot {
+  retry: () => void;
+}
+
+const LOADING: AuthSnapshot = { status: "loading", user: null, error: null, reason: null };
+
+const TelegramAuthContext = createContext<TelegramAuthState>({ ...LOADING, retry: () => {} });
 
 export function useTelegramAuth() {
   return useContext(TelegramAuthContext);
 }
 
-const AUTH_TIMEOUT_MS = 12000;
+const AUTH_TIMEOUT_MS = 15000;
 
-function setupTelegramViewport(webApp: TelegramWebApp): () => void {
+async function readSession(): Promise<AuthUser | null> {
   try {
-    webApp.ready();
-    webApp.expand();
-  } catch {}
-
-  try {
-    webApp.disableVerticalSwipes?.();
-  } catch {}
-
-  applySafeAreaCssVars(webApp);
-
-  try {
-    webApp.requestFullscreen?.();
-  } catch {}
-
-  const handleChange = () => applySafeAreaCssVars(webApp);
-  SAFE_AREA_EVENTS.forEach((eventName) => {
-    try {
-      webApp.onEvent(eventName, handleChange);
-    } catch {}
-  });
-
-  return () => {
-    SAFE_AREA_EVENTS.forEach((eventName) => {
-      try {
-        webApp.offEvent(eventName, handleChange);
-      } catch {}
-    });
-  };
+    const res = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return (body.user as AuthUser | null) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function TelegramAuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<TelegramAuthState>({
-    status: "loading",
-    user: null,
-    error: null,
-  });
+  const router = useRouter();
+  const [snapshot, setSnapshot] = useState<AuthSnapshot>(LOADING);
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    setSnapshot(LOADING);
+    setAttempt((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    let cleanupViewport: (() => void) | null = null;
+    let cleanup: (() => void) | null = null;
+
+    waitForTelegramWebApp().then((webApp) => {
+      if (!webApp || cancelled) return;
+      cleanup = initTelegramShell(webApp);
+    });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
 
     async function authenticate() {
       const webApp = await waitForTelegramWebApp();
-
       if (cancelled) return;
 
-      if (!webApp) {
-        setState({
-          status: "error",
-          user: null,
-          error: "Telegram WebApp SDK not found — open this app from Telegram.",
-        });
-        return;
-      }
-
-      cleanupViewport = setupTelegramViewport(webApp);
-
-      const initData = webApp.initData;
+      const initData = webApp?.initData;
       if (!initData) {
-        if (!cancelled) {
-          setState({
-            status: "error",
-            user: null,
-            error: "No initData available from Telegram.",
-          });
-        }
+        const existing = await readSession();
+        if (cancelled) return;
+        setSnapshot(
+          existing
+            ? { status: "ready", user: existing, error: null, reason: null }
+            : { status: "guest", user: null, error: null, reason: null }
+        );
         return;
       }
 
@@ -111,51 +98,53 @@ export function TelegramAuthProvider({ children }: { children: ReactNode }) {
         const res = await fetch("/api/auth/telegram", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
           body: JSON.stringify({ initData }),
+          signal: controller.signal,
         });
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `Auth request failed (${res.status})`);
+          throw new Error(typeof body.error === "string" ? body.error : "ورود انجام نشد");
         }
 
-        const { user } = await res.json();
-        if (!cancelled) {
-          setState({ status: "ready", user, error: null });
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setState({
+        const { fresh } = (await res.json()) as { fresh?: boolean };
+        const confirmed = await readSession();
+        if (cancelled) return;
+
+        if (!confirmed) {
+          setSnapshot({
             status: "error",
             user: null,
-            error: err instanceof Error ? err.message : "Unknown auth error",
+            error: "مرورگر اجازه‌ی ذخیره‌ی نشست داخل وب تلگرام را نمی‌دهد.",
+            reason: "cookies-blocked",
           });
+          return;
         }
+
+        setSnapshot({ status: "ready", user: confirmed, error: null, reason: null });
+        if (fresh) router.refresh();
+      } catch (err) {
+        if (cancelled) return;
+        setSnapshot({
+          status: "error",
+          user: null,
+          error: err instanceof Error && err.name !== "AbortError" ? err.message : "ارتباط با سرور برقرار نشد.",
+          reason: "failed",
+        });
+      } finally {
+        clearTimeout(timeout);
       }
     }
-
-    const timeout = setTimeout(() => {
-      if (!cancelled) {
-        setState((prev) =>
-          prev.status === "loading"
-            ? { status: "error", user: null, error: "Auth timed out." }
-            : prev
-        );
-      }
-    }, AUTH_TIMEOUT_MS);
 
     authenticate();
 
     return () => {
       cancelled = true;
       clearTimeout(timeout);
-      cleanupViewport?.();
+      controller.abort();
     };
-  }, []);
+  }, [attempt, router]);
 
-  return (
-    <TelegramAuthContext.Provider value={state}>
-      {children}
-    </TelegramAuthContext.Provider>
-  );
+  return <TelegramAuthContext.Provider value={{ ...snapshot, retry }}>{children}</TelegramAuthContext.Provider>;
 }

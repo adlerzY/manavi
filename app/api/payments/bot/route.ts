@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import crypto from "crypto";
 import { sendWelcomeMessage, sendHelpMessage, sendFallbackMessage, sendBalanceMessage } from "@/lib/telegram-bot";
+import { handleLoginCallback, handleLoginStart, type LoginCallbackQuery } from "@/lib/telegram-login";
+import { LOGIN_CALLBACK_DENY, LOGIN_CALLBACK_PREFIX, LOGIN_START_PREFIX } from "@/lib/login-request";
 import { checkRateLimit } from "@/lib/moderation";
 import { redis, isRedisConfigured } from "@/lib/redis";
 import { notifyAdmin } from "@/lib/admin-alert";
@@ -22,6 +23,7 @@ interface TelegramUpdate {
     chat?: { id: number };
     from?: { id: number };
   };
+  callback_query?: LoginCallbackQuery;
 }
 
 function parseCommand(text: string): { command: string | null; param?: string } {
@@ -90,6 +92,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, duplicate: true });
   }
 
+  const callback = update.callback_query;
+  if (
+    callback?.data &&
+    callback.from &&
+    !callback.from.is_bot &&
+    (callback.data === LOGIN_CALLBACK_DENY || callback.data.startsWith(LOGIN_CALLBACK_PREFIX))
+  ) {
+    if (await checkRateLimit(`tg-bot-login:${callback.from.id}`, 10)) {
+      after(() => handleLoginCallback(callback));
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const text = update.message?.text;
   const chatId = update.message?.chat?.id;
   const fromId = update.message?.from?.id;
@@ -103,7 +118,12 @@ export async function POST(req: NextRequest) {
     const { command, param } = parseCommand(text.slice(0, 200));
 
     if (command === "/start") {
-      after(() => sendWelcomeMessage(chatId, param?.slice(0, 64)));
+      if (param?.startsWith(LOGIN_START_PREFIX)) {
+        const nonce = param.slice(LOGIN_START_PREFIX.length);
+        after(() => handleLoginStart(chatId, nonce));
+      } else {
+        after(() => sendWelcomeMessage(chatId, param?.slice(0, 64)));
+      }
     } else if (command === "/help") {
       after(() => sendHelpMessage(chatId));
     } else if (command === "/balance") {

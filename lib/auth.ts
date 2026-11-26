@@ -78,7 +78,8 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   const session = verifySessionToken(token);
   if (!session) return null;
 
-  return fetchSessionUser(session.userId);
+  const user = await fetchSessionUser(session.userId);
+  return user && !user.deletedAt ? user : null;
 });
 
 export async function invalidateSessionUserCache(userId: string): Promise<void> {

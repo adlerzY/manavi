@@ -1454,3 +1454,20 @@ model AccessGiftRecipient {
   @@id([giftId, userId])
   @@index([userId])
 }
+enum LoginRequestStatus {
+  PENDING
+  APPROVED
+  CONSUMED
+}
+
+model LoginRequest {
+  id          String             @id @default(uuid())
+  nonce       String             @unique
+  status      LoginRequestStatus @default(PENDING)
+  userId      String?
+  deviceLabel String?
+  expiresAt   DateTime
+  createdAt   DateTime           @default(now())
+
+  @@index([expiresAt])
+}

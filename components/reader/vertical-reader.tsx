@@ -178,8 +178,9 @@ export function VerticalReader({
       </div>
 
       <div
-        className={`fixed left-4 top-20 z-40 flex flex-col items-center gap-2 transition-opacity duration-200 ${
-          controlsVisible ? "opacity-100" : "opacity-0"
+        style={{ top: "calc(var(--tg-content-safe-area-top, 0px) + 4.5rem)" }}
+        className={`fixed left-4 z-30 flex flex-col items-center gap-2 transition-opacity duration-300 ${
+          controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
         <button

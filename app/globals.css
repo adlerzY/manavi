@@ -12,14 +12,14 @@ html {
 }
 
 :root {
-  --tg-safe-area-top: 0px;
-  --tg-safe-area-bottom: 0px;
-  --tg-safe-area-left: 0px;
-  --tg-safe-area-right: 0px;
-  --tg-content-safe-area-top: 0px;
-  --tg-content-safe-area-bottom: 0px;
-  --tg-content-safe-area-left: 0px;
-  --tg-content-safe-area-right: 0px;
+  --tg-safe-area-top: env(safe-area-inset-top, 0px);
+  --tg-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --tg-safe-area-left: env(safe-area-inset-left, 0px);
+  --tg-safe-area-right: env(safe-area-inset-right, 0px);
+  --tg-content-safe-area-top: env(safe-area-inset-top, 0px);
+  --tg-content-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --tg-content-safe-area-left: env(safe-area-inset-left, 0px);
+  --tg-content-safe-area-right: env(safe-area-inset-right, 0px);
 }
 
 @keyframes mascot-float {
@@ -88,4 +88,16 @@ html.native-app a {
 html.no-zoom,
 html.no-zoom body {
   touch-action: pan-x pan-y;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
