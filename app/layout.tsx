@@ -1,5 +1,6 @@
+
 import type { ReactNode } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -9,9 +10,28 @@ const vazirFont = localFont({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#121212",
+  colorScheme: "dark",
+};
+
 export const metadata: Metadata = {
   title: "ماناوی — پلتفرم خوانش مانهوا و مانگا",
   description: "پلتفرم خوانش آنلاین مانهوا، مانگا و وبتون در تلگرام",
+  applicationName: "ماناوی",
+  appleWebApp: {
+    capable: true,
+    title: "ماناوی",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
     icon: [
       {
@@ -22,7 +42,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
     <html
       lang="fa"
